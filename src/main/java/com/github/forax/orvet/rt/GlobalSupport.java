@@ -11,6 +11,21 @@ import java.lang.invoke.MutableCallSite;
 import java.lang.invoke.SwitchPoint;
 import java.util.Objects;
 
+/// Implements the invokedynamic bootstrap methods for global variable access.
+///
+/// Each global name is associated with a GlobalCell stored in the ModuleContext.
+/// Only read to that global are op^timized.
+///
+/// A read call site initially  installs a target guarded by the cell's SwitchPoint.
+/// If the cell has a value, the target returns the resolved value as a constant.
+/// Otherwise, it raises a NameError.
+///
+/// When the cell is modified, the SwitchPoint is invalidated, call sites
+/// previously linked are lazily re-resolved to the new value.
+///
+/// After too many fallback invocations, a call site stops attempting
+/// constant folding and permanently switches to the generic
+/// GlobalCell.get() method.
 final class GlobalSupport {
   public GlobalSupport() {
     throw new AssertionError();
@@ -31,13 +46,30 @@ final class GlobalSupport {
     }
   }
 
+  /// Mutable storage for a single global variable, shared by all call sites
+  /// accessing that variable within a module.
+  ///
+  /// The value is volatile so that generic reads always observe the current binding.
+  /// The SwitchPoint represents the validity of constant values embedded in the call sites.
+  ///
+  /// Resolving a cell creates a SwitchPoint if necessary and returns a snapshot
+  /// of the current value together with that SwitchPoint. Updating a cell
+  /// invalidates the existing SwitchPoint before publishing the new value,
+  /// ensuring that previously linked call sites cannot continue using their
+  /// embedded constants.
   static final class GlobalCell {
+    /// The result of asking for the cell value, the switchPoint is never null
     record ResolvedCell(Object value, SwitchPoint switchPoint) {}
 
     private final String name;
     private volatile Object value;
 
-    // guarded by this, null until the value is set
+    /// The validity of constant values embedded in the call sites.
+    /// Invalidating a SwitchPoint prevents its guarded target from being selected,
+    /// but does not eagerly replace call-site targets, so obsolete values can remain
+    /// strongly reachable until the corresponding call sites are invoked and relinked.
+    ///
+    /// This field should be accessed only holding a lock on this
     private SwitchPoint switchPoint;
 
     GlobalCell(String name, Object value) {
@@ -59,6 +91,7 @@ final class GlobalSupport {
       throw new PyNameError("name '" + name + "' is not defined");
     }
 
+    /// Set the new value, invalidating the call sites that were previously constant folded
     public void set(Object newValue) {
       Objects.requireNonNull(newValue);
       synchronized (this) {
@@ -72,8 +105,8 @@ final class GlobalSupport {
       }
     }
 
-    /// The value to embed as a constant, or null if the cell can not (or no longer) be treated
-    /// as a constant: unbound (reading it raises NameError) or already unstable.
+    /// Returns the cell value (can be null) and a new switch point if the value
+    /// was never accessed
     ResolvedCell resolveCell() {
       synchronized (this) {
         var value = this.value;  // volatile read
@@ -100,6 +133,7 @@ final class GlobalSupport {
       }
     }
 
+    /// Maximum number of fallback invocations before giving up constant folding.
     private static final int MAX_COUNTER = 2;
 
     private final MethodHandle fallback;
@@ -115,6 +149,7 @@ final class GlobalSupport {
     }
 
     private Object fallback() {
+      // 1. too many optimization? change to volatile read
       var counter = this.counter;
       if (counter >= MAX_COUNTER) {
         setTarget(CELL_GET.bindTo(cell));
@@ -122,8 +157,11 @@ final class GlobalSupport {
       }
       this.counter = counter + 1;
 
+      // 2. get the value and its corresponding switch point
       var resolvedCell = cell.resolveCell();
       var value = resolvedCell.value;
+
+      // 3. install the switch point guard
       MethodHandle mh;
       if (value == null) {
         mh = NAME_ERROR.bindTo(cell.name);
@@ -133,6 +171,7 @@ final class GlobalSupport {
       var target = resolvedCell.switchPoint().guardWithTest(mh, fallback);
       setTarget(target);
 
+      // 4. return the value
       if (value == null) {
         throw (RuntimeException) GlobalCell.nameError(cell.name);
       }
