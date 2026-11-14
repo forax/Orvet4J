@@ -13,19 +13,23 @@ import java.util.Objects;
 
 /// Implements the invokedynamic bootstrap methods for global variable access.
 ///
-/// Each global name is associated with a GlobalCell stored in the ModuleContext.
-/// Only read to that global are op^timized.
+/// Each global name of a module is backed by one [GlobalCell], owned by the [ModuleContext].
+/// A cell is created on first access. It starts with the builtin of the same name if there is one
+/// or is unbound (value `null`) otherwise.
 ///
-/// A read call site initially  installs a target guarded by the cell's SwitchPoint.
-/// If the cell has a value, the target returns the resolved value as a constant.
-/// Otherwise, it raises a NameError.
+/// Only reads are optimized. A store is a plain call to [GlobalCell#set] which
+/// invalidates the cell's [SwitchPoint] if it exists.
 ///
-/// When the cell is modified, the SwitchPoint is invalidated, call sites
-/// previously linked are lazily re-resolved to the new value.
+/// Life cycle of a read call site (`()Object`):
+///  1. The site is created with the `fallback` as its target.
+///  2. On a fallback call, the site takes a (value, SwitchPoint) snapshot of the cell and installs
+///     `switchPoint.guardWithTest(constant(value), fallback)`. If the cell is unbound, the guarded
+///     target raises `NameError` instead of returning a constant.
+///  3. A store invalidates the SwitchPoint, so the guard fails and the next read goes through the
+///     fallback again, which re-folds the new value.
+///  4. A site folds at most [GetGlobalCallSite#MAX_COUNTER] times.
+///     The next fallback installs definitively a plain volatile read of the cell.
 ///
-/// After too many fallback invocations, a call site stops attempting
-/// constant folding and permanently switches to the generic
-/// GlobalCell.get() method.
 final class GlobalSupport {
   public GlobalSupport() {
     throw new AssertionError();
@@ -69,7 +73,7 @@ final class GlobalSupport {
     /// but does not eagerly replace call-site targets, so obsolete values can remain
     /// strongly reachable until the corresponding call sites are invoked and relinked.
     ///
-    /// This field should be accessed only holding a lock on this
+    /// This field should be accessed holding a lock on this
     private SwitchPoint switchPoint;
 
     GlobalCell(String name, Object value) {
@@ -95,6 +99,9 @@ final class GlobalSupport {
     public void set(Object newValue) {
       Objects.requireNonNull(newValue);
       synchronized (this) {
+        if (this.value == newValue) {
+          return;   // do nothing
+        }
         // invalidate switch point if it exists
         var switchPoint = this.switchPoint;
         if (switchPoint != null) {
@@ -153,7 +160,7 @@ final class GlobalSupport {
     }
 
     private Object fallback() {
-      // 1. too many optimizations? change to volatile read
+      // 1. The site was relinked too often? Stop folding and read (volatile) the cell directly
       var counter = this.counter;
       if (counter >= MAX_COUNTER) {
         setTarget(CELL_GET.bindTo(cell));
@@ -161,11 +168,11 @@ final class GlobalSupport {
       }
       this.counter = counter + 1;
 
-      // 2. get the value and its corresponding switch point
+      // 2. Get the value and its corresponding switch point
       var resolvedCell = cell.resolveCell();
       var value = resolvedCell.value;
 
-      // 3. install the switch point guard
+      // 3. Install the switch point guard
       MethodHandle mh;
       if (value == null) {
         mh = NAME_ERROR.bindTo(cell.name);
@@ -175,7 +182,7 @@ final class GlobalSupport {
       var target = resolvedCell.switchPoint().guardWithTest(mh, fallback);
       setTarget(target);
 
-      // 4. return the value
+      // 4. Return the value
       if (value == null) {
         throw (RuntimeException) GlobalCell.nameError(cell.name);
       }
@@ -183,13 +190,13 @@ final class GlobalSupport {
     }
   }
 
-  /// A read of a global.
+  /// A read of a global, `()Object`. The cell belongs to the module that loaded the calling class.
   static CallSite getGlobal(ModuleContext context, String name) {
     var cell = context.cell(name);
     return new GetGlobalCallSite(cell);
   }
 
-  /// A store to a global.
+  /// A store to a global, `(Object)void`. Never relinked: the cell does the invalidation.
   static CallSite setGlobal(ModuleContext context, String name) {
     var cell = context.cell(name);
     return new ConstantCallSite(CELL_SET.bindTo(cell));
