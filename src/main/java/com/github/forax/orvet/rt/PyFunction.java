@@ -95,7 +95,7 @@ public final class PyFunction {
       Objects.requireNonNull(arg);
     }
     try {
-      return FunctionSupport.FunctionCallSite.Megamorphic.megamorphic(this, args);
+      return FunctionSupport.Megamorphic.megamorphic(this, args);
     } catch (RuntimeException | Error e) {
       throw e;
     } catch (Throwable e) {
@@ -121,7 +121,7 @@ public final class PyFunction {
 
     // 1. Wrong arity?
     var argCount = type.parameterCount();
-    FunctionSupport.FunctionCallSite.checkArity(this, argCount);
+    FunctionSupport.checkArity(this, argCount);
 
     // 2. Get the compiled entry
     var compiledEntry = FunctionSupport.FunctionCallSite.getCompiledEntry(code);
