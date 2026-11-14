@@ -20,7 +20,7 @@ public final class Compiler {
 
   /// Compiles the script eagerly and returns its `__main__`; function bodies are compiled on their first call.
   public static MethodHandle compile(ModuleContext ctx, Script script) {
-    var internalName = "com/github/forax/ula4j/gen/Script";
+    var internalName = "com/github/forax/orvet/gen/Script";
     var dictionary = new Dictionary();
     var bytes = BytecodeGenerator.generateScript(ctx, dictionary, script, internalName);
 
