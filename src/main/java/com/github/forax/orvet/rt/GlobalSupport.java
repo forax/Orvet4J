@@ -31,7 +31,7 @@ import java.util.Objects;
 ///     The next fallback installs definitively a plain volatile read of the cell.
 ///
 final class GlobalSupport {
-  public GlobalSupport() {
+  private GlobalSupport() {
     throw new AssertionError();
   }
 
@@ -112,8 +112,8 @@ final class GlobalSupport {
       }
     }
 
-    /// Returns the cell value (can be null) and a new switch point if the value
-    /// was never accessed
+    /// Returns the tuple (cell value, switch point)
+    /// The value can be null, the switch point is never null
     ResolvedCell resolveCell() {
       synchronized (this) {
         var value = this.value;  // volatile read
@@ -126,6 +126,23 @@ final class GlobalSupport {
     }
   }
 
+  // [Unlinked / CallSite Init]
+  //          │
+  //          ▼
+  //   fallback()  (counter = 0 -> 1)
+  //          │
+  //          ├── Value bound? ──► Target: SwitchPoint.gwt(MHs.constant(value), fallback)
+  //          └── Value unbound? ─► Target: SwitchPoint.gwt(NAME_ERROR.bindTo(name), fallback)
+  //          │
+  //          ▼  (Global updated via setGlobal() -> SwitchPoint invalidated)
+  //   fallback()  (counter = 1 -> 2)
+  //          │
+  //          └── Re-binds to new value / new SwitchPoint (same as above)
+  //          │
+  //          ▼  (Global updated again -> SwitchPoint invalidated)
+  //   fallback()  (counter >= MAX_COUNTER)
+  //          │
+  //          └── Target: CELL_GET.bindTo(cell)  [Megamorphic / Volatile fast-path]
   private static final class GetGlobalCallSite extends MutableCallSite {
     private static final MethodType TYPE;
     private static final MethodHandle FALLBACK;
