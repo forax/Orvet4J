@@ -1,4 +1,4 @@
-# ula4j: Implementation Plan (rev. 3)
+# Orvet4J: Implementation Plan (rev. 3)
 
 ## 0. How to read this document
 
@@ -208,7 +208,7 @@ Notes:
 - `$iadd$` and `$imul$` dispatch on `PyList` and mutate it in place, returning the same list, so aliases see the change.
 - Name targets: load, evaluate value, `$iop$`, store.
 - Subscript targets: container and index are evaluated once, in that order, into temps; then `$getItem$`, the value, `$iop$`, `$setItem$`.
-- Operand combinations CPython supports but ula4j does not raise `UnimplementedFeatureError`.
+- Operand combinations CPython supports but orvet does not raise `UnimplementedFeatureError`.
 
 ### 6.3 Builtins [PARTIAL]
 
@@ -216,7 +216,7 @@ Notes:
 - Lookup order is global cell value, then builtin, then `PyNameError`. A module-level assignment shadows a builtin. There is no `ModuleContext.defineBuiltin`.
 - Builtin calling convention: `static Object name(PyFunction self, Object... args)`; extra arguments arrive as an `Object[]`, **not** a `PyTuple` (user functions receive a `PyTuple` for `*rest`).
 - Implemented: `print(*objects)`. It joins `$str$` of each argument with `" "`, writes one line to `System.out`, returns `None`. No `sep`/`end`/`file` (§16.4).
-- **Policy (proposed, §16.2):** a name that exists in CPython's `builtins` but not in ula4j raises `UnimplementedFeatureError("builtin 'range'")` instead of `PyNameError`, so the conformance runner can skip such programs.
+- **Policy (proposed, §16.2):** a name that exists in CPython's `builtins` but not in orvet raises `UnimplementedFeatureError("builtin 'range'")` instead of `PyNameError`, so the conformance runner can skip such programs.
 
 ### 6.4 Special methods
 
@@ -403,7 +403,7 @@ In use: `PyRuntimeError` (dict mutation during iteration), `PyKeyError`, `PyInde
 Planned types: `PyStopIteration`, `PyAssertionError`, and others only when a supported construct needs them.
 
 **Other throwables**
-- `UnimplementedFeatureError` is not a Python exception. It means valid CPython that ula4j does not implement. Current uses:
+- `UnimplementedFeatureError` is not a Python exception. It means valid CPython that orvet does not implement. Current uses:
   - `'%'` formatting
   - shifts or exponents beyond JVM limits
   - negative float to a non-integer power, which would be complex
@@ -493,7 +493,7 @@ Syntax and `ASTBuilder` rejections are eager. Scope analysis, definite assignmen
 ## 14. Toolchain and build
 
 - **Build.** Maven, `release 27`, ANTLR 4.13.2, ASM 9.11.1, JUnit 5.14.3.
-  - The shade plugin names `com.github.forax.ula4j.main.Main` as the entry point, but this class does not exist yet (§18, phase 5).
+  - The shade plugin names `orvet` as the entry point, but this class does not exist yet (§18, phase 5).
   - Generated classes use class-file version 25, and the ASM and JDK pairing must be pinned and tested.
 - **Parser.** The grammar is ANTLR (Python 3.14.2 grammar by R. Einhorn) with `PythonLexerBase`. `ASTBuilder` is hand-written with one typed method per rule.
   Any unhandled alternative is rejected, so a forgotten rule can never be silently accepted.
@@ -511,7 +511,7 @@ Syntax and `ASTBuilder` rejections are eager. Scope analysis, definite assignmen
 - Download a specific build, verify its SHA-256, and never use a developer's system Python.
 - Committed goldens form a fast hermetic CI layer.
 - Compare stdout, the exception type and message of an uncaught failure, mutation and aliasing, and iteration order where Python specifies it.
-- Skip a corpus program only when ula4j rejects it with `UnsupportedSyntaxException` or `UnimplementedFeatureError` (this includes a missing builtin, §6.3). Any other mismatch fails.
+- Skip a corpus program only when orvet rejects it with `UnsupportedSyntaxException` or `UnimplementedFeatureError` (this includes a missing builtin, §6.3). Any other mismatch fails.
 - Never assert unspecified behaviour (string and tuple hashes, identity of immutables).
 
 ### 15.2 Semantic test groups
@@ -571,7 +571,7 @@ A JMH baseline of plain `invokedynamic` to generic intrinsics must exist before 
 Resolved since rev. 2: equality owner (`ComparisonIntrinsics`), list and dict storage design.
 
 1. **Builtin set**: names, signatures, argument validation, behavior (candidates in §18, phase 1).
-2. **Missing builtins**: raise `UnimplementedFeatureError` for CPython builtin names ula4j lacks (proposed in §6.3), or keep `PyNameError`?
+2. **Missing builtins**: raise `UnimplementedFeatureError` for CPython builtin names orvet lacks (proposed in §6.3), or keep `PyNameError`?
 3. **Container method table**: which list, tuple, dict and str methods exist first. `dict.items/keys/values` stay excluded.
 4. **`print` keywords**: `sep=`/`end=` conflict with the "no keyword arguments" rule. Options: a special case in the compiler or a tiny keyword-capable builtin ABI. `%` formatting is in scope and `str.format` is not.
 5. **Function method surface**: none, unless explicitly decided.

@@ -1,0 +1,58 @@
+package com.github.forax.orvet.compiler;
+
+import com.github.forax.orvet.ast.ASTBuilder;
+import com.github.forax.orvet.ast.Script;
+import com.github.forax.orvet.rt.Dictionary;
+import com.github.forax.orvet.rt.ModuleContext;
+import com.github.forax.orvet.rt.RT;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.Objects;
+
+/// Facade: source -> AST -> `Script_<n>` class -> run `__main__`.
+public final class Compiler {
+  private Compiler() { throw new AssertionError(); }
+
+  private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+
+  /// Compiles the script eagerly and returns its `__main__`; function bodies are compiled on their first call.
+  public static MethodHandle compile(ModuleContext ctx, Script script) {
+    var internalName = "com/github/forax/ula4j/gen/Script";
+    var dictionary = new Dictionary();
+    var bytes = BytecodeGenerator.generateScript(ctx, dictionary, script, internalName);
+
+    var className = internalName.replace('/', '.');
+    var clazz = RT.defineClass(ctx, dictionary, className, bytes);
+    try {
+      return LOOKUP.findStatic(clazz, "__main__", MethodType.methodType(void.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  /// Runs a program and returns its module, whose globals can then be inspected.
+  public static ModuleContext run(String source) {
+    Objects.requireNonNull(source);
+    var script = ASTBuilder.createScript(source);
+    return run(script);
+  }
+
+  public static ModuleContext run(Script script) {
+    Objects.requireNonNull(script);
+    var ctx = new ModuleContext();
+    var main = compile(ctx, script);
+    try {
+      main.invokeExact();
+    } catch(RuntimeException | Error e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new UndeclaredThrowableException(e);
+    }
+    return ctx;
+  }
+
+
+}
