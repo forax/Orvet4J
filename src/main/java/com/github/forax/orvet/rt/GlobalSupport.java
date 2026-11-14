@@ -126,7 +126,7 @@ final class GlobalSupport {
     }
   }
 
-
+  /// A mutable call site implementing speculative constant-folding for global variable reads.
   private static final class GetGlobalCallSite extends MutableCallSite {
 
     // [Unlinked / CallSite Init]
