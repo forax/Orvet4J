@@ -138,6 +138,10 @@ final class GlobalSupport {
 
     private final MethodHandle fallback;
     private final GlobalCell cell;
+
+    /// Approximate number of fallback invocations, used only to decide when to stop
+    /// attempting constant folding. Deliberately neither volatile nor atomic,
+    /// it's just a perf counter.
     private int counter;
 
     private GetGlobalCallSite(GlobalCell cell) {
@@ -149,7 +153,7 @@ final class GlobalSupport {
     }
 
     private Object fallback() {
-      // 1. too many optimization? change to volatile read
+      // 1. too many optimizations? change to volatile read
       var counter = this.counter;
       if (counter >= MAX_COUNTER) {
         setTarget(CELL_GET.bindTo(cell));
