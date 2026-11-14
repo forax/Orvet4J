@@ -18,13 +18,65 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/// Runtime support for Python function definitions, lazy compilation, and dynamic invocations.
+///
+/// ## Calling Conventions
+/// Every compiled or native function entry point adheres to one of two signatures:
+/// - **Python Function:**
+///   ```
+///   (captures..., PyFunction self, Object p0..pn-1 [, PyTuple rest]) -> Object
+///   ```
+///   Captured variables precede `self`. When the function is variadic, excess arguments
+///   are collected into an immutable [PyTuple].
+/// - **Built-in / Native Function:**
+///   ```
+///   (PyFunction self, Object p0..pn-1 [, Object[] rest]) -> Object
+///   ```
+///   Built-ins do not capture variables. When variadic, excess arguments are delivered
+///   as a raw `Object[]` array.
+///
+/// ## Dispatch Pipeline
+/// Function call dispatch uses a two-tier strategy:
+/// 1. **Polymorphic Inline Cache ([FunctionCallSite]):** Call sites maintain a bounded
+///    cascade of [java.lang.invoke.MethodHandles#guardWithTest] guards (up to depth 4).
+/// 2. **Megamorphic Fallback ([Megamorphic]):** Call sites exceeding the
+///    polymorphic depth threshold are flattened into a single collector that dynamically
+///    dispatches via uniform thunks without cache thrashing.
 final class FunctionSupport {
   private FunctionSupport() { throw new AssertionError(); }
 
+  /// An invokedynamic [MutableCallSite] managing function invocation and inline caching.
+  ///
+  /// ## Function Creation
+  /// ```
+  /// (Object[] captures) -> Object
+  /// ```
   static final class DefCallSite {
     private DefCallSite() {
       throw new AssertionError();
     }
+
+    //                    invokedynamic #def : (captures...) -> Object
+    //                                          |
+    //                                          v
+    //          DefCallSite.def(ModuleContext, Dictionary, MethodType, int astIndex)
+    //                        functionDef = dictionary.lookup(astIndex)
+    //                                          |
+    //                +-------------------------+-------------------------+
+    //                |                                                   |
+    //                v (captureCount == 0)                               v (captureCount > 0)
+    //     Stateless / Zero-Capture                            Lexical Closure Factory
+    //                |                                                   |
+    //                v                                                   v
+    //    Pre-allocate PyFunction:                            Bind Constructor into MH:
+    //    new PyFunction(code, EMPTY)                         PY_FUNCTION.bindTo(code)
+    //                |                                                   |
+    //                v                                                   v
+    //    MethodHandles.constant(...)                         asCollector(Object[].class, k)
+    //                |                                                   |
+    //                v                                                   v
+    //        ConstantCallSite                                     ConstantCallSite
+    // (Always returns same instance)                     (Invokes factory on each execution)
 
     private static final MethodHandle PY_FUNCTION;
     static {
@@ -61,10 +113,58 @@ final class FunctionSupport {
     }
   }
 
+  /// Handles megamorphic function calls when a call site exceeds the PIC depth limit.
+  ///
+  /// Also serves as the backend execution engine for direct reflection-like calls
+  /// via [PyFunction#call(Object...)].
+  ///
+  /// ## Universal Thunk
+  /// Every function entry is adapted into a universal thunk:
+  /// ```
+  /// (Object[] captured, PyFunction self, Object[] args) -> Object
+  /// ```
   static final class Megamorphic {
     private Megamorphic() {
       throw new AssertionError();
     }
+
+    //                  Call Site: fn(arg0, arg1, arg2...)
+    //                                 |
+    //                                 v
+    //                 asCollector(Object[].class, N)
+    //      Packs all call-site arguments into a single Object[] args
+    //                                 |
+    //                                 v
+    //           Does the call site provide keyword arguments?
+    //                                 |
+    //               +-----------------+-----------------+
+    //               | NO                                | YES
+    //               v                                   v
+    //    Megamorphic.megamorphic          Megamorphic.megamorphicWithKeywords
+    //         (callee, args)               (callee, args, posCount, kwNames)
+    //               |                                   |
+    //               |                                   v
+    //               |                        reorderKeywordArguments(...)
+    //               |                        Computes canonical slot plan
+    //               |                                   |
+    //               |                                   v
+    //               |                       Allocate: Object[canonicalSize]
+    //               |                         ordered[plan[i]] = args[i]
+    //               |                                   |
+    //               v                                   v
+    //       args (canonical)                     ordered (canonical)
+    //               |                                   |
+    //               +-----------------+-----------------+
+    //                                 |
+    //                                 v
+    //         Validate: asFunction(callee), checkArity(function, len)
+    //                                 |
+    //                                 v
+    //                         getThunkEntry(function)
+    //            (Retrieves or lazily constructs the uniform thunk)
+    //                                 |
+    //                                 v
+    //     thunkEntry.invokeExact(function.capturedArgs, function, args_ordered)
 
     static final MethodHandle MEGAMORPHIC, MEGAMORPHIC_WITH_KEYWORDS;
     private static final MethodHandle ARRAY_ELEMENT, REST_TUPLE, BUILTIN_REST;
@@ -85,6 +185,12 @@ final class FunctionSupport {
       }
     }
 
+    /// Entry point for megamorphic calls with purely positional arguments.
+    ///
+    /// @param callee the target function (must be a [PyFunction])
+    /// @param args positional arguments array
+    /// @return return value of the function invocation
+    /// @throws Throwable if invocation or argument validation fails
     static Object megamorphic(Object callee, Object[] args) throws Throwable {
       var function = asFunction(callee);
       checkArity(function, args.length);
@@ -92,6 +198,14 @@ final class FunctionSupport {
       return thunkEntry.invokeExact(function.capturedArgs, function, args);
     }
 
+    /// Entry point for megamorphic calls with keyword arguments.
+    ///
+    /// @param callee the target function (must be a [PyFunction])
+    /// @param args argument array holding positional arguments followed by keyword values
+    /// @param positionalCount number of positional arguments in `args`
+    /// @param keywordNames names of the keyword arguments
+    /// @return return value of the function invocation
+    /// @throws Throwable if invocation or keyword reordering fails
     static Object megamorphicWithKeywords(Object callee, Object[] args,
                                           int positionalCount, String[] keywordNames) throws Throwable {
       var function = asFunction(callee);
@@ -115,8 +229,8 @@ final class FunctionSupport {
       return thunkEntry;
     }
 
-    /// Adapts the compiled entry to `(Object[] captured, PyFunction self, Object[] args) -> Object`
-    /// where `args` holds the declared parameters followed by the extra positional arguments.
+    /// Creates a universal thunk handle adapting the compiled entry to
+    /// `(Object[] captured, PyFunction self, Object[] args) -> Object`.
     private static MethodHandle createThunk(MethodHandle compiledEntry, PyFunction.Code code) {
       // 1. (Object[] captured, PyFunction self, <declared parameters> [, rest])
       var captureCount = code.captureCount();
@@ -162,6 +276,14 @@ final class FunctionSupport {
     }
   }
 
+  /// Adapter factory optimizing variadic (`*rest`) argument packing into [PyTuple] instances.
+  ///
+  /// When a compiled Python function declares a rest parameter, its method handle expects
+  /// a [PyTuple] at the designated parameter index. Instead of allocating an intermediate
+  /// `Object[]` array on every invocation, this adapter selects the most efficient tuple constructor:
+  ///
+  /// This design allows HotSpot C2 to perform escape analysis and completely eliminate heap
+  /// allocations for short variadic argument lists.
   private static final class RestAdapter {
     private RestAdapter() {
       throw new AssertionError();
@@ -190,6 +312,13 @@ final class FunctionSupport {
       }
     }
 
+    /// Adapts `entry` by replacing the rest parameter at `position` with `restCount`
+    /// positional argument slots packed into a [PyTuple].
+    ///
+    /// @param entry the method handle with signature `(..., PyTuple rest) -> Object`
+    /// @param position the zero-based parameter index of the rest parameter
+    /// @param restCount the number of extra arguments passed at the call site
+    /// @return the adapted method handle
     static MethodHandle adapt(MethodHandle entry, int position, int restCount) {
       return switch (restCount) {
         case 0 -> MethodHandles.insertArguments(entry, position, TUPLE_EMPTY);
@@ -310,6 +439,9 @@ final class FunctionSupport {
       return entry;
     }
 
+    /// Compiles a function body lazily if not already compiled.
+    /// @param code the function code metadata
+    /// @return the compiled method handle entry point
     static MethodHandle getCompiledEntry(PyFunction.Code code) {
       // We do not want to compile the function several times (synchronized + Double Check Locking)
       var compiledEntry = code.compiledEntry;  // volatile read
@@ -409,11 +541,12 @@ final class FunctionSupport {
     }
   }
 
-  /// Keyword reordering, shared by the polymorphic and megamorphic paths.
-  ///
-  /// Returns `plan` such that call-site argument `i` (callee excluded) goes to the slot `plan[i]`
-  /// of the canonical order: the declared parameters, then the extra positional arguments.
-  /// The canonical size is `max(positionalCount, arity)` and every slot is filled exactly once.
+  /// Computes the argument reordering plan mapping call-site arguments to canonical slots.
+  /// @param function the target function
+  /// @param positionalCount count of positional arguments
+  /// @param keywordNames names of keyword arguments
+  /// @return array where index `i` maps call-site argument `i` to its canonical slot
+  /// @throws PyTypeError if keywords are unknown, duplicate, or missing required parameters
   static int[] reorderKeywordArguments(PyFunction function, int positionalCount, String[] keywordNames) {
     if (function.code.isBuiltin()) {
       throw builtinKeywords(function);

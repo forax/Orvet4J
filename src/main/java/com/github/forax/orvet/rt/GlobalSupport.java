@@ -126,24 +126,27 @@ final class GlobalSupport {
     }
   }
 
-  // [Unlinked / CallSite Init]
-  //          │
-  //          ▼
-  //   fallback()  (counter = 0 -> 1)
-  //          │
-  //          ├── Value bound? ──► Target: SwitchPoint.gwt(MHs.constant(value), fallback)
-  //          └── Value unbound? ─► Target: SwitchPoint.gwt(NAME_ERROR.bindTo(name), fallback)
-  //          │
-  //          ▼  (Global updated via setGlobal() -> SwitchPoint invalidated)
-  //   fallback()  (counter = 1 -> 2)
-  //          │
-  //          └── Re-binds to new value / new SwitchPoint (same as above)
-  //          │
-  //          ▼  (Global updated again -> SwitchPoint invalidated)
-  //   fallback()  (counter >= MAX_COUNTER)
-  //          │
-  //          └── Target: CELL_GET.bindTo(cell)  [Megamorphic / Volatile fast-path]
+
   private static final class GetGlobalCallSite extends MutableCallSite {
+
+    // [Unlinked / CallSite Init]
+    //          |
+    //          v
+    //   fallback()  (counter = 0 -> 1)
+    //          |
+    //          +-- Value bound?   --> Target: SwitchPoint.gwt(MHs.constant(value), fallback)
+    //          +-- Value unbound? --> Target: SwitchPoint.gwt(NAME_ERROR.bindTo(name), fallback)
+    //          |
+    //          v  (Global updated via setGlobal() -> SwitchPoint invalidated)
+    //   fallback()  (counter = 1 -> 2)
+    //          |
+    //          +-- Re-binds to new value / new SwitchPoint (same as above)
+    //          |
+    //          v  (Global updated again -> SwitchPoint invalidated)
+    //   fallback()  (counter >= MAX_COUNTER)
+    //          |
+    //          +-- Target: CELL_GET.bindTo(cell)  [Megamorphic / Volatile fast-path]
+
     private static final MethodType TYPE;
     private static final MethodHandle FALLBACK;
     static {
