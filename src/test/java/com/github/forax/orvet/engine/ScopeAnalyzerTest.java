@@ -53,7 +53,7 @@ public final class ScopeAnalyzerTest {
                         pass
                     """);
       var result = ScopeAnalyzer.analyze(script);
-      var node = (Stmt.FunctionDef) script.body().stmts().get(0);
+      var node = (Stmt.FunctionDef) script.body().stmts().getFirst();
       assertSame(node, result.keySet().iterator().next());
     }
 
@@ -257,6 +257,15 @@ public final class ScopeAnalyzerTest {
                         return inner
                     """);
       assertEquals(Set.of("p"), byName(result, "inner").freeVariables());
+    }
+
+    @Test
+    public void selfRecursionTopLevelIsNotCaptured() {
+      var result = analyze("""
+                    def fact(n):
+                        return 1 if n <= 1 else n * fact(n - 1)
+                    """);
+      assertTrue(byName(result, "fact").freeVariables().isEmpty());
     }
 
     @Test
