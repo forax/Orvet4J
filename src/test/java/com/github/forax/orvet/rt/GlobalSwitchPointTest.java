@@ -30,44 +30,44 @@ public final class GlobalSwitchPointTest {
     }
   }
 
-  private static MethodHandle getter(ModuleContext ctx, String name) {
-    return GlobalSupport.getGlobal(ctx, name).dynamicInvoker();
+  private static MethodHandle getter(ModuleContext context, String name) {
+    return GlobalSupport.getGlobal(context, name).dynamicInvoker();
   }
 
   @Test
   public void aSiteLinkedWhileUnboundSeesTheLaterBinding() {
-    var ctx = new ModuleContext();
-    var site = getter(ctx, "x");
+    var context = new ModuleContext();
+    var site = getter(context, "x");
     assertThrows(PyNameError.class, () -> read(site));
 
-    ctx.setGlobal("x", 1L);
+    context.setGlobal("x", 1L);
     assertEquals(1L, read(site));
   }
 
   @Test
   public void aFoldedSiteSeesEveryRebinding() {
-    var ctx = new ModuleContext();
-    ctx.setGlobal("x", 1L);
-    var before = getter(ctx, "x");
+    var context = new ModuleContext();
+    context.setGlobal("x", 1L);
+    var before = getter(context, "x");
     assertEquals(1L, read(before));
 
-    ctx.setGlobal("x", 2L);
-    var after = getter(ctx, "x");
+    context.setGlobal("x", 2L);
+    var after = getter(context, "x");
     assertEquals(2L, read(before));
     assertEquals(2L, read(after));
 
-    ctx.setGlobal("x", 3L);
+    context.setGlobal("x", 3L);
     assertEquals(3L, read(before));
     assertEquals(3L, read(after));
   }
 
   @Test
   public void storesThroughTheCallSiteInvalidateToo() throws Throwable {
-    var ctx = new ModuleContext();
-    ctx.setGlobal("x", 1L);
+    var context = new ModuleContext();
+    context.setGlobal("x", 1L);
 
-    var get = getter(ctx, "x");
-    var set = GlobalSupport.setGlobal(ctx, "x").dynamicInvoker();
+    var get = getter(context, "x");
+    var set = GlobalSupport.setGlobal(context, "x").dynamicInvoker();
     assertEquals(1L, read(get));
 
     set.invokeExact((Object) 7L);
@@ -76,12 +76,12 @@ public final class GlobalSwitchPointTest {
 
   @Test
   public void aGlobalShadowsABuiltinEvenForSitesThatFoldedTheBuiltin() {
-    var ctx = new ModuleContext();
+    var context = new ModuleContext();
     var len = Builtins.BUILTINS.get("len");
-    var site = getter(ctx, "len");
+    var site = getter(context, "len");
     assertSame(len, read(site));
 
-    ctx.setGlobal("len", 5L);
+    context.setGlobal("len", 5L);
     assertEquals(5L, read(site));
 
     var other = new ModuleContext();  // cells are per module
@@ -115,9 +115,9 @@ public final class GlobalSwitchPointTest {
   @Test
   @Timeout(60)
   public void readersNeverSeeAValueGoingBackwards() throws Exception {
-    var ctx = new ModuleContext();
-    ctx.setGlobal("counter", 0L);
-    var linkedEarly = getter(ctx, "counter");
+    var context = new ModuleContext();
+    context.setGlobal("counter", 0L);
+    var linkedEarly = getter(context, "counter");
     var done = new AtomicBoolean();
 
     try (var pool = Executors.newFixedThreadPool(4)) {
@@ -127,7 +127,7 @@ public final class GlobalSwitchPointTest {
         futures.add(pool.submit(() -> {
           var last = -1L;
           while (!done.get()) {
-            var handle = relink ? getter(ctx, "counter") : linkedEarly;
+            var handle = relink ? getter(context, "counter") : linkedEarly;
             var value = (Long) read(handle);
             assertTrue(value >= last, value + " after " + last);
             last = value;
@@ -135,14 +135,14 @@ public final class GlobalSwitchPointTest {
         }));
       }
       for (var i = 1L; i <= 20_000; i++) {
-        ctx.setGlobal("counter", i);
+        context.setGlobal("counter", i);
       }
       done.set(true);
       for (var future : futures) {
         future.get();
       }
     }
-    assertEquals(20_000L, ctx.getGlobal("counter"));
+    assertEquals(20_000L, context.getGlobal("counter"));
   }
 
   @Test
@@ -150,15 +150,15 @@ public final class GlobalSwitchPointTest {
     var dict = new PyDict<>();
     var weak = new WeakReference<>(dict);
 
-    var ctx = new ModuleContext();
-    ctx.setGlobal("dict", dict);
+    var context = new ModuleContext();
+    context.setGlobal("dict", dict);
     dict = null;
 
-    var site = getter(ctx, "dict");
+    var site = getter(context, "dict");
     read(site);
     read(site);
 
-    ctx.setGlobal("dict", new PyDict<>());
+    context.setGlobal("dict", new PyDict<>());
     read(site);
 
     System.gc();

@@ -19,13 +19,13 @@ public final class Engine {
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
   /// Compiles the script eagerly and returns its `__main__`; function bodies are compiled on their first call.
-  public static MethodHandle compile(ModuleContext ctx, Script script) {
+  public static MethodHandle compile(ModuleContext context, Script script) {
     var internalName = "com/github/forax/orvet/gen/Script";
     var dictionary = new Dictionary();
-    var bytes = BytecodeGenerator.generateScript(ctx, dictionary, script, internalName);
+    var bytes = BytecodeGenerator.generateScript(context, dictionary, script, internalName);
 
     var className = internalName.replace('/', '.');
-    var clazz = RT.defineClass(ctx, dictionary, className, bytes);
+    var clazz = RT.defineClass(context, dictionary, className, bytes);
     try {
       return LOOKUP.findStatic(clazz, "__main__", MethodType.methodType(void.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {

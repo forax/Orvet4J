@@ -125,11 +125,11 @@ public final class BytecodeGenerator {
   // ---------------------------------------------------------------------------------------------
   // entry points
 
-  public static byte[] generateScript(ModuleContext ctx, Dictionary dictionary, Script script, String internalName) {
+  public static byte[] generateScript(ModuleContext context, Dictionary dictionary, Script script, String internalName) {
     var cw = newClassWriter(internalName);
     var mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "__main__", "()V", null, null);
     mv.visitCode();
-    var emitter = new Emitter(mv, ctx, dictionary, null, Set.of());
+    var emitter = new Emitter(mv, context, dictionary, null, Set.of());
     emitter.block(script.body());
     mv.visitInsn(RETURN);
     mv.visitMaxs(0, 0);
@@ -138,7 +138,7 @@ public final class BytecodeGenerator {
     return cw.toByteArray();
   }
 
-  public static byte[] generateFunction(ModuleContext ctx, Dictionary dictionary,
+  public static byte[] generateFunction(ModuleContext context, Dictionary dictionary,
                                         Stmt.FunctionDef def, FunctionScope scope) {
     var analysis = scope.analysis();
     var captures = captureNames(def, analysis);
@@ -155,7 +155,7 @@ public final class BytecodeGenerator {
     var mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, def.name(), descriptor, null, null);
     mv.visitCode();
 
-    var emitter = new Emitter(mv, ctx, dictionary, def, scope.analysis().freeVariables());
+    var emitter = new Emitter(mv, context, dictionary, def, scope.analysis().freeVariables());
     for (var capture : captures) {
       emitter.declare(capture);
     }
@@ -170,7 +170,7 @@ public final class BytecodeGenerator {
       }
     }
 
-    scope.childByDef().forEach(ctx::registerScope);
+    scope.childByDef().forEach(context::registerScope);
 
     emitter.block(def.body());
     mv.visitFieldInsn(GETSTATIC, PY_NONE, "INSTANCE", "L" + PY_NONE + ";");
@@ -257,7 +257,7 @@ public final class BytecodeGenerator {
 
   private static final class Emitter {
     private final MethodVisitor mv;
-    private final ModuleContext ctx;
+    private final ModuleContext context;
     private final Dictionary dictionary;
     private final Stmt.FunctionDef function;  // null in __main__
     private final Set<String> frees;
@@ -267,9 +267,9 @@ public final class BytecodeGenerator {
     private Label breakTarget;
     private Label continueTarget;
 
-    Emitter(MethodVisitor mv, ModuleContext ctx, Dictionary dictionary, Stmt.FunctionDef function, Set<String> frees) {
+    Emitter(MethodVisitor mv, ModuleContext context, Dictionary dictionary, Stmt.FunctionDef function, Set<String> frees) {
       this.mv = mv;
-      this.ctx = ctx;
+      this.context = context;
       this.dictionary = dictionary;
       this.function = function;
       this.frees = frees;
@@ -515,7 +515,7 @@ public final class BytecodeGenerator {
     private void functionDef(Stmt.FunctionDef def) {
       var captures = function == null
           ? List.<String>of()
-          : captureNames(def, ctx.scopeOf(def).analysis());
+          : captureNames(def, context.scopeOf(def).analysis());
       for (var capture : captures) {
         loadName(capture);
       }

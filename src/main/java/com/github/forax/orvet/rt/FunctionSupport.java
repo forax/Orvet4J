@@ -470,15 +470,15 @@ final class FunctionSupport {
       return callee instanceof PyFunction f && f.code == expected;
     }
 
-    private static MethodHandle compileBody(ModuleContext ctx, Stmt.FunctionDef def) {
-      var scope = ctx.scopeFor(def);
+    private static MethodHandle compileBody(ModuleContext context, Stmt.FunctionDef def) {
+      var scope = context.scopeFor(def);
       ScopeAnalyzer.checkDefiniteAssignment(scope);
 
       var dictionary = new Dictionary();
-      var bytes = BytecodeGenerator.generateFunction(ctx, dictionary, def, scope);
+      var bytes = BytecodeGenerator.generateFunction(context, dictionary, def, scope);
 
       var className = BytecodeGenerator.functionClassName(def).replace('/', '.');
-      var clazz = RT.defineClass(ctx, dictionary, className, bytes);
+      var clazz = RT.defineClass(context, dictionary, className, bytes);
 
       var captureCount = BytecodeGenerator.captureNames(def, scope.analysis()).size();
       var type = BytecodeGenerator.bodyType(captureCount, def.parameters().size(), def.rest().isPresent());

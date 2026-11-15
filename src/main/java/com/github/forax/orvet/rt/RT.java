@@ -23,8 +23,8 @@ public final class RT {
     }
   }
 
-  public static Class<?> defineClass(ModuleContext ctx, Dictionary dictionary, String className, byte[] bytes) {
-    var loader = new FunctionClassLoader(ctx, dictionary);
+  public static Class<?> defineClass(ModuleContext context, Dictionary dictionary, String className, byte[] bytes) {
+    var loader = new FunctionClassLoader(context, dictionary);
     return loader.define(className, bytes);
   }
 

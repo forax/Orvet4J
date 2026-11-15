@@ -54,8 +54,8 @@ public final class FunctionSupportTest {
 
   /// Compiles and runs a script in an existing module: its globals and the call sites inside
   /// the already defined functions are kept.
-  private static void runIn(ModuleContext ctx, String source) {
-    var main = Engine.compile(ctx, ASTBuilder.createScript(source));
+  private static void runIn(ModuleContext context, String source) {
+    var main = Engine.compile(context, ASTBuilder.createScript(source));
     try {
       main.invokeExact();
     } catch (RuntimeException | Error e) {
