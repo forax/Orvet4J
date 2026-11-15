@@ -1,6 +1,7 @@
 package com.github.forax.orvet.compiler;
 
 import com.github.forax.orvet.ast.UnsupportedSyntaxException;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
@@ -21,9 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class BytecodeGeneratorTest {
-  private static Object eval(String source, String global) {
-    return Compiler.run(source).getGlobal(global);
+  private static ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
   }
+
+  private static Object eval(String source, String global) {
+    return run(source).getGlobal(global);
+  }
+
+
 
   @Nested
   public final class Literal {
@@ -299,7 +308,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void augAssignOnUndefinedNameIsANameError() {
-      assertThrows(PyNameError.class, () -> Compiler.run("x += 1"));
+      assertThrows(PyNameError.class, () -> run("x += 1"));
     }
 
     @Test
@@ -341,7 +350,7 @@ public final class BytecodeGeneratorTest {
           original = 10
           changed = f(original)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(10L, module.getGlobal("original"));
       assertEquals(11L, module.getGlobal("changed"));
@@ -353,7 +362,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void chainedAssignment() {
-      var module = Compiler.run("a = b = c = 1");
+      var module = run("a = b = c = 1");
 
       assertEquals(1L, module.getGlobal("a"));
       assertEquals(1L, module.getGlobal("b"));
@@ -367,7 +376,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void reassignmentDoesNotAffectEarlierCopies() {
-      var module = Compiler.run("x = 1\ny = x\nx = 2");
+      var module = run("x = 1\ny = x\nx = 2");
 
       assertEquals(2L, module.getGlobal("x"));
       assertEquals(1L, module.getGlobal("y"));
@@ -959,7 +968,7 @@ public final class BytecodeGeneratorTest {
           r2 = result
           """;
 
-      var module = Compiler.run(source);
+      var module = run(source);
       assertEquals(3L, module.getGlobal("r1"));
       assertEquals("a😀b", module.getGlobal("r2"));
     }
@@ -1059,7 +1068,7 @@ public final class BytecodeGeneratorTest {
           r1 = find('abc', 'b')
           r2 = find('abc', 'z')
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(1L, module.getGlobal("r1"));
       assertEquals(0L, module.getGlobal("r2"));
@@ -1078,7 +1087,7 @@ public final class BytecodeGeneratorTest {
           n = sign(-3)
           z = sign(0)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(1L, module.getGlobal("p"));
       assertEquals(-1L, module.getGlobal("n"));
@@ -1097,7 +1106,7 @@ public final class BytecodeGeneratorTest {
           b = count(1)
           c = count(1, 2, 3)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(0L, module.getGlobal("a"));
       assertEquals(1L, module.getGlobal("b"));
@@ -1114,7 +1123,7 @@ public final class BytecodeGeneratorTest {
           r1 = one(42)
           r2 = many(1, 2, 3, 4, 5)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(42L, module.getGlobal("r1"));
       assertEquals(15L, module.getGlobal("r2"));
@@ -1146,7 +1155,7 @@ public final class BytecodeGeneratorTest {
           b = choose(0)
           c = choose(7)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(-1L, module.getGlobal("a"));
       assertEquals(0L, module.getGlobal("b"));
@@ -1163,7 +1172,7 @@ public final class BytecodeGeneratorTest {
           a = factorial(5)
           b = factorial(6)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(120L, module.getGlobal("a"));
       assertEquals(720L, module.getGlobal("b"));
@@ -1196,7 +1205,7 @@ public final class BytecodeGeneratorTest {
           a = apply(increment, 10)
           b = apply(double, 10)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(11L, module.getGlobal("a"));
       assertEquals(20L, module.getGlobal("b"));
@@ -1213,7 +1222,7 @@ public final class BytecodeGeneratorTest {
           a = old_f()
           b = f()
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(1L, module.getGlobal("a"));
       assertEquals(2L, module.getGlobal("b"));
@@ -1230,7 +1239,7 @@ public final class BytecodeGeneratorTest {
           a = f(10)
           b = f(10, 20, 30)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(10L, module.getGlobal("a"));
       assertEquals(12L, module.getGlobal("b"));
@@ -1247,7 +1256,7 @@ public final class BytecodeGeneratorTest {
           r1 = sum_from(5)
           r2 = sum_from(5, 1, 2, 3)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(5L, module.getGlobal("r1"));
       assertEquals(11L, module.getGlobal("r2"));
@@ -1269,17 +1278,17 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void tooFewArgumentsRaisesTypeError() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("def f(a, b):\n    return a + b\nf(1)"));
+      assertThrows(PyTypeError.class, () -> run("def f(a, b):\n    return a + b\nf(1)"));
     }
 
     @Test
     public void tooManyArgumentsRaisesTypeErrorForFixedArityFunction() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("def f(a):\n    return a\nf(1, 2)"));
+      assertThrows(PyTypeError.class, () -> run("def f(a):\n    return a\nf(1, 2)"));
     }
 
     @Test
     public void missingFixedArgumentRaisesTypeErrorForVarargsFunction() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("def f(a, *rest):\n    return a\nf()"));
+      assertThrows(PyTypeError.class, () -> run("def f(a, *rest):\n    return a\nf()"));
     }
 
     @Test
@@ -1291,7 +1300,7 @@ public final class BytecodeGeneratorTest {
           f(1, 2)
           """;
 
-      assertThrows(PyTypeError.class, () -> Compiler.run(source));
+      assertThrows(PyTypeError.class, () -> run(source));
     }
   }
 
@@ -1340,7 +1349,7 @@ public final class BytecodeGeneratorTest {
           r1 = a(1)
           r2 = b(1)
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(2L, module.getGlobal("r1"));
       assertEquals(11L, module.getGlobal("r2"));
@@ -1419,7 +1428,7 @@ public final class BytecodeGeneratorTest {
           b = second()
           c = first()
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(10L, module.getGlobal("a"));
       assertEquals(20L, module.getGlobal("b"));
@@ -1543,7 +1552,7 @@ public final class BytecodeGeneratorTest {
                 return a + b
             r = f(a=1)
             """;
-      assertThrows(PyTypeError.class, () -> Compiler.run(source));
+      assertThrows(PyTypeError.class, () -> run(source));
     }
   }
 
@@ -1560,7 +1569,7 @@ public final class BytecodeGeneratorTest {
           x = 10
           r2 = f()
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(2L, module.getGlobal("r1"));
       assertEquals(11L, module.getGlobal("r2"));
@@ -1576,7 +1585,7 @@ public final class BytecodeGeneratorTest {
           r1 = f()
           r2 = x
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(2L, module.getGlobal("r1"));
       assertEquals(1L, module.getGlobal("r2"));
@@ -1592,7 +1601,7 @@ public final class BytecodeGeneratorTest {
           r = x
           """;
 
-      assertThrows(PyNameError.class, () -> Compiler.run(source));
+      assertThrows(PyNameError.class, () -> run(source));
     }
 
     @Test
@@ -1617,7 +1626,7 @@ public final class BytecodeGeneratorTest {
           value = 99
           second = read_value()
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(1L, module.getGlobal("first"));
       assertEquals(99L, module.getGlobal("second"));
@@ -1633,7 +1642,7 @@ public final class BytecodeGeneratorTest {
           local = f()
           global_copy = value
           """;
-      var module = Compiler.run(source);
+      var module = run(source);
 
       assertEquals(7L, module.getGlobal("local"));
       assertEquals(100L, module.getGlobal("global_copy"));
@@ -1647,7 +1656,7 @@ public final class BytecodeGeneratorTest {
           f()
           """;
 
-      assertThrows(PyNameError.class, () -> Compiler.run(source));
+      assertThrows(PyNameError.class, () -> run(source));
     }
 
     @Test
@@ -1659,7 +1668,7 @@ public final class BytecodeGeneratorTest {
           result = created_inside
           """;
 
-      assertThrows(PyNameError.class, () -> Compiler.run(source));
+      assertThrows(PyNameError.class, () -> run(source));
     }
   }
 
@@ -1722,7 +1731,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void eachListDisplayCreatesANewList() {
-      var module = Compiler.run("""
+      var module = run("""
           first = [1]
           second = [1]
           first[0] = 2
@@ -1813,7 +1822,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void chainedSubscriptAssignmentStoresTheSameValueInBothTargets() {
-      var module = Compiler.run("""
+      var module = run("""
           calls = [0]
           def next_value():
               calls[0] += 1
@@ -1830,7 +1839,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void subscriptAssignmentEvaluatesRightHandSideBeforeTheIndex() {
-      var module = Compiler.run("""
+      var module = run("""
           events = [0]
           values = [0]
           def right_hand_side():
@@ -1856,7 +1865,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void augmentedSubscriptAssignmentEvaluatesContainerAndIndexOnce() {
-      var module = Compiler.run("""
+      var module = run("""
           values = [10]
           calls = [0, 0]
           def select_values():
@@ -1898,12 +1907,12 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void deletingAnOutOfRangeIndexRaisesIndexError() {
-      assertThrows(PyIndexError.class, () -> Compiler.run("x = [1]; del x[1]"));
+      assertThrows(PyIndexError.class, () -> run("x = [1]; del x[1]"));
     }
 
     @Test
     public void deletingWithANonIntegerIndexRaisesTypeError() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = [1]; del x['0']"));
+      assertThrows(PyTypeError.class, () -> run("x = [1]; del x['0']"));
     }
   }
 
@@ -1989,7 +1998,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void eachDictDisplayCreatesANewDictionary() {
-      var module = Compiler.run("""
+      var module = run("""
           first = {'key': 1}
           second = {'key': 1}
           first['key'] = 2
@@ -2071,7 +2080,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void unhashableKeyCannotBeAssigned() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = {}; x[[1]] = 2"));
+      assertThrows(PyTypeError.class, () -> run("x = {}; x[[1]] = 2"));
     }
   }
 
@@ -2087,12 +2096,12 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void deletingAMissingKeyRaisesKeyError() {
-      assertThrows(PyKeyError.class, () -> Compiler.run("x = {'a': 1}; del x['missing']"));
+      assertThrows(PyKeyError.class, () -> run("x = {'a': 1}; del x['missing']"));
     }
 
     @Test
     public void unhashableKeyCannotBeDeleted() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = {}; del x[[1]]"));
+      assertThrows(PyTypeError.class, () -> run("x = {}; del x[[1]]"));
     }
   }
 
@@ -2195,7 +2204,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void tupleImmutability() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = (1, 2, 3)\nx[0] = 9"));
+      assertThrows(PyTypeError.class, () -> run("x = (1, 2, 3)\nx[0] = 9"));
     }
   }
 
@@ -2220,17 +2229,17 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void indexPositiveOutOfRange() {
-      assertThrows(PyIndexError.class, () -> Compiler.run("x = (1, 2, 3)[3]"));
+      assertThrows(PyIndexError.class, () -> run("x = (1, 2, 3)[3]"));
     }
 
     @Test
     public void indexNegativeOutOfRange() {
-      assertThrows(PyIndexError.class, () -> Compiler.run("x = (1, 2, 3)[-4]"));
+      assertThrows(PyIndexError.class, () -> run("x = (1, 2, 3)[-4]"));
     }
 
     @Test
     public void indexEmptyTuple() {
-      assertThrows(PyIndexError.class, () -> Compiler.run("x = ()[0]"));
+      assertThrows(PyIndexError.class, () -> run("x = ()[0]"));
     }
 
     @Test
@@ -2257,7 +2266,7 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void indexInvalidType() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = (1, 2)[1.5]"));
+      assertThrows(PyTypeError.class, () -> run("x = (1, 2)[1.5]"));
     }
   }
 
@@ -2266,7 +2275,7 @@ public final class BytecodeGeneratorTest {
     @Test
     public void assignToTupleElementFails() {
       // tuple is immutable
-      assertThrows(PyTypeError.class, () -> Compiler.run("t = (1, 2, 3)\nt[0] = 9"));
+      assertThrows(PyTypeError.class, () -> run("t = (1, 2, 3)\nt[0] = 9"));
     }
   }
 
@@ -2275,7 +2284,7 @@ public final class BytecodeGeneratorTest {
     @Test
     public void deleteFromTupleElementFails() {
       // tuples are immutable, so items cannot be deleted
-      assertThrows(PyTypeError.class, () -> Compiler.run("t = (1, 2, 3)\ndel t[0]"));
+      assertThrows(PyTypeError.class, () -> run("t = (1, 2, 3)\ndel t[0]"));
     }
   }
 
@@ -2317,44 +2326,44 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void typeErrors() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 1 / 'a'"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 'a' + 1"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = None + 1"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 1\nx()"));
+      assertThrows(PyTypeError.class, () -> run("x = 1 / 'a'"));
+      assertThrows(PyTypeError.class, () -> run("x = 'a' + 1"));
+      assertThrows(PyTypeError.class, () -> run("x = None + 1"));
+      assertThrows(PyTypeError.class, () -> run("x = 1\nx()"));
     }
 
     // -- unsupported constructs
 
     @Test
     public void moreUnsupportedConstructs() {
-      assertThrows(UnsupportedSyntaxException.class, () -> Compiler.run("x = 1\ndel x"));
-      assertThrows(UnsupportedSyntaxException.class, () -> Compiler.run("x = 1\ny = x[1:2]"));
-      assertThrows(UnsupportedSyntaxException.class, () -> Compiler.run("x = 1\ny = x.m()"));
+      assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ndel x"));
+      assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ny = x[1:2]"));
+      assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ny = x.m()"));
     }
 
     @Test
     public void invalidNumericAndBitwiseOperandCombinationsRaiseTypeError() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 1 - 'a'"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 1 * None"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 1 << 1.5"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("x = 'a' // 2"));
+      assertThrows(PyTypeError.class, () -> run("x = 1 - 'a'"));
+      assertThrows(PyTypeError.class, () -> run("x = 1 * None"));
+      assertThrows(PyTypeError.class, () -> run("x = 1 << 1.5"));
+      assertThrows(PyTypeError.class, () -> run("x = 'a' // 2"));
     }
 
     @Test
     public void callingNonFunctionValuesRaisesTypeError() {
-      assertThrows(PyTypeError.class, () -> Compiler.run("value = 42\nvalue()"));
-      assertThrows(PyTypeError.class, () -> Compiler.run("value = 'text'\nvalue(1)"));
+      assertThrows(PyTypeError.class, () -> run("value = 42\nvalue()"));
+      assertThrows(PyTypeError.class, () -> run("value = 'text'\nvalue(1)"));
     }
 
     @Test
     public void readingUndefinedTopLevelNameRaisesNameError() {
-      assertThrows(PyNameError.class, () -> Compiler.run("result = not_defined"));
+      assertThrows(PyNameError.class, () -> run("result = not_defined"));
     }
 
     @Test
     public void unsupportedTupleTargetsRemainRejected() {
       assertThrows(UnsupportedSyntaxException.class,
-          () -> Compiler.run("first, second = 1, 2"));
+          () -> run("first, second = 1, 2"));
     }
   }
 

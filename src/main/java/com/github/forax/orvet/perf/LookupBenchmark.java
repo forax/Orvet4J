@@ -1,6 +1,7 @@
 package com.github.forax.orvet.perf;
 
 import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyFunction;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -27,6 +28,12 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class LookupBenchmark {
 
+  private static ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
+  }
+
   private static final MethodHandle LOOKUP_LOCAL_MH, LOOKUP_DICT_MH;
   static {
     var lookupLocalSource = """
@@ -34,7 +41,7 @@ public class LookupBenchmark {
             x = 42
             return x + x
         """;
-    var lookupLocal = (PyFunction) Compiler.run(lookupLocalSource).getGlobal("lookup_local");
+    var lookupLocal = (PyFunction) run(lookupLocalSource).getGlobal("lookup_local");
     LOOKUP_LOCAL_MH = lookupLocal.createDirectMethodHandle(MethodType.methodType(long.class));
 
     var lookupDictSource = """
@@ -42,7 +49,7 @@ public class LookupBenchmark {
             d = {"value": 42}
             return d["value"] + d["value"]
         """;
-    var lookupDict = (PyFunction) Compiler.run(lookupDictSource).getGlobal("lookup_dict");
+    var lookupDict = (PyFunction) run(lookupDictSource).getGlobal("lookup_dict");
     LOOKUP_DICT_MH = lookupDict.createDirectMethodHandle(MethodType.methodType(long.class));
   }
 

@@ -90,7 +90,8 @@ public final class GlobalSwitchPointTest {
 
   @Test
   public void compiledCodeSeesRebindingAfterTheCallSiteFolded() {
-    var module = Compiler.run("""
+    var context = new ModuleContext();
+    Compiler.run(context, """
         def read():
             return x
         x = 1
@@ -104,11 +105,11 @@ public final class GlobalSwitchPointTest {
         x = 5
         e = read()
         """);
-    assertEquals(1L, module.getGlobal("a"));
-    assertEquals(2L, module.getGlobal("b"));
-    assertEquals(3L, module.getGlobal("c"));
-    assertEquals(4L, module.getGlobal("d"));
-    assertEquals(5L, module.getGlobal("e"));
+    assertEquals(1L, context.getGlobal("a"));
+    assertEquals(2L, context.getGlobal("b"));
+    assertEquals(3L, context.getGlobal("c"));
+    assertEquals(4L, context.getGlobal("d"));
+    assertEquals(5L, context.getGlobal("e"));
   }
 
   @Test

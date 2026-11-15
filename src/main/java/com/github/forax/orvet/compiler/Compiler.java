@@ -34,16 +34,17 @@ public final class Compiler {
   }
 
   /// Runs a program and returns its module, whose globals can then be inspected.
-  public static ModuleContext run(String source) {
+  public static void run(ModuleContext context, String source) {
+    Objects.requireNonNull(context);
     Objects.requireNonNull(source);
     var script = ASTBuilder.createScript(source);
-    return run(script);
+    run(context, script);
   }
 
-  public static ModuleContext run(Script script) {
+  public static void run(ModuleContext context, Script script) {
+    Objects.requireNonNull(context);
     Objects.requireNonNull(script);
-    var ctx = new ModuleContext();
-    var main = compile(ctx, script);
+    var main = compile(context, script);
     try {
       main.invokeExact();
     } catch(RuntimeException | Error e) {
@@ -51,8 +52,5 @@ public final class Compiler {
     } catch (Throwable e) {
       throw new UndeclaredThrowableException(e);
     }
-    return ctx;
   }
-
-
 }

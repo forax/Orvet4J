@@ -1,6 +1,7 @@
 package com.github.forax.orvet.perf;
 
 import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyFunction;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -35,6 +36,12 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class RecursiveFunctionBenchmark {
 
+  private static ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
+  }
+
   private static final MethodHandle FIBO_MH;
   static {
     var source = """
@@ -43,7 +50,7 @@ public class RecursiveFunctionBenchmark {
               return 1
             return fibo(n - 1) + fibo(n - 2)
         """;
-    var fibo = (PyFunction) Compiler.run(source).getGlobal("fibo");
+    var fibo = (PyFunction) run(source).getGlobal("fibo");
     FIBO_MH = fibo.createDirectMethodHandle(MethodType.methodType(long.class, long.class));
   }
 

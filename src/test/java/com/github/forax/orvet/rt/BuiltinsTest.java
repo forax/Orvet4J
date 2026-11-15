@@ -18,13 +18,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class BuiltinsTest {
 
+  private static void run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+  }
+
   private static String runCaptureOutput(String source) throws IOException {
     try (var out = new ByteArrayOutputStream();
          var printStream = new PrintStream(out)) {
       var originalOut = System.out;
       System.setOut(printStream);
       try {
-        Compiler.run(source);
+        run(source);
       } finally {
         System.setOut(originalOut);
       }
@@ -50,7 +55,7 @@ public final class BuiltinsTest {
 
   private static void assertRaises(Class<? extends Throwable> expected,
                                    String source) {
-    assertThrows(expected, () -> Compiler.run(source));
+    assertThrows(expected, () -> run(source));
   }
 
 
@@ -225,7 +230,7 @@ public final class BuiltinsTest {
     }
 
     @Test
-    public void integerSizeCreatesZeroFilledBytes() throws IOException {
+    public void integerSizeCreatesZeroFilledBytes() {
       // CPython: bytearray(3) == bytearray(b'\\x00\\x00\\x00')
       //assertEquals("0\n0\n0\n", runCaptureOutput("""
       //    for b in bytearray(3):
@@ -424,7 +429,7 @@ public final class BuiltinsTest {
     @Test
     public void zeroIntegerDivisor() {
       var error = assertThrows(PyZeroDivisionError.class,
-          () -> Compiler.run("divmod(1, 0)"));
+          () -> run("divmod(1, 0)"));
       assertEquals("integer division or modulo by zero",
           error.getMessage());
     }
@@ -432,11 +437,11 @@ public final class BuiltinsTest {
     @Test
     public void zeroFloatDivisor() {
       var error = assertThrows(PyZeroDivisionError.class,
-          () -> Compiler.run("divmod(1.0, 0.0)"));
+          () -> run("divmod(1.0, 0.0)"));
       assertEquals("float divmod()", error.getMessage());
 
       error = assertThrows(PyZeroDivisionError.class,
-          () -> Compiler.run("divmod(1, 0.0)"));
+          () -> run("divmod(1, 0.0)"));
       assertEquals("float divmod()", error.getMessage());
     }
 

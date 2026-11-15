@@ -4,6 +4,7 @@ import com.github.forax.orvet.ast.ASTBuilder;
 import com.github.forax.orvet.ast.Script;
 import com.github.forax.orvet.ast.SyntaxErrorException;
 import com.github.forax.orvet.ast.UnsupportedSyntaxException;
+import com.github.forax.orvet.rt.ModuleContext;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -30,7 +31,7 @@ public final class ConformanceTestIT {
     return pyFile.resolveSibling(goldenFileName);
   }
 
-  private record TestPair(Path pyFile, String source, String goldenSource, Script script) {
+  public record TestPair(Path pyFile, String source, String goldenSource, Script script) {
     @Override
     public String toString() {
       return BASICS_DIR.relativize(pyFile).toString();
@@ -79,7 +80,8 @@ public final class ConformanceTestIT {
 
       // Execute the source with ula4j
       try {
-        Compiler.run(script);
+        var context = new ModuleContext();
+        Compiler.run(context, script);
       } catch (UnsupportedSyntaxException e) {
         Assumptions.assumeTrue(false, e.getMessage());
         return;

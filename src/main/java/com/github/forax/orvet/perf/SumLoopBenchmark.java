@@ -1,6 +1,7 @@
 package com.github.forax.orvet.perf;
 
 import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.ComparisonIntrinsics;
@@ -40,6 +41,12 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class SumLoopBenchmark {
 
+  private static ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
+  }
+
   private static final long LIMIT = 10_000;
 
   // Compile the Python loop once and obtain a direct MethodHandle adapted to ()long
@@ -54,7 +61,7 @@ public class SumLoopBenchmark {
                 i = i + 1
             return sum
         """.replace("LIMIT", "" + LIMIT);
-    var fn = (PyFunction) Compiler.run(source).getGlobal("loop");
+    var fn = (PyFunction) run(source).getGlobal("loop");
     PYTHON_LOOP_MH = fn.createDirectMethodHandle(MethodType.methodType(long.class));
   }
 

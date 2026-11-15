@@ -18,12 +18,18 @@ public final class PyFunctionTest {
     return TupleIntrinsics.fromArray(args);
   }
 
+  private static ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
+  }
+
   @Nested
   public final class Call {
 
     @Test
     public void callWithTwoArguments() {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");
@@ -33,7 +39,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callWithNoArguments() {
-      var answer = (PyFunction) Compiler.run("""
+      var answer = (PyFunction) run("""
           def answer():
               return 42
           """).getGlobal("answer");
@@ -43,7 +49,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callClosureCapturesValue() {
-      var makeAdder = (PyFunction) Compiler.run("""
+      var makeAdder = (PyFunction) run("""
           def make_adder(n):
               def add(x):
                   return x + n
@@ -56,7 +62,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callVarargsWithNoExtraArguments() {
-      var zero = (PyFunction) Compiler.run("""
+      var zero = (PyFunction) run("""
           def zero(*args):
               return 0
           """).getGlobal("zero");
@@ -66,7 +72,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callVarargsWithExtraArguments() {
-      var first = (PyFunction) Compiler.run("""
+      var first = (PyFunction) run("""
           def first(a, *args):
               return a
           """).getGlobal("first");
@@ -76,7 +82,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callFixedArityWithMissingArgument() {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");
@@ -86,7 +92,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callFixedArityWithTooManyArguments() {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");
@@ -96,7 +102,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callVarargsWithMissingRequiredArgument() {
-      var first = (PyFunction) Compiler.run("""
+      var first = (PyFunction) run("""
           def first(a, *args):
               return a
           """).getGlobal("first");
@@ -106,7 +112,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callVarargsExposesRestTuple() {
-      var collect = (PyFunction) Compiler.run("""
+      var collect = (PyFunction) run("""
           def collect(first, *rest):
               return rest
           """).getGlobal("collect");
@@ -117,7 +123,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callOnlyVarargsWithExtraArguments() {
-      var collect = (PyFunction) Compiler.run("""
+      var collect = (PyFunction) run("""
           def collect(*args):
               return args
           """).getGlobal("collect");
@@ -129,7 +135,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callRecursiveFunction() {
-      var factorial = (PyFunction) Compiler.run("""
+      var factorial = (PyFunction) run("""
           def factorial(n):
               if n == 0:
                   return 1
@@ -141,7 +147,7 @@ public final class PyFunctionTest {
 
     @Test
     public void callClosuresCaptureIndependently() {
-      var makeAdder = (PyFunction) Compiler.run("""
+      var makeAdder = (PyFunction) run("""
           def make_adder(n):
               def add(x):
                   return x + n
@@ -161,7 +167,7 @@ public final class PyFunctionTest {
 
     @Test
     public void nullMethodTypeRejected() {
-      var identity = (PyFunction) Compiler.run("""
+      var identity = (PyFunction) run("""
           def identity(x):
               return x
           """).getGlobal("identity");
@@ -172,7 +178,7 @@ public final class PyFunctionTest {
 
     @Test
     public void tooFewArgumentsRejected() {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");
@@ -184,7 +190,7 @@ public final class PyFunctionTest {
 
     @Test
     public void tooManyArgumentsRejected() {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");
@@ -196,7 +202,7 @@ public final class PyFunctionTest {
 
     @Test
     public void varargsWithMissingRequiredArgumentRejected() {
-      var first = (PyFunction) Compiler.run("""
+      var first = (PyFunction) run("""
           def first(a, *args):
               return a
           """).getGlobal("first");
@@ -208,7 +214,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMH() throws Throwable {
-      var identity = (PyFunction) Compiler.run("""
+      var identity = (PyFunction) run("""
           def identity(x):
               return x
           """).getGlobal("identity");
@@ -221,7 +227,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestEmpty() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -236,7 +242,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestOne() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -251,7 +257,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestTwo() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -266,7 +272,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestThree() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -281,7 +287,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestFour() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -296,7 +302,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestFive() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(a, *args):
               return args
           """).getGlobal("rest");
@@ -311,7 +317,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithNoArguments() throws Throwable {
-      var answer = (PyFunction) Compiler.run("""
+      var answer = (PyFunction) run("""
           def answer():
               return 42
           """).getGlobal("answer");
@@ -324,7 +330,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithMultipleFixedArguments() throws Throwable {
-      var sub = (PyFunction) Compiler.run("""
+      var sub = (PyFunction) run("""
           def sub(a, b):
               return a - b
           """).getGlobal("sub");
@@ -338,7 +344,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithRestAndNoFixedArguments() throws Throwable {
-      var rest = (PyFunction) Compiler.run("""
+      var rest = (PyFunction) run("""
           def rest(*args):
               return args
           """).getGlobal("rest");
@@ -356,7 +362,7 @@ public final class PyFunctionTest {
 
     @Test
     public void createDirectMHWithPrimitiveArgumentsAndReturn() throws Throwable {
-      var add = (PyFunction) Compiler.run("""
+      var add = (PyFunction) run("""
           def add(a, b):
               return a + b
           """).getGlobal("add");

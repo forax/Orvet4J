@@ -43,11 +43,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class FunctionSupportTest {
 
   private static ModuleContext run(String source) {
-    return Compiler.run(source);
+    var context = new ModuleContext();
+    Compiler.run(context, source);
+    return context;
   }
 
   private static Object eval(String source, String global) {
-    return Compiler.run(source).getGlobal(global);
+    return run(source).getGlobal(global);
   }
 
   /// Compiles and runs a script in an existing module: its globals and the call sites inside
@@ -72,7 +74,7 @@ public final class FunctionSupportTest {
   }
 
   private static String assertTypeErrorMessage(String source) {
-    return assertThrows(PyTypeError.class, () -> Compiler.run(source)).getMessage();
+    return assertThrows(PyTypeError.class, () -> run(source)).getMessage();
   }
 
   private static void assertGlobal(ModuleContext module, String name, Object expected) {
@@ -1688,7 +1690,7 @@ public final class FunctionSupportTest {
 
     @Test
     public void undefinedGlobalFunctionIsANameError() {
-      assertThrows(PyNameError.class, () -> Compiler.run("""
+      assertThrows(PyNameError.class, () -> run("""
           def g():
               return nowhere()
           g()
@@ -1872,7 +1874,7 @@ public final class FunctionSupportTest {
               return middle(x) + 1
           outer(0)
           """;
-      assertThrows(PyZeroDivisionError.class, () -> Compiler.run(source));
+      assertThrows(PyZeroDivisionError.class, () -> run(source));
     }
 
     @Test
@@ -1884,13 +1886,13 @@ public final class FunctionSupportTest {
               return div
           make(10)(0)
           """;
-      assertThrows(PyZeroDivisionError.class, () -> Compiler.run(source));
+      assertThrows(PyZeroDivisionError.class, () -> run(source));
     }
 
     @Test
     public void argumentsAreEvaluatedBeforeTheArityCheck() {
       assertThrows(PyZeroDivisionError.class,
-          () -> Compiler.run("def f(a):\n    return a\nf(1 // 0, 2)\n"));
+          () -> run("def f(a):\n    return a\nf(1 // 0, 2)\n"));
     }
 
     @Test
@@ -2148,7 +2150,7 @@ public final class FunctionSupportTest {
     @ValueSource(ints = {0, 1, 4, 5, 8})
     public void keywordsOnAVariadicBuiltin(int n) {
       assertThrows(UnimplementedFeatureError.class,
-          () -> Compiler.run(builtinKeywordSource(n, "apply(print)\n")));
+          () -> run(builtinKeywordSource(n, "apply(print)\n")));
     }
 
     @ParameterizedTest(name = "{0} callees seen before")

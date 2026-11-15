@@ -1,6 +1,7 @@
 package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
@@ -25,7 +26,6 @@ public final class HashingIntrinsicsTest {
   private static <E> PyList<E> pyList(E... elements) {
     return new PyList<>(elements);
   }
-
   
   @Nested
   public final class NumericContract {
@@ -310,6 +310,12 @@ public final class HashingIntrinsicsTest {
 
   @Nested
   public final class NoneAndFunctionHashing {
+    private static ModuleContext run(String source) {
+      var context = new ModuleContext();
+      Compiler.run(context, source);
+      return context;
+    }
+
     @Test
     public void noneHashIsUnique() {
       assertEquals(hash(PyNone.INSTANCE), hash(PyNone.INSTANCE));
@@ -317,7 +323,7 @@ public final class HashingIntrinsicsTest {
 
     @Test
     public void pyFunctionHashUsesIdentityHashCode() {
-      var fn = Compiler.run("""
+      var fn = run("""
           def fn():
               pass
           """).getGlobal("fn");
