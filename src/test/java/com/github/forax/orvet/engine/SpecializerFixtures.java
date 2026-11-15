@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.intrinsic.Intrinsic;

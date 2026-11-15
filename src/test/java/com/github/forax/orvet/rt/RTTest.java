@@ -5,7 +5,7 @@ import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.intrinsic.HashingIntrinsics;
-import com.github.forax.orvet.compiler.SpecializerFixtures;
+import com.github.forax.orvet.engine.SpecializerFixtures;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

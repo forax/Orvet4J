@@ -64,7 +64,7 @@ Packages:
 |---|---|
 | `grammar.antlr` | `PythonLexer.g4`, `PythonParser.g4` (Python 3.14 grammar), `PythonLexerBase` (indentation, f-string modes) |
 | `ast` | records `Script`, `Block`, `Stmt`, `Expr`, `Target`; `ASTBuilder`; `Literals`; `SyntaxErrorException`, `UnsupportedSyntaxException` |
-| `compiler` | `ScopeAnalyzer`, `BytecodeGenerator`, `Compiler`, `SemanticErrorException` |
+| `compiler` | `ScopeAnalyzer`, `BytecodeGenerator`, `Engine`, `SemanticErrorException` |
 | `rt` | `RT` (bootstraps), `ModuleContext`, `Dictionary`, `FunctionSupport`, `PyFunction`, `Builtins`, `PyNone`, `PyTuple`, `PyList`, `PyDict`, `PyIterator` |
 | `rt.intrinsic` | `@Intrinsic` classes (§6.1) and `IntrinsicSupport` |
 | `rt.specializer` | `Specializer` (ASM), plus `SpecializationSupport` in `rt` |
@@ -412,7 +412,7 @@ Planned types: `PyStopIteration`, `PyAssertionError`, and others only when a sup
 - Front-end errors are `SyntaxErrorException`, `UnsupportedSyntaxException` and `SemanticErrorException` (compiler-side: scope rules, limits). All carry line and column.
 - A non-canonical value reaching an intrinsic is an internal bug. The policy is §11 rule 6; see D1 for the places that still use `PyTypeError`.
 - Stack traces stay enabled. `StackOverflowError` and `OutOfMemoryError` are not mapped.
-- Without `try`/`except`, Python exceptions propagate out of `Compiler.run`.
+- Without `try`/`except`, Python exceptions propagate out of `Engine.run`.
 - Python-style traceback rendering is planned (§18, phase 5).
 
 ## 10. Numeric semantics [DONE except conversions]

@@ -1,6 +1,6 @@
 package com.github.forax.orvet.rt;
 
-import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.error.PyNameError;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -91,7 +91,7 @@ public final class GlobalSwitchPointTest {
   @Test
   public void compiledCodeSeesRebindingAfterTheCallSiteFolded() {
     var context = new ModuleContext();
-    Compiler.run(context, """
+    Engine.run(context, """
         def read():
             return x
         x = 1

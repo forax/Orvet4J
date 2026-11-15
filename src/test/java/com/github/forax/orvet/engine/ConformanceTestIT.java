@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.ast.ASTBuilder;
 import com.github.forax.orvet.ast.Script;
@@ -81,7 +81,7 @@ public final class ConformanceTestIT {
       // Execute the source with ula4j
       try {
         var context = new ModuleContext();
-        Compiler.run(context, script);
+        Engine.run(context, script);
       } catch (UnsupportedSyntaxException e) {
         Assumptions.assumeTrue(false, e.getMessage());
         return;

@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.ast.UnsupportedSyntaxException;
 import com.github.forax.orvet.rt.ModuleContext;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public final class BytecodeGeneratorTest {
   private static ModuleContext run(String source) {
     var context = new ModuleContext();
-    Compiler.run(context, source);
+    Engine.run(context, source);
     return context;
   }
 

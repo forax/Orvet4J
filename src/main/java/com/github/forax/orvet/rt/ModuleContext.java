@@ -1,8 +1,8 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.ast.Stmt;
-import com.github.forax.orvet.compiler.ScopeAnalyzer;
-import com.github.forax.orvet.compiler.ScopeAnalyzer.FunctionScope;
+import com.github.forax.orvet.engine.ScopeAnalyzer;
+import com.github.forax.orvet.engine.ScopeAnalyzer.FunctionScope;
 
 import java.util.IdentityHashMap;
 import java.util.Objects;

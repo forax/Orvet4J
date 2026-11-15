@@ -1,6 +1,6 @@
 package com.github.forax.orvet.rt.intrinsic;
 
-import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
@@ -312,7 +312,7 @@ public final class HashingIntrinsicsTest {
   public final class NoneAndFunctionHashing {
     private static ModuleContext run(String source) {
       var context = new ModuleContext();
-      Compiler.run(context, source);
+      Engine.run(context, source);
       return context;
     }
 

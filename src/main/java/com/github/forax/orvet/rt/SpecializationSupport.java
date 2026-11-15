@@ -1,6 +1,6 @@
 package com.github.forax.orvet.rt;
 
-import com.github.forax.orvet.compiler.Specializer;
+import com.github.forax.orvet.engine.Specializer;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;

@@ -1,8 +1,8 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.ast.Stmt;
-import com.github.forax.orvet.compiler.BytecodeGenerator;
-import com.github.forax.orvet.compiler.ScopeAnalyzer;
+import com.github.forax.orvet.engine.BytecodeGenerator;
+import com.github.forax.orvet.engine.ScopeAnalyzer;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;

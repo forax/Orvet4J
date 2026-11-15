@@ -1,6 +1,6 @@
 package com.github.forax.orvet.rt;
 
-import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -20,7 +20,7 @@ public final class BuiltinsTest {
 
   private static void run(String source) {
     var context = new ModuleContext();
-    Compiler.run(context, source);
+    Engine.run(context, source);
   }
 
   private static String runCaptureOutput(String source) throws IOException {

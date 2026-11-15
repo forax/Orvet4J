@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;

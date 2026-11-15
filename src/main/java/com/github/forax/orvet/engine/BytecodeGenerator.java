@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.ast.Block;
 import com.github.forax.orvet.ast.Expr;
@@ -6,8 +6,8 @@ import com.github.forax.orvet.ast.Script;
 import com.github.forax.orvet.ast.Stmt;
 import com.github.forax.orvet.ast.Target;
 import com.github.forax.orvet.ast.UnsupportedSyntaxException;
-import com.github.forax.orvet.compiler.ScopeAnalyzer.FunctionAnalysis;
-import com.github.forax.orvet.compiler.ScopeAnalyzer.FunctionScope;
+import com.github.forax.orvet.engine.ScopeAnalyzer.FunctionAnalysis;
+import com.github.forax.orvet.engine.ScopeAnalyzer.FunctionScope;
 import com.github.forax.orvet.rt.Dictionary;
 import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyFunction;

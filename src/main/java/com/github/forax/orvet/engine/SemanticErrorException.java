@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 /// A well-formed program that violates a Java-style scoping or assignment rule.
 public final class SemanticErrorException extends RuntimeException {

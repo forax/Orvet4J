@@ -1,6 +1,6 @@
 package com.github.forax.orvet.rt.intrinsic;
 
-import com.github.forax.orvet.compiler.SpecializerFixtures;
+import com.github.forax.orvet.engine.SpecializerFixtures;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;

@@ -1,6 +1,6 @@
 package com.github.forax.orvet.perf;
 
-import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
@@ -43,7 +43,7 @@ public class SumLoopBenchmark {
 
   private static ModuleContext run(String source) {
     var context = new ModuleContext();
-    Compiler.run(context, source);
+    Engine.run(context, source);
     return context;
   }
 

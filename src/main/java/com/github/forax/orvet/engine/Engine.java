@@ -1,4 +1,4 @@
-package com.github.forax.orvet.compiler;
+package com.github.forax.orvet.engine;
 
 import com.github.forax.orvet.ast.ASTBuilder;
 import com.github.forax.orvet.ast.Script;
@@ -13,8 +13,8 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Objects;
 
 /// Facade: source -> AST -> `Script_<n>` class -> run `__main__`.
-public final class Compiler {
-  private Compiler() { throw new AssertionError(); }
+public final class Engine {
+  private Engine() { throw new AssertionError(); }
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 

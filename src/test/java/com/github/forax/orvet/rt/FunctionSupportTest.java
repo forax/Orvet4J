@@ -1,7 +1,7 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.ast.ASTBuilder;
-import com.github.forax.orvet.compiler.Compiler;
+import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.error.PyNameError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyZeroDivisionError;
@@ -44,7 +44,7 @@ public final class FunctionSupportTest {
 
   private static ModuleContext run(String source) {
     var context = new ModuleContext();
-    Compiler.run(context, source);
+    Engine.run(context, source);
     return context;
   }
 
@@ -55,7 +55,7 @@ public final class FunctionSupportTest {
   /// Compiles and runs a script in an existing module: its globals and the call sites inside
   /// the already defined functions are kept.
   private static void runIn(ModuleContext ctx, String source) {
-    var main = Compiler.compile(ctx, ASTBuilder.createScript(source));
+    var main = Engine.compile(ctx, ASTBuilder.createScript(source));
     try {
       main.invokeExact();
     } catch (RuntimeException | Error e) {
