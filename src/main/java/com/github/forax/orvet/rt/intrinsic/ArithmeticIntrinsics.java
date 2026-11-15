@@ -374,7 +374,7 @@ public final class ArithmeticIntrinsics {
       return l.concat(r);
     }
     if (left instanceof PyTuple l && right instanceof PyTuple r) {
-      return concatTuples(l, r);
+      return TupleIntrinsics.$concat$(l, r);
     }
     if (left instanceof PyList<?> l && right instanceof PyList<?> r) {
       return ListIntrinsics.$concat$(l, r);
@@ -441,7 +441,7 @@ public final class ArithmeticIntrinsics {
     var times = repeatCount(count);
     return switch (sequence) {
       case String s -> repeatString(s, times);
-      case PyTuple t -> repeatTuple(t, times);
+      case PyTuple t -> TupleIntrinsics.$repeat$(t, times);
       case PyList<?> l -> ListIntrinsics.$repeat$(l, times);
       default -> throw new AssertionError("not a sequence: " + sequence);
     };
@@ -465,52 +465,6 @@ public final class ArithmeticIntrinsics {
       throw new UnimplementedFeatureError("a string longer than the JVM limit can not be created");
     }
     return s.repeat((int) times);
-  }
-
-  private static Object repeatTuple(PyTuple tuple, long times) {
-    var items = itemsOf(tuple);
-    if (times <= 0 || items.length == 0) {
-      return tupleOf(new Object[0]);
-    }
-    if (times == 1) {
-      return tuple;
-    }
-    if (items.length > MAX_SEQUENCE_LENGTH / times) {
-      throw new UnimplementedFeatureError("a tuple longer than the JVM limit can not be created");
-    }
-    var result = new Object[(int) (items.length * times)];
-    for (var offset = 0; offset < result.length; offset += items.length) {
-      System.arraycopy(items, 0, result, offset, items.length);
-    }
-    return tupleOf(result);
-  }
-
-  private static Object concatTuples(PyTuple left, PyTuple right) {
-    var leftItems = itemsOf(left);
-    var rightItems = itemsOf(right);
-    var items = Arrays.copyOf(leftItems, leftItems.length + rightItems.length);
-    System.arraycopy(rightItems, 0, items, leftItems.length, rightItems.length);
-    return tupleOf(items);
-  }
-
-  private static Object[] itemsOf(PyTuple tuple) {
-    var size = (int) TupleIntrinsics.$size$(tuple);
-    var items = new Object[size];
-    for (var i = 0; i < size; i++) {
-      items[i] = TupleIntrinsics.$get$(tuple, (long) i);
-    }
-    return items;
-  }
-
-  /// Picks the representation: arity 1-4 use the specialized records, 0 and 5+ the generic one.
-  private static PyTuple tupleOf(Object[] items) {
-    return switch (items.length) {
-      case 1 -> new PyTuple1(items[0]);
-      case 2 -> new PyTuple2(items[0], items[1]);
-      case 3 -> new PyTuple3(items[0], items[1], items[2]);
-      case 4 -> new PyTuple4(items[0], items[1], items[2], items[3]);
-      default -> new PyTupleN(items);
-    };
   }
 
   // ------------------------------------------------------------------ true division

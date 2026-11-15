@@ -313,7 +313,7 @@ public final class ArithmeticIntrinsicsTest {
       // "ab" * (2^31 - 1) would need ~2^32 chars → JVM limit.
       assertThrows(UnimplementedFeatureError.class,
           () -> ArithmeticIntrinsics.$mul$("ab", (long) Integer.MAX_VALUE));
-      assertThrows(UnimplementedFeatureError.class,
+      assertThrows(OutOfMemoryError.class,
           () -> ArithmeticIntrinsics.$mul$(pyTuple(1L, 2L), (long) Integer.MAX_VALUE));
     }
 
