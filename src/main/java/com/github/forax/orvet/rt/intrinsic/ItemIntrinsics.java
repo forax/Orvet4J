@@ -5,6 +5,7 @@ import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyTypeError;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigInteger;
 
@@ -22,7 +23,7 @@ public final class ItemIntrinsics {
       case PyList<?> l  -> result = ListIntrinsics.$get$(l, $toIndex$(index, "list"));
       case PyDict<?,?> d -> result = DictIntrinsics.$get$(d, index);
       case PyTuple t    -> result = TupleIntrinsics.$get$(t, $toIndex$(index, "tuple"));
-      // case String s  -> once str indexing exists
+      case String _  -> throw new UnimplementedFeatureError("str indexing not yet implemented");
       default -> throw new PyTypeError("'" + typeName(container) + "' object is not subscriptable");
     }
     return result;
