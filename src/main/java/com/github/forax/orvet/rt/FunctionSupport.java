@@ -7,7 +7,10 @@ import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.util.CheckClassAdapter;
 
+import java.io.PrintWriter;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
@@ -17,6 +20,18 @@ import java.lang.invoke.MutableCallSite;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static java.lang.invoke.MethodHandles.arrayElementGetter;
+import static java.lang.invoke.MethodHandles.collectArguments;
+import static java.lang.invoke.MethodHandles.constant;
+import static java.lang.invoke.MethodHandles.dropArguments;
+import static java.lang.invoke.MethodHandles.empty;
+import static java.lang.invoke.MethodHandles.exactInvoker;
+import static java.lang.invoke.MethodHandles.filterArguments;
+import static java.lang.invoke.MethodHandles.foldArguments;
+import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.invoke.MethodHandles.permuteArguments;
 
 /// Runtime support for Python function definitions, lazy compilation, and dynamic invocations.
 ///
@@ -38,7 +53,7 @@ import java.util.List;
 /// ## Dispatch Pipeline
 /// Function call dispatch uses a two-tier strategy:
 /// 1. **Polymorphic Inline Cache ([FunctionCallSite]):** Call sites maintain a bounded
-///    cascade of [java.lang.invoke.MethodHandles#guardWithTest] guards (up to depth 4).
+///    cascade of [MethodHandles#guardWithTest] guards (up to depth 4).
 /// 2. **Megamorphic Fallback ([Megamorphic]):** Call sites exceeding the
 ///    polymorphic depth threshold are flattened into a single collector that dynamically
 ///    dispatches via uniform thunks without cache thrashing.
@@ -102,7 +117,7 @@ final class FunctionSupport {
 
       if (captureCount == 0) {
         var function = new PyFunction(code, EMPTY_CAPTURED_ARGS);
-        return new ConstantCallSite(MethodHandles.constant(Object.class, function));
+        return new ConstantCallSite(constant(Object.class, function));
       }
 
       var factory = PY_FUNCTION.bindTo(code);
@@ -170,7 +185,7 @@ final class FunctionSupport {
     private static final MethodHandle ARRAY_ELEMENT, REST_TUPLE, BUILTIN_REST;
     static {
       var lookup = MethodHandles.lookup();
-      ARRAY_ELEMENT = MethodHandles.arrayElementGetter(Object[].class);
+      ARRAY_ELEMENT = arrayElementGetter(Object[].class);
       try {
         MEGAMORPHIC = lookup.findStatic(Megamorphic.class, "megamorphic",
             MethodType.methodType(Object.class, Object.class, Object[].class));
@@ -235,14 +250,14 @@ final class FunctionSupport {
       // 1. (Object[] captured, PyFunction self, <declared parameters> [, rest])
       var captureCount = code.captureCount();
       var handle = captureCount == 0
-          ? MethodHandles.dropArguments(compiledEntry, 0, Object[].class)
+          ? dropArguments(compiledEntry, 0, Object[].class)
           : compiledEntry.asSpreader(0, Object[].class, captureCount);
 
       // 2. No rest parameter: spread the declared parameters (or ignore the array if there is none).
       var arity = code.parameters().size();
       if (!code.isVariadic()) {
         return arity == 0
-            ? MethodHandles.dropArguments(handle, 2, Object[].class)
+            ? dropArguments(handle, 2, Object[].class)
             : handle.asSpreader(2, Object[].class, arity);
       }
 
@@ -251,10 +266,10 @@ final class FunctionSupport {
       var packer = code.isBuiltin() ? BUILTIN_REST : REST_TUPLE;
       var filters = new MethodHandle[arity + 1];
       for (var i = 0; i < arity; i++) {
-        filters[i] = MethodHandles.insertArguments(ARRAY_ELEMENT, 1, i);
+        filters[i] = insertArguments(ARRAY_ELEMENT, 1, i);
       }
-      filters[arity] = MethodHandles.insertArguments(packer, 1, arity);
-      var filtered = MethodHandles.filterArguments(handle, 2, filters);
+      filters[arity] = insertArguments(packer, 1, arity);
+      var filtered = filterArguments(handle, 2, filters);
 
       // 4. Every filtered parameter reads the same args array.
       var type = MethodType.methodType(Object.class, Object[].class, PyFunction.class, Object[].class);
@@ -262,7 +277,7 @@ final class FunctionSupport {
       reorder[0] = 0;  // captured
       reorder[1] = 1;  // self
       Arrays.fill(reorder, 2, reorder.length, 2);  // args
-      return MethodHandles.permuteArguments(filtered, type, reorder);
+      return permuteArguments(filtered, type, reorder);
     }
 
     private static PyTuple restTuple(Object[] args, int start) {
@@ -321,12 +336,12 @@ final class FunctionSupport {
     /// @return the adapted method handle
     static MethodHandle adapt(MethodHandle entry, int position, int restCount) {
       return switch (restCount) {
-        case 0 -> MethodHandles.insertArguments(entry, position, TUPLE_EMPTY);
-        case 1 -> MethodHandles.collectArguments(entry, position, TUPLE1);
-        case 2 -> MethodHandles.collectArguments(entry, position, TUPLE2);
-        case 3 -> MethodHandles.collectArguments(entry, position, TUPLE3);
-        case 4 -> MethodHandles.collectArguments(entry, position, TUPLE4);
-        default -> MethodHandles.collectArguments(entry, position,
+        case 0 -> insertArguments(entry, position, TUPLE_EMPTY);
+        case 1 -> collectArguments(entry, position, TUPLE1);
+        case 2 -> collectArguments(entry, position, TUPLE2);
+        case 3 -> collectArguments(entry, position, TUPLE3);
+        case 4 -> collectArguments(entry, position, TUPLE4);
+        default -> collectArguments(entry, position,
             TUPLE_N.asCollector(Object[].class, restCount));
       };
     }
@@ -369,7 +384,7 @@ final class FunctionSupport {
       this.depth = depth;
       super(type);
       this.root = root == null ? this : root;
-      setTarget(MethodHandles.foldArguments(MethodHandles.exactInvoker(type()), FALLBACK.bindTo(this)));
+      setTarget(foldArguments(exactInvoker(type()), FALLBACK.bindTo(this)));
     }
 
     private MethodHandle fallback(Object callee) {
@@ -380,7 +395,7 @@ final class FunctionSupport {
       if (depth == MAX_DEPTH) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
-            : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
+            : insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
         var target = entryPoint.asCollector(Object[].class, argCount);
         root.setTarget(target);
         return target;
@@ -414,7 +429,7 @@ final class FunctionSupport {
 
       // 5. Install the inlining cache
       var fallback = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1).dynamicInvoker();
-      setTarget(MethodHandles.guardWithTest(test, adapted, fallback));
+      setTarget(guardWithTest(test, adapted, fallback));
 
       return adapted;
     }
@@ -422,7 +437,7 @@ final class FunctionSupport {
     static MethodHandle getNoCaptureMH(PyFunction function) {
       var compiledEntry = getCompiledEntry(function.code);
       var bound = compiledEntry.bindTo(function);
-      return MethodHandles.dropArguments(bound, 0, Object.class);  // drop the callee
+      return dropArguments(bound, 0, Object.class);  // drop the callee
     }
 
     static MethodHandle getEntry(PyFunction.Code code) {
@@ -434,7 +449,7 @@ final class FunctionSupport {
 
       var captureCount = code.captureCount();  // != 0
       var spread = compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
-      entry = MethodHandles.foldArguments(spread, CAPTURED_ARGS);
+      entry = foldArguments(spread, CAPTURED_ARGS);
       code.entry = entry;  // racy write
       return entry;
     }
@@ -477,6 +492,12 @@ final class FunctionSupport {
       var dictionary = new Dictionary();
       var bytes = BytecodeGenerator.generateFunction(context, dictionary, def, scope);
 
+      // DEBUG
+      //var checkedBytes = Arrays.copyOf(bytes, bytes.length);
+      //checkedBytes[4] = 0;
+      //checkedBytes[5] = 0;
+      //CheckClassAdapter.verify(new ClassReader(checkedBytes), true, new PrintWriter(System.err));
+
       var className = BytecodeGenerator.functionClassName(def).replace('/', '.');
       var clazz = RT.defineClass(context, dictionary, className, bytes);
 
@@ -516,9 +537,166 @@ final class FunctionSupport {
       }
 
       var adapted = adapt(function, entry, 1 + arity, restCount).asType(type);
-      return MethodHandles.permuteArguments(adapted, type, reorder);
+      return permuteArguments(adapted, type, reorder);
     }
   }
+
+
+  /// Raises NameError if the global is unbound. A cell never goes back to unbound,
+  /// so the first successful check replaces the target by a nop.
+  static final class CheckGlobalCallSite extends MutableCallSite {
+    private static final MethodHandle FALLBACK, NOP;
+    static {
+      var type = MethodType.methodType(void.class);
+      NOP = empty(type);
+      var lookup = MethodHandles.lookup();
+      try {
+        FALLBACK = lookup.findVirtual(CheckGlobalCallSite.class, "fallback", type);
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    static CallSite checkGlobal(ModuleContext context, String name) {
+      return new CheckGlobalCallSite(context.cell(name));
+    }
+
+    private final GlobalSupport.GlobalCell cell;
+
+    private CheckGlobalCallSite(GlobalSupport.GlobalCell cell) {
+      this.cell = cell;
+      super(NOP.type());
+      setTarget(FALLBACK.bindTo(this));
+    }
+
+    private void fallback() {
+      cell.get();  // throws NameError if unbound
+      setTarget(NOP);
+    }
+  }
+
+
+  /// A call `name(args...)` where `name` is a global: `(Object arg0, ..., Object argN-1) -> Object`.
+  ///
+  /// While the cell holds a function, the target is a direct call to its compiled entry (captured values
+  /// and self already bound), guarded by the SwitchPoint of the cell. After MAX_INVALIDATIONS invalidations
+  /// the global is considered unstable and the site reads the cell on every call (megamorphic path).
+  static final class GlobalCallCallSite extends MutableCallSite {
+    private static final MethodHandle FALLBACK;
+    static {
+      var lookup = MethodHandles.lookup();
+      try {
+        FALLBACK = lookup.findVirtual(GlobalCallCallSite.class, "fallback",
+            MethodType.methodType(MethodHandle.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    static CallSite globalCall(ModuleContext context, MethodType type, String globalName,
+                               int positionalCount, String[] keywordNames) {
+      var cell = context.cell(globalName);
+      return new GlobalCallCallSite(cell, type, positionalCount, keywordNames);
+    }
+
+    private static final int MAX_INVALIDATIONS = 4;
+
+    private final GlobalSupport.GlobalCell cell;
+    private final int positionalCount;
+    private final String[] keywordNames;
+    private final MethodHandle fallback;
+
+    private int invalidationCount;  // guards installed so far; racy updates are benign
+
+    private GlobalCallCallSite(GlobalSupport.GlobalCell cell, MethodType type,
+                               int positionalCount, String[] keywordNames) {
+      this.cell = cell;
+      this.positionalCount = positionalCount;
+      this.keywordNames = keywordNames;
+      super(type);
+      this.fallback = foldArguments(exactInvoker(type), FALLBACK.bindTo(this));
+      setTarget(fallback);
+    }
+
+    /// Called on the first call and every time a guard is invalidated.
+    private MethodHandle fallback() {
+      // 1. unstable global: read the cell on every call, for good
+      var invalidationCount = this.invalidationCount;
+      if (invalidationCount >= MAX_INVALIDATIONS) {
+        var megamorphic = megamorphicTarget();
+        setTarget(megamorphic);
+        return megamorphic;
+      }
+      this.invalidationCount = invalidationCount + 1;
+
+      // 2. atomic snapshot of the value and of the SwitchPoint that protects it
+      var resolved = cell.resolveCell();
+      var value = resolved.value();
+      if (value == null) {
+        throw new AssertionError();  // CheckGlobalCallSite is called before
+      }
+
+      // 3. errors (not callable, arity, keywords) are raised here, nothing is installed
+      var function = asFunction(value);
+      var direct = directTarget(function);
+
+      // 4. install the guard; once the SwitchPoint is invalidated the guard calls link() again
+      var guard = resolved.switchPoint().guardWithTest(direct, fallback);
+      setTarget(guard);
+
+      return direct;
+    }
+
+    private MethodHandle megamorphicTarget() {
+      var argCount = type().parameterCount();
+      var entryPoint = keywordNames.length == 0
+          ? Megamorphic.MEGAMORPHIC
+          : insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS,
+          2, positionalCount, keywordNames);
+
+      // (Object callee, Object... args) with the callee read from the cell
+      var target = entryPoint.asCollector(Object[].class, argCount);
+      var combiner = GlobalSupport.CELL_GET.bindTo(cell);
+      return foldArguments(target, combiner);
+    }
+
+    /// The compiled entry bound to the function, adapted to the type of the call site.
+    private MethodHandle directTarget(PyFunction function) {
+      var type = type();
+      var argCount = type.parameterCount();
+      var arity = function.arity();
+
+      // 1. validate before compiling the callee
+      int[] plan = null;
+      if (keywordNames.length == 0) {
+        checkArity(function, argCount);
+      } else {
+        plan = reorderKeywordArguments(function, positionalCount, keywordNames);
+      }
+
+      // 2. (captures..., self, params... [, rest]) -> (params... [, rest])
+      var compiledEntry = FunctionCallSite.getCompiledEntry(function.code);
+      var captured = function.capturedArgs;
+      var boundValues = new Object[captured.length + 1];
+      System.arraycopy(captured, 0, boundValues, 0, captured.length);
+      boundValues[captured.length] = function;
+      var entry = insertArguments(compiledEntry, 0, boundValues);
+
+      // 3. rest parameter, then keyword reordering
+      if (plan == null) {
+        return FunctionCallSite.adapt(function, entry, arity, argCount - arity).asType(type);
+      }
+      var restCount = Math.max(0, positionalCount - arity);
+      var adapted = FunctionCallSite.adapt(function, entry, arity, restCount).asType(type);
+      var reorder = new int[arity + restCount];
+      for (var i = 0; i < plan.length; i++) {
+        reorder[plan[i]] = i;
+      }
+      return permuteArguments(adapted, type, reorder);
+    }
+  }
+
+
 
 
   // -- helpers

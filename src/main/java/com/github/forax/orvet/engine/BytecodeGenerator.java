@@ -78,6 +78,8 @@ public final class BytecodeGenerator {
   private static final Handle BSM_SPECIALIZE = bsm("bsmSpecialize", BSM_PREFIX + "Ljava/lang/Class;" + CALL_SITE);
   private static final Handle BSM_DEF = bsm("bsmDef", BSM_PREFIX + "I" + CALL_SITE);
   private static final Handle BSM_CALL = bsm("bsmCall", BSM_PREFIX + "I[Ljava/lang/String;" + CALL_SITE);
+  private static final Handle BSM_CHECK_GLOBAL = bsm("bsmCheckGlobal", BSM_PREFIX + "Ljava/lang/String;" + CALL_SITE);
+  private static final Handle BSM_GLOBAL_CALL = bsm("bsmGlobalCall", BSM_PREFIX + "I[Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_GET_GLOBAL = bsm("bsmGetGlobal", BSM_PREFIX + "Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_SET_GLOBAL = bsm("bsmSetGlobal", BSM_PREFIX + "Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_CONST = bsm("bsmConst", CONDY_PREFIX + O + ")" + O);
@@ -684,20 +686,31 @@ public final class BytecodeGenerator {
           if (argsSize > MAX_CALL_ARGUMENTS) {
             throw unsupported("call with more than " + MAX_CALL_ARGUMENTS + " arguments", c.line(), c.column());
           }
-          expr(c.func());
+          var name = c.func() instanceof Expr.Name(var id, _, _) ? id : "call";
+          var globalCall = c.func() instanceof Expr.Name(var id, _, _) &&
+              !slots.containsKey(id) &&
+              (function == null || !id.equals(function.name()) || !frees.contains(id));
+          if (globalCall) {
+            mv.visitInvokeDynamicInsn("globalCheck", "()V", BSM_CHECK_GLOBAL, name);
+          } else {
+            expr(c.func());
+          }
           for (var arg : c.args().positional()) {
             expr(arg);
           }
           for (var keyword : c.args().keywords()) {
             expr(keyword.value());
           }
-          var callName = c.func() instanceof Expr.Name name ? name.id() : "call";
           var bsmArgs = new Object[1 + c.args().keywords().size()];
           bsmArgs[0] = c.args().positional().size();
           for(var i = 0; i < c.args().keywords().size(); i++) {
             bsmArgs[i + 1] = c.args().keywords().get(i).name();
           }
-          mv.visitInvokeDynamicInsn(callName, "(" + O.repeat(argsSize + 1) + ")" + O, BSM_CALL, bsmArgs);
+          if (globalCall) {
+            mv.visitInvokeDynamicInsn(name, "(" + O.repeat(argsSize) + ")" + O, BSM_GLOBAL_CALL, bsmArgs);
+          } else {
+            mv.visitInvokeDynamicInsn(name, "(" + O.repeat(argsSize + 1) + ")" + O, BSM_CALL, bsmArgs);
+          }
         }
         case Expr.MethodCall m -> throw unsupported("method call", m.line(), m.column());
         case Expr.Subscript s -> {

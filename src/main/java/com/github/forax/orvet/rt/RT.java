@@ -46,7 +46,7 @@ public final class RT {
   }
 
   public static CallSite bsmDef(MethodHandles.Lookup lookup, String name, MethodType type, int astIndex) {
-    var loader = (RT.FunctionClassLoader) lookup.lookupClass().getClassLoader();
+    var loader = (FunctionClassLoader) lookup.lookupClass().getClassLoader();
     return FunctionSupport.DefCallSite.def(loader.context, loader.dictionary, type, astIndex);
   }
 
@@ -54,13 +54,24 @@ public final class RT {
     return FunctionSupport.FunctionCallSite.call(type, positionalCount, keywordNames);
   }
 
+  public static CallSite bsmCheckGlobal(MethodHandles.Lookup lookup, String name, MethodType type, String globalName) {
+    var loader = (FunctionClassLoader) lookup.lookupClass().getClassLoader();
+    return FunctionSupport.CheckGlobalCallSite.checkGlobal(loader.context, globalName);
+  }
+
+  public static CallSite bsmGlobalCall(MethodHandles.Lookup lookup, String globalName, MethodType type,
+                                       int positionalCount, String... keywordNames) {
+    var loader = (FunctionClassLoader) lookup.lookupClass().getClassLoader();
+    return FunctionSupport.GlobalCallCallSite.globalCall(loader.context, type, globalName, positionalCount, keywordNames);
+  }
+
   public static CallSite bsmGetGlobal(MethodHandles.Lookup lookup, String name, MethodType type, String globalName) {
-    var loader = (RT.FunctionClassLoader) lookup.lookupClass().getClassLoader();
+    var loader = (FunctionClassLoader) lookup.lookupClass().getClassLoader();
     return GlobalSupport.getGlobal(loader.context, globalName);
   }
 
   public static CallSite bsmSetGlobal(MethodHandles.Lookup lookup, String name, MethodType type, String globalName) {
-    var loader = (RT.FunctionClassLoader) lookup.lookupClass().getClassLoader();
+    var loader = (FunctionClassLoader) lookup.lookupClass().getClassLoader();
     return GlobalSupport.setGlobal(loader.context, globalName);
   }
 }

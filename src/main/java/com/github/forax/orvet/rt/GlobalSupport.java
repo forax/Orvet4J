@@ -27,7 +27,7 @@ import java.util.Objects;
 ///     target raises `NameError` instead of returning a constant.
 ///  3. A store invalidates the SwitchPoint, so the guard fails and the next read goes through the
 ///     fallback again, which re-folds the new value.
-///  4. A site folds at most [GetGlobalCallSite#MAX_COUNTER] times.
+///  4. A site folds at most [GetGlobalCallSite#MAX_INVALIDATIONS] times.
 ///     The next fallback installs definitively a plain volatile read of the cell.
 ///
 final class GlobalSupport {
@@ -35,7 +35,8 @@ final class GlobalSupport {
     throw new AssertionError();
   }
 
-  private static final MethodHandle CELL_GET, CELL_SET, NAME_ERROR;
+  private static final MethodHandle CELL_SET, NAME_ERROR;
+  static final MethodHandle CELL_GET;
   static {
     var lookup = MethodHandles.lookup();
     try {
@@ -161,7 +162,7 @@ final class GlobalSupport {
     }
 
     /// Maximum number of fallback invocations before giving up constant folding.
-    private static final int MAX_COUNTER = 2;
+    private static final int MAX_INVALIDATIONS = 2;
 
     private final MethodHandle fallback;
     private final GlobalCell cell;
@@ -182,7 +183,7 @@ final class GlobalSupport {
     private Object fallback() {
       // 1. The site was relinked too often? Stop folding and read (volatile) the cell directly
       var counter = this.counter;
-      if (counter >= MAX_COUNTER) {
+      if (counter >= MAX_INVALIDATIONS) {
         setTarget(CELL_GET.bindTo(cell));
         return cell.get();
       }
