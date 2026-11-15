@@ -21,12 +21,17 @@ import java.lang.invoke.MethodType;
 import java.util.concurrent.TimeUnit;
 
 // Java 28 preview
-// Benchmark                               Mode  Cnt   Score   Error  Units
-//RecursiveFunctionBenchmark.java_fibo    avgt    5   29.509 ± 0.414  us/op
-//RecursiveFunctionBenchmark.python_fibo  avgt    5   70.379 ± 5.540  us/op
+//Benchmark                               Mode  Cnt     Score     Error  Units
+//RecursiveFunctionBenchmark.java_fibo    avgt    5   205.050 ±   2.497  us/op
+//RecursiveFunctionBenchmark.python_fibo  avgt    5   466.321 ±  13.414  us/op
+
+// Java 27
+//Benchmark                               Mode  Cnt     Score     Error  Units
+//RecursiveFunctionBenchmark.java_fibo    avgt    5   205.440 ±   7.507  us/op
+//RecursiveFunctionBenchmark.python_fibo  avgt    5   568.732 ±  21.037  us/op
 
 // Python 3.14.8
-//                                        avgt    5  840.929 ± 9.449  us/op
+//                                        avgt    5  5916.403 ± 119.864  us/op
 
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
@@ -56,7 +61,7 @@ public class RecursiveFunctionBenchmark {
 
   @Benchmark
   public long python_fibo() throws Throwable {
-    return (long) FIBO_MH.invokeExact(21L);
+    return (long) FIBO_MH.invokeExact(25L);
   }
 
   private static long fibo(long n) {
@@ -68,7 +73,7 @@ public class RecursiveFunctionBenchmark {
 
   @Benchmark
   public long java_fibo() throws Throwable {
-    return fibo(21L);
+    return fibo(25L);
   }
 
   static void main() throws RunnerException {

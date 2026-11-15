@@ -13,7 +13,7 @@ WARMUP_RUNS = 5
 MEASUREMENT_RUNS = 5
 CONFIDENCE = 0.999
 
-timer = timeit.Timer(lambda: fibo(21))
+timer = timeit.Timer(lambda: fibo(25))
 
 # Determine iterations per measurement
 number, _ = timer.autorange()
@@ -49,7 +49,7 @@ else:
 # Results in microsecond per operation
 scale = 1e6
 
-print(f"Function result: {fibo(21)}")
+print(f"Function result: {fibo(25)}")
 print(f"Iterations per measurement: {number}")
 print(f"Number of measurements: {n}")
 print(f"Score: {mean * scale:.3f} us/op")
