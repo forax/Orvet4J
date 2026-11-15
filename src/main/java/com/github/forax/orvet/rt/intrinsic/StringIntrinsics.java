@@ -6,7 +6,6 @@ import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyValueError;
-import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -39,7 +38,7 @@ public final class StringIntrinsics {
       case PyList<?> list -> listRepr(list);
       case PyDict<?,?> dict -> dictRepr(dict);
       case PyFunction f -> functionRepr(f);
-      default -> throw unsupported(value);
+      default -> throw notCanonical("str", value);
     };
   }
 
@@ -56,7 +55,7 @@ public final class StringIntrinsics {
       case Double d -> floatString(d);
       case PyNone _ -> "None";
       case PyFunction f -> functionRepr(f);
-      default -> throw unsupported(value);
+      default -> throw notCanonical("repr", value);
     };
   }
 
@@ -343,7 +342,7 @@ public final class StringIntrinsics {
     }
   }
 
-  private static UnimplementedFeatureError unsupported(Object value) {
-    return new UnimplementedFeatureError("str of " + value.getClass().getName());
+  private static NotCanonicalException notCanonical(String name, Object value) {
+    return new NotCanonicalException(name + " of a non canonical value", value);
   }
 }

@@ -61,6 +61,28 @@ public final class IntrinsicSupport {
     };
   }
 
+  /// The name that type(value).__name__ would report. Raises NotCanonicalException for a non-canonical value.
+  //public static String typeName(Object value) {
+  //  return TypeIntrinsics.$type$(value).name();
+  //}
+
+  /// Class check only: whether the value is one of the runtime's representation classes.
+  /// (The "BigInteger never fits in a long" invariant is not checked here.)
+  public static boolean isCanonical(Object v) {
+    return v instanceof Long || v instanceof BigInteger || v instanceof Boolean || v instanceof Double
+        || v instanceof String || v instanceof PyNone || v instanceof PyTuple || v instanceof PyList<?>
+        || v instanceof PyDict<?, ?> || v instanceof PyFunction
+        //|| v instanceof PyRange || v instanceof PySlice || v instanceof PyType
+        ;
+  }
+
+  /// For "answer is false" paths that never look at a value's class.
+  public static void checkCanonical(Object value) {
+    if (!isCanonical(value)) {
+      throw new NotCanonicalException("not canonical", value);
+    }
+  }
+
   /// Keeps the invariant that a BigInteger never holds a value that fits in a long.
   static Object normalize(BigInteger value) {
     if (value.bitLength() < 64) {

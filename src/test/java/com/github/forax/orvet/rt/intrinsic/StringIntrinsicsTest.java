@@ -5,7 +5,6 @@ import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
 import com.github.forax.orvet.rt.error.PyValueError;
-import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -90,10 +89,17 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void strUnsupported() {
-      var ex = assertThrows(UnimplementedFeatureError.class,
+    public void strObjectNonCanonical() {
+      var ex = assertThrows(NotCanonicalException.class,
           () -> StringIntrinsics.$str$(new Object()));
-      assertEquals("str of java.lang.Object", ex.getMessage());
+      assertEquals("str of a non canonical value: java.lang.Object", ex.getMessage());
+    }
+
+    @Test
+    public void strCharacterNonCanonical() {
+      var ex = assertThrows(NotCanonicalException.class,
+          () -> StringIntrinsics.$str$('a'));
+      assertEquals("str of a non canonical value: java.lang.Character", ex.getMessage());
     }
   }
 
@@ -143,17 +149,23 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void reprUnsupported() {
-      var ex = assertThrows(UnimplementedFeatureError.class,
-          () -> StringIntrinsics.$repr$(new Object()));
-      assertEquals("str of java.lang.Object", ex.getMessage());
+    public void nonCanonicalStrMessages() {
+      assertEquals("str of a non canonical value: java.lang.Object",
+          assertThrows(NotCanonicalException.class,
+              () -> StringIntrinsics.$str$(new Object())).getMessage());
+      assertEquals("str of a non canonical value: java.lang.Character",
+          assertThrows(NotCanonicalException.class,
+              () -> StringIntrinsics.$str$('c')).getMessage());
     }
 
     @Test
-    public void reprCharacterUnsupported() {
-      var ex = assertThrows(UnimplementedFeatureError.class,
-          () -> StringIntrinsics.$repr$('c'));
-      assertEquals("str of java.lang.Character", ex.getMessage());
+    public void nonCanonicalReprMessages() {
+      assertEquals("repr of a non canonical value: java.lang.Object",
+          assertThrows(NotCanonicalException.class,
+              () -> StringIntrinsics.$repr$(new Object())).getMessage());
+      assertEquals("repr of a non canonical value: java.lang.Character",
+          assertThrows(NotCanonicalException.class,
+              () -> StringIntrinsics.$repr$('c')).getMessage());
     }
   }
 
@@ -406,24 +418,6 @@ public final class StringIntrinsicsTest {
   @Nested
   public final class ErrorMessage {
 
-    @Test
-    public void unsupportedStrMessages() {
-      assertEquals("str of java.lang.Object",
-          assertThrows(UnimplementedFeatureError.class,
-              () -> StringIntrinsics.$str$(new Object())).getMessage());
-      assertEquals("str of java.lang.Character",
-          assertThrows(UnimplementedFeatureError.class,
-              () -> StringIntrinsics.$str$('c')).getMessage());
-    }
 
-    @Test
-    public void unsupportedReprMessages() {
-      assertEquals("str of java.lang.Object",
-          assertThrows(UnimplementedFeatureError.class,
-              () -> StringIntrinsics.$repr$(new Object())).getMessage());
-      assertEquals("str of java.lang.Character",
-          assertThrows(UnimplementedFeatureError.class,
-              () -> StringIntrinsics.$repr$('c')).getMessage());
-    }
   }
 }

@@ -1,6 +1,7 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyTypeError;
+import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -155,10 +156,10 @@ public final class PyDictTest {
   public void nonCanonicalRuntimeValuesAreRejectedAsKeys() {
     var dict = new PyDict<Object, Object>();
 
-    assertThrows(PyTypeError.class,
+    assertThrows(NotCanonicalException.class,
         () -> dict.put(new Object(), "value"));
 
-    assertThrows(PyTypeError.class,
+    assertThrows(NotCanonicalException.class,
         () -> dict.containsKey(new Object()));
   }
 

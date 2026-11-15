@@ -5,7 +5,6 @@ import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
-import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigInteger;
 
@@ -26,12 +25,16 @@ public final class TruthinessIntrinsics {
       case PyList<?> list -> { return !list.isEmpty(); }
       case PyDict<?,?> dict -> { return !dict.isEmpty(); }
       case PyFunction _ -> { return true; }
-      default -> throw new UnimplementedFeatureError("truthiness of " + value.getClass().getName());
+      default -> throw notCanonical(value);
     }
   }
 
   @Intrinsic
   public static boolean $not$(Object value) {
     return !$truthy$(value);
+  }
+
+  private static NotCanonicalException notCanonical(Object value) {
+    return new NotCanonicalException("no truthiness for a non canonical value", value);
   }
 }

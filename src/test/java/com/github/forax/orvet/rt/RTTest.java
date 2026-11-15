@@ -3,9 +3,9 @@ package com.github.forax.orvet.rt;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
-import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.intrinsic.HashingIntrinsics;
 import com.github.forax.orvet.engine.SpecializerFixtures;
+import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -250,9 +250,9 @@ public final class RTTest {
       var hash = RT.bsmSpecialize(LOOKUP, "$hash$",
           MethodType.methodType(long.class, Object.class), HashingIntrinsics.class).getTarget();
 
-      var expected = assertThrows(PyTypeError.class, () -> HashingIntrinsics.$hash$(new Object()));
-      var actual = assertThrows(PyTypeError.class, () -> {
-        long ignored = (long) hash.invokeExact(new Object());
+      var expected = assertThrows(NotCanonicalException.class, () -> HashingIntrinsics.$hash$(new Object()));
+      var actual = assertThrows(NotCanonicalException.class, () -> {
+        var _ = (long) hash.invokeExact(new Object());
       });
       assertEquals(expected.getMessage(), actual.getMessage());
     }

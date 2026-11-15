@@ -7,7 +7,6 @@ import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.RT;
 import com.github.forax.orvet.rt.error.PyTypeError;
-import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -179,14 +178,14 @@ public final class ComparisonIntrinsicsTest {
     @Test
     public void equalityWithUnsupportedTypeThrows() {
       // Equality is only defined for supported runtime types for now.
-      assertThrows(UnimplementedFeatureError.class,
+      assertThrows(NotCanonicalException.class,
           () -> ComparisonIntrinsics.$eq$(new Object(), new Object()));
-      assertThrows(UnimplementedFeatureError.class,
+      assertThrows(NotCanonicalException.class,
           () -> ComparisonIntrinsics.$ne$(new Object(), new Object()));
       // The dispatcher is driven by the *left* operand.
-      assertThrows(UnimplementedFeatureError.class,
+      assertThrows(NotCanonicalException.class,
           () -> ComparisonIntrinsics.$eq$(new Object(), PyNone.INSTANCE));
-      // …but a supported left operand gracefully returns false.
+      // but a supported left operand returns false
       assertFalse(ComparisonIntrinsics.$eq$(PyNone.INSTANCE, new Object()));
       assertFalse(ComparisonIntrinsics.$eq$(1L, new Object()));
     }
@@ -933,7 +932,7 @@ public final class ComparisonIntrinsicsTest {
 
 
   @Nested
-  public final class TypeError {
+  public final class Error {
 
     @Test
     public void orderingAcrossTypesIsATypeError() {

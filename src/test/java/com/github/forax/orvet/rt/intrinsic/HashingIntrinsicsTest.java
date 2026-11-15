@@ -338,15 +338,15 @@ public final class HashingIntrinsicsTest {
     @Test
     public void boxedIntegerIsRejected() {
       // The runtime uses Long, not Integer; anything else falls through to the default case.
-      var ex = assertThrows(PyTypeError.class, () -> hash(Integer.valueOf(1)));
+      var ex = assertThrows(NotCanonicalException.class, () -> hash(Integer.valueOf(1)));
       assertTrue(ex.getMessage().contains("java.lang.Integer"), "was: " + ex.getMessage());
-      assertTrue(ex.getMessage().startsWith("not a canonical runtime value:"),
+      assertTrue(ex.getMessage().contains("a non canonical value:"),
           "was: " + ex.getMessage());
     }
 
     @Test
     public void arbitraryObjectIsRejected() {
-      var ex = assertThrows(PyTypeError.class, () -> hash(new Object()));
+      var ex = assertThrows(NotCanonicalException.class, () -> hash(new Object()));
       assertTrue(ex.getMessage().contains("java.lang.Object"), "was: " + ex.getMessage());
     }
 

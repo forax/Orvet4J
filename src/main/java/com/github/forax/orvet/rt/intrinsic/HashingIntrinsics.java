@@ -49,8 +49,7 @@ public final class HashingIntrinsics {
       case PyDict<?,?> _ -> throw unhashable("dict");
       case PyNone _ -> { return HASH_NONE; }
       case PyFunction function -> { return System.identityHashCode(function); }
-      default -> throw new PyTypeError(
-          "not a canonical runtime value: " + value.getClass().getName());
+      default -> throw notCanonical(value);
     }
   }
 
@@ -147,5 +146,9 @@ public final class HashingIntrinsics {
 
   private static PyTypeError unhashable(String typeName) {
     return new PyTypeError("unhashable type: '" + typeName + "'");
+  }
+
+  private static NotCanonicalException notCanonical(Object value) {
+    return new NotCanonicalException("can not hash a non canonical value", value);
   }
 }

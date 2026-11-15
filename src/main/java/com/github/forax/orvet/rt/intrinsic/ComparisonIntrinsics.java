@@ -6,7 +6,6 @@ import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyTypeError;
-import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -38,6 +37,8 @@ public final class ComparisonIntrinsics {
 
   // --- equality
 
+  // Throwing an exception when the arguments are not canonical can be too costly here,
+  // so it's not done on every path.
   @Intrinsic
   public static boolean $eq$(Object left, Object right) {
     switch (left) {
@@ -82,7 +83,7 @@ public final class ComparisonIntrinsics {
       }
       case PyFunction l -> { return right == l; }  // Python functions compare by identity in this runtime.
       // TODO PyRange, PySlice, PyType
-      default -> throw unimplemented("==", left);
+      default -> throw notCanonical("==", left);
     }
   }
 
@@ -232,9 +233,13 @@ public final class ComparisonIntrinsics {
     if (left instanceof PyList<?> l && right instanceof PyList<?> r) {
       return listOrder(l, r, op);
     }
+    IntrinsicSupport.checkCanonical(left);
+    IntrinsicSupport.checkCanonical(right);
     throw new PyTypeError("'" + symbol(op) + "' not supported between instances of '"
         + typeName(left) + "' and '" + typeName(right) + "'");
   }
+
+
 
   private static boolean holds(int op, int comparison) {
     return switch (op) {
@@ -256,8 +261,8 @@ public final class ComparisonIntrinsics {
     };
   }
 
-  private static UnimplementedFeatureError unimplemented(String operator, Object operand) {
-    return new UnimplementedFeatureError("'" + operator + "' on " + operand.getClass().getName());
+  private static NotCanonicalException notCanonical(String operator, Object value) {
+    return new NotCanonicalException("'" + operator + "' on a non canonical value ", value);
   }
 
   // ------------------------------------------------------------------ tuples
