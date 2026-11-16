@@ -2,6 +2,7 @@ package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
+import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
@@ -24,6 +25,7 @@ public final class ContainmentIntrinsics {
       case PyTuple tuple -> { return TupleIntrinsics.$in$(tuple, item); }
       case PyList<?> list -> { return ListIntrinsics.$in$(list, item); }
       case PyDict<?,?> dict -> { return DictIntrinsics.$in$(dict, item); }
+      case PyRange range -> { return RangeIntrinsics.$in$(range, item); }
       default -> throw new PyTypeError("argument of type '" + typeName(container) + "' is not iterable");
     }
   }

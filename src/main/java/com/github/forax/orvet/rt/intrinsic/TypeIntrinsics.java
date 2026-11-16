@@ -4,6 +4,8 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.RT;
 import com.github.forax.orvet.rt.error.PyOverflowError;
@@ -62,12 +64,11 @@ public final class TypeIntrinsics {
       //case Double _ -> { return PyType.FLOAT.function; }
       case String _ -> { return PyType.STR.function; }
       case PyNone _ -> { return PyType.NONE_TYPE.function; }
-      //case PyTuple _ -> { return PyType.TUPLE.function; }
-      //case PyList<?> _ -> { return PyType.LIST.function; }
+      case PyTuple _ -> { return PyType.TUPLE.function; }
+      case PyList<?> _ -> { return PyType.LIST.function; }
       case PyDict<?, ?> _ -> { return PyType.DICT.function; }
-      //case PyRange _ -> { return PyType.RANGE; }
-      //case PySlice _ -> { return PyType.SLICE; }
-      //case PyType _ -> { return PyType.TYPE.function; }
+      case PyRange _ -> { return PyType.RANGE.function; }
+      case PySlice _ -> { return PyType.SLICE.function; }
       case PyFunction f -> { return PyType.FUNCTION.function; }
       default -> throw new NotCanonicalException("not canonical", value);
     }

@@ -20,7 +20,8 @@ public final class PyRange {
   private final BigInteger bigLength;                      // valid iff !small
 
   public static PyRange of(Object start, Object stop, Object step) {
-    if (step instanceof Long l && l == 0L) {
+    if ((step instanceof Long l && l == 0L) ||
+        (step instanceof BigInteger b && b.equals(BigInteger.ZERO))) {
       throw new PyValueError("range() arg 3 must not be zero");
     }
     return new PyRange(start, stop, step);

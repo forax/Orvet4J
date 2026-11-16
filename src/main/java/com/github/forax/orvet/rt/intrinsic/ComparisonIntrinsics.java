@@ -4,6 +4,8 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
@@ -82,7 +84,18 @@ public final class ComparisonIntrinsics {
         }
       }
       case PyFunction l -> { return right == l; }  // Python functions compare by identity in this runtime.
-      // TODO PyRange, PySlice, PyType
+      case PyRange l -> {
+        switch (right) {
+          case PyRange r -> { return l.sameSequence(r); }
+          default -> { return false; }
+        }
+      }
+      case PySlice l -> {
+        switch (right) {
+          case PySlice r -> { return tupleEquals(l.asTuple(), r.asTuple()); }
+          default -> { return false; }
+        }
+      }
       default -> throw notCanonical("==", left);
     }
   }

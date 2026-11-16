@@ -4,6 +4,8 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyValueError;
 
@@ -38,6 +40,8 @@ public final class StringIntrinsics {
       case PyList<?> list -> listRepr(list);
       case PyDict<?,?> dict -> dictRepr(dict);
       case PyFunction f -> functionRepr(f);
+      case PyRange r -> r.toString();
+      case PySlice s -> s.toString();
       default -> throw notCanonical("str", value);
     };
   }
@@ -55,6 +59,8 @@ public final class StringIntrinsics {
       case Double d -> floatString(d);
       case PyNone _ -> "None";
       case PyFunction f -> functionRepr(f);
+      case PyRange r -> r.toString();
+      case PySlice s -> s.toString();
       default -> throw notCanonical("repr", value);
     };
   }

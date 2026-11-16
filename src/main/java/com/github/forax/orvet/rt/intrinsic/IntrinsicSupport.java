@@ -4,6 +4,8 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
@@ -72,8 +74,7 @@ public final class IntrinsicSupport {
     return v instanceof Long || v instanceof BigInteger || v instanceof Boolean || v instanceof Double
         || v instanceof String || v instanceof PyNone || v instanceof PyTuple || v instanceof PyList<?>
         || v instanceof PyDict<?, ?> || v instanceof PyFunction
-        //|| v instanceof PyRange || v instanceof PySlice || v instanceof PyType
-        ;
+        || v instanceof PyRange || v instanceof PySlice;
   }
 
   /// For "answer is false" paths that never look at a value's class.

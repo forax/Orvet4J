@@ -4,6 +4,8 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
@@ -49,6 +51,8 @@ public final class HashingIntrinsics {
       case PyDict<?,?> _ -> throw unhashable("dict");
       case PyNone _ -> { return HASH_NONE; }
       case PyFunction function -> { return System.identityHashCode(function); }
+      case PyRange range -> { return hashTuple(range.canonicalTuple()); }
+      case PySlice slice -> { return hashTuple(slice.asTuple()); }
       default -> throw notCanonical(value);
     }
   }

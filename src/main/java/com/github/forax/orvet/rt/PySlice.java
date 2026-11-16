@@ -2,6 +2,7 @@ package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 
 import java.math.BigInteger;
 import java.util.Objects;
@@ -24,6 +25,12 @@ public final class PySlice {
 
   /// Equality, hashing and ordering are those of the (start, stop, step) tuple.
   public PyTuple asTuple() { return new PyTuple.PyTuple3(start, stop, step); }
+
+  @Override
+  public String toString() {
+    return "slice(" + StringIntrinsics.$repr$(start) + ", "
+        + StringIntrinsics.$repr$(stop) + ", " + StringIntrinsics.$repr$(step) + ")";
+  }
 
   public Resolved resolve(long length) {
     var stepValue = step == PyNone.INSTANCE ? 1L : index(step);
