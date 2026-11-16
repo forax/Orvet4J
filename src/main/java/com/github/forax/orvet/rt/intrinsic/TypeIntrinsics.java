@@ -5,41 +5,72 @@ import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
-import com.github.forax.orvet.rt.PyType;
+import com.github.forax.orvet.rt.RT;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.typeName;
 
 public final class TypeIntrinsics {
   private TypeIntrinsics() { throw new AssertionError(); }
 
-  @Intrinsic
-  public static PyType $type$(Object value) {
-    switch (value) {
-      case Long _, BigInteger _ -> { return PyType.INT; }
-      case Boolean _ -> { return PyType.BOOL; }
-      case Double _ -> { return PyType.FLOAT; }
-      case String _ -> { return PyType.STR; }
-      case PyNone _ -> { return PyType.NONE_TYPE; }
-      case PyTuple _ -> { return PyType.TUPLE; }
-      case PyList<?> _ -> { return PyType.LIST; }
-      case PyDict<?, ?> _ -> { return PyType.DICT; }
-      //case PyRange _ -> { return PyType.RANGE; }
-      //case PySlice _ -> { return PyType.SLICE; }
-      case PyType _ -> { return PyType.TYPE; }
-      case PyFunction f -> { return f.isBuiltin() ? PyType.BUILTIN_FUNCTION : PyType.FUNCTION; }
-      default -> throw new NotCanonicalException("not canonical", value);
+  enum PyType {
+    //OBJECT("object"),
+    //TYPE("type"),
+    INT("int"),
+    BOOL("bool"),
+    //FLOAT("float"),
+    STR("str"),
+    NONE_TYPE("NoneType"),
+    //TUPLE("tuple"),
+    //LIST("list"),
+    DICT("dict"),
+    //RANGE("range"),
+    //SLICE("slice"),
+    FUNCTION("function")
+    ;
+
+    final PyFunction function;
+
+    PyType(String name) {
+      this.function = RT.constructor(name);
     }
+
+    @Override
+    public String toString() { return  function.name(); }
+  }
+
+  static final HashMap<String, PyType> TYPE_MAP;
+  static {
+    var typeMap = new HashMap<String, PyType>();
+    for(PyType type: PyType.values()) {
+      typeMap.put(type.function.name(), type);
+    }
+    TYPE_MAP = typeMap;
   }
 
   @Intrinsic
-  public static boolean $isInstance$(Object value, PyType type) {
-    return $type$(value).isSubtypeOf(type);
+  public static Object $type$(Object value) {
+    switch (value) {
+      case Long _, BigInteger _ -> { return PyType.INT.function; }
+      case Boolean _ -> { return PyType.BOOL.function; }
+      //case Double _ -> { return PyType.FLOAT.function; }
+      case String _ -> { return PyType.STR.function; }
+      case PyNone _ -> { return PyType.NONE_TYPE.function; }
+      //case PyTuple _ -> { return PyType.TUPLE.function; }
+      //case PyList<?> _ -> { return PyType.LIST.function; }
+      case PyDict<?, ?> _ -> { return PyType.DICT.function; }
+      //case PyRange _ -> { return PyType.RANGE; }
+      //case PySlice _ -> { return PyType.SLICE; }
+      //case PyType _ -> { return PyType.TYPE.function; }
+      case PyFunction f -> { return PyType.FUNCTION.function; }
+      default -> throw new NotCanonicalException("not canonical", value);
+    }
   }
 
   @Intrinsic

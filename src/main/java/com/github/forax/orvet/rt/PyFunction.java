@@ -2,6 +2,7 @@ package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.ast.Stmt;
 import com.github.forax.orvet.rt.error.PyBaseException;
+import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;

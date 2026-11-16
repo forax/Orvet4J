@@ -29,6 +29,14 @@ public final class RT {
     return loader.define(className, bytes);
   }
 
+  public static PyFunction constructor(String name) {
+    var function = Builtins.CONSTRUCTORS.get(name);
+    if (function == null) {
+      throw new AssertionError("unknown constructor: " + name);
+    }
+    return function;
+  }
+
 
   public static CallSite bsmSpecialize(MethodHandles.Lookup unused, String name, MethodType type, Class<?> intrinsicClass) {
     var target = SpecializationSupport.specialize(name, type, intrinsicClass);

@@ -1,5 +1,6 @@
 package com.github.forax.orvet.rt;
 
+import com.github.forax.orvet.rt.PyFunction.Code;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -10,7 +11,6 @@ import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
-import com.github.forax.orvet.rt.intrinsic.TruthinessIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
@@ -36,51 +36,75 @@ final class Builtins {
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
   static final HashMap<String, PyFunction> BUILTINS;
+  static final HashMap<String, PyFunction> CONSTRUCTORS;
   static {
-    var codes = new PyFunction.Code[] {
+    var commonCodes = new Code[] {
+        specializedVariadic("bool", TypeIntrinsics.class),
+        specializedVariadic("int", TypeIntrinsics.class),
+        //specializedVariadic("float", TypeIntrinsics.class),
+        specialized("str", StringIntrinsics.class, "obj"),
+        //variadic("tuple"),
+        //variadic("list"),
+        variadic("dict"),
+        variadic("range"),
+        specializedVariadic("type", TypeIntrinsics.class),
+    };
+    var constructorCodes = new Code[] {
+        fixed("NoneType"),
+        fixed("function")
+    };
+    var builtinCodes = new Code[] {
         fixed("abs", "x"),
         variadic("bytearray"),
         fixed("bin", "x"),
-        specializedVariadic("bool", TypeIntrinsics.class),
-        variadic("dict"),
         fixed("divmod", "a", "b"),
         fixed("hex", "x"),
-        specializedVariadic("int", TypeIntrinsics.class),
         specialized("len", ItemIntrinsics.class, "obj"),
         fixed("oct", "x"),
         fixed("ord", "c"),
         variadic("pow"),
         variadic("print"),
-        variadic("range"),
         specialized("repr", StringIntrinsics.class, "obj"),
         variadic("round")
     };
+
+    var constructors = new HashMap<String, PyFunction>();
     var builtins = new HashMap<String, PyFunction>();
-    for(var code : codes) {
+    for(var code : commonCodes) {
+      var name = code.name();
+      var function = new PyFunction(code, NO_CAPTURE_ARGS);
+      constructors.put(name, function);
+      builtins.put(name, function);
+    }
+    for(var code : constructorCodes) {
+      constructors.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
+    }
+    for(var code : builtinCodes) {
       builtins.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
     }
+    CONSTRUCTORS = constructors;
     BUILTINS = builtins;
   }
 
-  private static PyFunction.Code fixed(String name, String... parameters) {
-    return new PyFunction.Code(name, List.of(parameters), false, 0, null, null);
+  private static Code fixed(String name, String... parameters) {
+    return new Code(name, List.of(parameters), false, 0, null, null);
   }
 
-  private static PyFunction.Code variadic(String name) {
-    return new PyFunction.Code(name, List.of(), true, 0, null, null);
+  private static Code variadic(String name) {
+    return new Code(name, List.of(), true, 0, null, null);
   }
 
-  private static PyFunction.Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
-    return new PyFunction.Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+  private static Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
+    return new Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
   }
 
-  private static PyFunction.Code specializedVariadic(String name, Class<?> intrinsicClass) {
-    return new PyFunction.Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+  private static Code specializedVariadic(String name, Class<?> intrinsicClass) {
+    return new Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
   }
 
   /// The entry of a builtin: always a fixed-arity handle. For a variadic builtin the last parameter
   /// is an Object[] that call sites fill explicitly (never through the varargs-collector bit).
-  static MethodHandle resolve(PyFunction.Code code) {
+  static MethodHandle resolve(Code code) {
     var name = code.name();
     var mh = switch (code.specializationContext()) {
       case PyFunction.SpecializationContext(var intrinsicClass) ->
@@ -96,7 +120,7 @@ final class Builtins {
     return MethodHandles.dropArguments(mh, 0, PyFunction.class);
   }
 
-  private static MethodType builtinType(PyFunction.Code code) {
+  private static MethodType builtinType(Code code) {
     var types = new ArrayList<Class<?>>();
     for (var _ : code.parameters()) {
       types.add(Object.class);
@@ -351,43 +375,6 @@ final class Builtins {
     return result;
   }
 
-  /*@SuppressWarnings("unused")
-  public static Object _int_(Object... args) {
-    requireCount("int", args.length, 0, 2);
-    if (args.length == 0) {
-      return 0L;
-    }
-    if (args.length == 2) {
-      if (!(args[0] instanceof String string)) {
-        throw new PyTypeError("int() can't convert non-string with explicit base");
-      }
-      var base = asIndex(args[1]);
-      if (base.compareTo(BigInteger.ZERO) < 0 || base.compareTo(BigInteger.valueOf(36)) > 0
-          || base.equals(BigInteger.ONE)) {
-        throw new PyValueError("int() base must be >= 2 and <= 36, or 0");
-      }
-      return parseInteger(string, base.intValue());
-    }
-
-    var value = args[0];
-    return switch (value) {
-      case Boolean b -> b ? 1L : 0L;
-      case Long l -> l;
-      case BigInteger b -> normalizeInt(b);
-      case Double d -> {
-        if (!Double.isFinite(d)) {
-          throw new PyOverflowError(Double.isNaN(d)
-              ? "cannot convert float NaN to integer"
-              : "cannot convert float infinity to integer");
-        }
-        yield normalizeInt(new BigDecimal(d).toBigInteger());
-      }
-      case String string -> parseInteger(string, 10);
-      default -> throw new PyTypeError("int() argument must be a string, a bytes-like object or a real number, not '"
-          + typeName(value) + "'");
-    };
-  }*/
-
   @SuppressWarnings("unused")
   public static Object _divmod_(Object a, Object b) {
     if (!isNumeric(a) || !isNumeric(b)) {
@@ -408,6 +395,16 @@ final class Builtins {
     var remainder = ArithmeticIntrinsics.$mod$(a, b);
 
     return new PyTuple.PyTuple2(quotient, remainder);
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _NoneType_() {
+    return PyNone.INSTANCE;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _function_() {
+    throw new UnimplementedFeatureError("function is nor callable");
   }
 
 

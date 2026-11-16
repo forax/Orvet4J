@@ -167,10 +167,14 @@ public final class StringIntrinsics {
 
 
   private static String functionRepr(PyFunction function) {
+    var name = function.name();
     if (function.isBuiltin()) {
-      return "<built-in function " + function.name() + ">";
+      if (TypeIntrinsics.TYPE_MAP.containsKey(name)) {
+        return "<class '" + name + "'>";
+      }
+      return "<built-in function " + name + ">";
     }
-    return "<function " + function.name()
+    return "<function " + name
         + " at 0x"
         + Integer.toHexString(System.identityHashCode(function))
         + ">";
