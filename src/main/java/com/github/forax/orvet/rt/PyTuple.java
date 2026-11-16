@@ -161,7 +161,7 @@ public sealed interface PyTuple {
         return false;
       }
       return switch (other) {
-        case PyTuple4 tuple -> item0.equals(tuple.item0) && item1.equals(tuple.item1) && item2.equals(tuple.item2);
+        case PyTuple4 tuple -> item0.equals(tuple.item0) && item1.equals(tuple.item1) && item2.equals(tuple.item2) && item3.equals(tuple.item3);
         case PyTupleN tuple when tuple.itemCount() == 4->
             item0.equals(tuple.itemAt(0)) && item1.equals(tuple.itemAt(1)) && item2.equals(tuple.itemAt(2)) && item3.equals(tuple.itemAt(3));
         default -> false;
