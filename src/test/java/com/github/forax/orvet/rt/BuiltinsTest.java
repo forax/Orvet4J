@@ -924,4 +924,15 @@ public final class BuiltinsTest {
       assertRaises(PyTypeError.class, "round(1, 2, 3)");
     }
   }
+
+  @Nested
+  public final class Type {
+    @Test
+    public void typeBuiltinIsSingleArgument() throws IOException {
+      assertEquals("<class 'int'>", reprOf("type(1)"));
+
+      assertRaises(PyTypeError.class, "type()");
+      assertRaises(PyTypeError.class, "type(1, 2)");
+    }
+  }
 }
