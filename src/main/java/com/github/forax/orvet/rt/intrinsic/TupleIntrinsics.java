@@ -1,5 +1,6 @@
 package com.github.forax.orvet.rt.intrinsic;
 
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
@@ -172,6 +173,28 @@ public final class TupleIntrinsics {
     }
   }
 
+  // TupleIntrinsics
+  @Intrinsic
+  public static PyTuple $slice$(PyTuple tuple, PySlice slice) {
+    var size = $size$(tuple);
+    var r = slice.resolve(size);
+    if (r.step() == 1 && r.count() == size) {
+      return tuple;                                      // t[:] is t, as in CPython
+    }
+    if (r.count() == 0) {
+      return TUPLE_EMPTY;
+    }
+    var items = new Object[(int) r.count()];
+    var pos = r.start();
+    for (var i = 0; i < items.length; i++, pos += r.step()) {
+      items[i] = $get$(tuple, pos);
+    }
+    return fromArray(items);
+  }
+
+
+  // -- helpers
+
   private static boolean tupleNContains(PyTupleN tuple, Object item) {
     for (var i = 0; i < tuple.itemCount(); i++) {
       var value = tuple.itemAt(i);
@@ -181,9 +204,6 @@ public final class TupleIntrinsics {
     }
     return false;
   }
-
-
-  // -- helpers (not intrinsics: they call the generic intrinsics directly)
 
   /// Normalizes a possibly negative index, or raises IndexError.
   private static int checkedIndex(long index, int size) {

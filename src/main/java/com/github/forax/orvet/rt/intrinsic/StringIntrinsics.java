@@ -26,7 +26,7 @@ public final class StringIntrinsics {
       ThreadLocal.withInitial(IdentityHashMap::new);
 
   @Intrinsic
-  public static String $str$(Object value) {
+  public static Object $str$(Object value) {
     return switch (value) {
       case String s -> s;
       case Boolean b -> b ? "True" : "False";

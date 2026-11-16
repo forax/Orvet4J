@@ -269,7 +269,7 @@ public final class StringIntrinsicsTest {
           -1.0 / 7.0, 1e-300, 1e300
       };
       for (var v : values) {
-        var s = StringIntrinsics.$str$(v);
+        var s = (String) StringIntrinsics.$str$(v);
         assertEquals(0.0, Double.compare(v, Double.parseDouble(s)),
             "round-trip failed for " + v + " (\"str\" gave \"" + s + "\")");
       }

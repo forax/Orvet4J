@@ -43,11 +43,12 @@ final class Builtins {
         specializedVariadic("int", TypeIntrinsics.class),
         //specializedVariadic("float", TypeIntrinsics.class),
         specialized("str", StringIntrinsics.class, "obj"),
-        //variadic("tuple"),
-        //variadic("list"),
+        variadic("tuple"),
+        variadic("list"),
         variadic("dict"),
         variadic("range"),
-        specializedVariadic("type", TypeIntrinsics.class),
+        variadic("slice"),
+        specialized("type", TypeIntrinsics.class, "obj")
     };
     var constructorCodes = new Code[] {
         fixed("NoneType"),
@@ -152,40 +153,13 @@ final class Builtins {
   @SuppressWarnings("unused")
   public static Object _range_(Object... args) {
     requireCount("range", args.length, 1, 3);
-    BigInteger start;
-    BigInteger stop;
-    BigInteger step;
-    if (args.length == 1) {
-      start = BigInteger.ZERO;
-      stop = asIndex(args[0]);
-      step = BigInteger.ONE;
-    } else {
-      start = asIndex(args[0]);
-      stop = asIndex(args[1]);
-      step = args.length == 3 ? asIndex(args[2]) : BigInteger.ONE;
-    }
-    if (step.signum() == 0) {
-      throw new PyValueError("range() arg 3 must not be zero");
-    }
-
-    var count = BigInteger.ZERO;
-    if (step.signum() > 0 && start.compareTo(stop) < 0) {
-      count = stop.subtract(start).subtract(BigInteger.ONE).divide(step).add(BigInteger.ONE);
-    } else if (step.signum() < 0 && start.compareTo(stop) > 0) {
-      count = start.subtract(stop).subtract(BigInteger.ONE).divide(step.negate()).add(BigInteger.ONE);
-    }
-    if (count.compareTo(MAX_ARRAY_SIZE) > 0) {
-      throw new UnimplementedFeatureError("range larger than the maximum Java array size");
-    }
-
-    var result = new PyList<>(count.intValue());
-    var value = start;
-    for (var i = 0; i < count.intValue(); i++) {
-      result.append(normalizeInt(value));
-      value = value.add(step);
-    }
-    return result;
+    return switch (args.length) {
+      case 1 -> PyRange.of(0L, index(args[0]), 1L);
+      case 2 -> PyRange.of(index(args[0]), index(args[1]), 1L);
+      default -> PyRange.of(index(args[0]), index(args[1]), index(args[2]));
+    };
   }
+  private static Object index(Object v) { return normalizeInt(asIndex(v)); }
 
   @SuppressWarnings("unused")
   public static Object _abs_(Object value) {
@@ -405,6 +379,49 @@ final class Builtins {
   @SuppressWarnings("unused")
   public static Object _function_() {
     throw new UnimplementedFeatureError("function is nor callable");
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _slice_(Object... a) {
+    requireCount("slice", a.length, 1, 3);
+    return switch (a.length) {
+      case 1 -> new PySlice(PyNone.INSTANCE, a[0], PyNone.INSTANCE);
+      case 2 -> new PySlice(a[0], a[1], PyNone.INSTANCE);
+      default -> new PySlice(a[0], a[1], a[2]);
+    };
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _list_(Object... args) {
+    requireCount("list", args.length, 0, 1);
+    var result = new PyList<>();
+    if (args.length == 1) {
+      var it = IteratorIntrinsics.$iterator$(args[0]);
+      Object item;
+      while ((item = IteratorIntrinsics.$next$(it)) != null) {
+        result.append(item);
+      }
+    }
+    throw new UnimplementedFeatureError("???");  // FIXME
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _tuple_(Object... args) {
+    requireCount("tuple", args.length, 0, 1);
+    var length = args.length;
+    if (length == 0) {
+      return TupleIntrinsics.empty();
+    }
+    if (args.length == 1) {
+      var arrayList = new ArrayList<>();
+      var it = IteratorIntrinsics.$iterator$(args[0]);
+      Object item;
+      while ((item = IteratorIntrinsics.$next$(it)) != null) {
+        arrayList.add(item);
+      }
+      return TupleIntrinsics.fromArray(arrayList.toArray());
+    }
+    throw new UnimplementedFeatureError("???");  //FIXME
   }
 
 

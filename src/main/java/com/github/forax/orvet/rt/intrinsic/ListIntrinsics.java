@@ -2,7 +2,9 @@ package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.error.PyIndexError;
+import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 /// Python-list operations.
@@ -114,6 +116,77 @@ public final class ListIntrinsics {
       index++;
     }
     return false;
+  }
+
+  @Intrinsic
+  public static <E> PyList<E> $slice$(PyList<E> list, PySlice slice) {
+    var r = slice.resolve(list.size());
+    var result = new PyList<E>((int) r.count());
+    var pos = r.start();
+    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+      result.append(list.get((int) pos));
+    }
+    return result;
+  }
+
+  @Intrinsic
+  public static Object $setSlice$(PyList<Object> list, PySlice slice, Object iterable) {
+    var items = toItems(iterable);                       // snapshot: l[:] = l is safe
+    var r = slice.resolve(list.size());
+    if (r.step() == 1) {
+      var from = (int) r.start();
+      list.splice(from, from + (int) r.count(), items);  // count == 0 inserts at `from`, as CPython
+    } else {
+      if (items.length != r.count()) {
+        throw new PyValueError("attempt to assign sequence of size " + items.length
+            + " to extended slice of size " + r.count());
+      }
+      var pos = r.start();
+      for (var i = 0; i < items.length; i++, pos += r.step()) {
+        list.set((int) pos, items[i]);
+      }
+    }
+    return PyNone.INSTANCE;
+  }
+
+  @Intrinsic
+  @SuppressWarnings("unchecked")
+  public static <E> Object $deleteSlice$(PyList<E> list, PySlice slice) {
+    var r = slice.resolve(list.size());
+    if (r.count() == 0) {
+      return PyNone.INSTANCE;
+    }
+    if (r.step() == 1) {
+      list.splice((int) r.start(), (int) (r.start() + r.count()), (E[]) new Object[0]);
+      return PyNone.INSTANCE;
+    }
+    var items = (E[]) list.toArray();
+    var removed = new boolean[items.length];
+    var pos = r.start();
+    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+      removed[(int) pos] = true;
+    }
+    var kept = (E[]) new Object[items.length - (int) r.count()];
+    for (int i = 0, k = 0; i < items.length; i++) {
+      if (!removed[i]) {
+        kept[k++] = items[i];
+      }
+    }
+    list.splice(0, items.length, kept);
+    return PyNone.INSTANCE;
+  }
+
+  private static Object[] toItems(Object iterable) {
+    if (iterable instanceof PyList<?> l) {
+      return l.toArray();
+    }
+    var out = new PyList<Object>();
+    var it = IteratorIntrinsics.$iterator$(iterable);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(it)) != null) {
+      out.append(item);
+    }
+    return out.toArray();
   }
 
 

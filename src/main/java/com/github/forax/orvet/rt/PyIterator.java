@@ -1,7 +1,10 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyRuntimeError;
+import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
+
+import java.math.BigInteger;
 
 /// Internal iterators used by {@code for}; they are never visible to Python code.
 public sealed interface PyIterator {
@@ -110,6 +113,46 @@ public sealed interface PyIterator {
     private Object fail(String message) {
       failure = message;
       throw new PyRuntimeError(message);
+    }
+  }
+
+  final class RangeIterator implements PyIterator {
+    private final boolean small;
+    private long current, remaining, step;                   // small mode
+    private BigInteger bigCurrent, bigStep, bigRemaining;    // big mode
+
+    public RangeIterator(PyRange range) {
+      if (range.isSmall()) {
+        small = true;
+        current = range.smallStart();
+        step = range.smallStep();
+        remaining = range.smallLength();
+      } else {
+        small = false;
+        bigCurrent = PyRange.big(range.start());
+        bigStep = PyRange.big(range.step());
+        bigRemaining = range.length();
+      }
+    }
+
+    public Object next() {
+      if (small) {
+        if (remaining == 0) {
+          return null;
+        }
+        var value = current;
+        if (--remaining != 0) {
+          current += step;               // only computed when the next element exists: no overflow
+        }
+        return value;
+      }
+      if (bigRemaining.signum() == 0) {
+        return null;
+      }
+      var value = bigCurrent;
+      bigRemaining = bigRemaining.subtract(BigInteger.ONE);
+      bigCurrent = bigCurrent.add(bigStep);
+      return IntrinsicSupport.normalize(value);
     }
   }
 }

@@ -47,6 +47,7 @@ public final class BytecodeGenerator {
   private static final String PY_DICT = "com/github/forax/orvet/rt/PyDict";
   private static final String PY_TUPLE = "com/github/forax/orvet/rt/PyTuple";
   private static final String PY_LIST = "com/github/forax/orvet/rt/PyList";
+  private static final String PY_SLICE = "com/github/forax/orvet/rt/PySlice";
   private static final String INTRINSICS = "com/github/forax/orvet/rt/intrinsic/";
   private static final String ARITHMETIC = INTRINSICS + "ArithmeticIntrinsics";
   private static final String COMPARISON = INTRINSICS + "ComparisonIntrinsics";
@@ -705,7 +706,14 @@ public final class BytecodeGenerator {
           expr(s.index());
           intrinsic(ITEM, "$getItem$", BINARY);
         }
-        case Expr.Slice s -> throw unsupported("slice", s.line(), s.column());
+        case Expr.Slice s -> {
+          mv.visitTypeInsn(NEW, PY_SLICE);                       // PY_SLICE = "com/github/forax/orvet/rt/PySlice"
+          mv.visitInsn(DUP);
+          expr(s.lower());                                       // omitted parts are NoneLiteral
+          expr(s.upper());
+          expr(s.step());
+          mv.visitMethodInsn(INVOKESPECIAL, PY_SLICE, "<init>", "(" + O + O + O + ")V", false);
+        }
         case Expr.ListDisplay d -> listDisplay(d);
         case Expr.TupleDisplay d -> tupleDisplay(d);
         case Expr.DictDisplay d -> dictDisplay(d);

@@ -84,7 +84,7 @@ public final class IntrinsicSupport {
   }
 
   /// Keeps the invariant that a BigInteger never holds a value that fits in a long.
-  static Object normalize(BigInteger value) {
+  public static Object normalize(BigInteger value) {
     if (value.bitLength() < 64) {
       return value.longValue();
     }

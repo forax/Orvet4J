@@ -27,11 +27,11 @@ public final class TypeIntrinsics {
     //FLOAT("float"),
     STR("str"),
     NONE_TYPE("NoneType"),
-    //TUPLE("tuple"),
-    //LIST("list"),
+    TUPLE("tuple"),
+    LIST("list"),
     DICT("dict"),
-    //RANGE("range"),
-    //SLICE("slice"),
+    RANGE("range"),
+    SLICE("slice"),
     FUNCTION("function")
     ;
 
@@ -78,7 +78,7 @@ public final class TypeIntrinsics {
     return switch (args.length) {
       case 0 -> false;
       case 1 -> TruthinessIntrinsics.$truthy$(args[0]);
-      default -> throw new PyTypeError("int() expected at most 1 argument, got " + args.length);
+      default -> throw new PyTypeError("bool() expected at most 1 argument, got " + args.length);
     };
   }
 
@@ -87,20 +87,8 @@ public final class TypeIntrinsics {
     switch (args.length) {
       case 0 -> { return 0L; }
       case 1 -> { return $int_oneArg$(args[0]); }
-      case 2 -> {
-        var value = args[0];
-        var base = args[1];
-        switch (base) {
-          case Long l -> {
-            if (l == 10L) {  // fast path
-              return $int_oneArg$(value);
-            }
-            return int_twoArg(value, base);
-          }
-          default -> { return int_twoArg(value, base); }
-        }
-      }
-      default -> throw new PyTypeError("int() expected at most 3 arguments, got " + args.length);
+      case 2 -> { return int_twoArg(args[0], args[1]); }
+      default -> throw new PyTypeError("int() expected at most 2 arguments, got " + args.length);
     }
   }
 

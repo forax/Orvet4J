@@ -163,6 +163,26 @@ public final class PyList<E> {
     size = newSize;
   }
 
+  /// Replaces [from, to) with the given items (which must not alias this list's storage).
+  @SafeVarargs
+  public final void splice(int from, int to, E... items) {
+    Objects.checkFromToIndex(from, to, size);
+    for (var item : items) {
+      Objects.requireNonNull(item);
+    }
+    var newSize = (long) size - (to - from) + items.length;
+    if (newSize > MAX_ARRAY_SIZE) {
+      throw tooLarge();
+    }
+    ensureCapacity((int) newSize);
+    System.arraycopy(elements, to, elements, from + items.length, size - to);
+    System.arraycopy(items, 0, elements, from, items.length);
+    if (newSize < size) {
+      Arrays.fill(elements, (int) newSize, size, null);
+    }
+    size = (int) newSize;
+  }
+
 
   // -- Java API
 
