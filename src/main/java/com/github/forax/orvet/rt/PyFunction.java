@@ -12,7 +12,7 @@ import java.util.Objects;
 
 /// A Python function (or a native/builtin one, see [Code#isBuiltin()]).
 public final class PyFunction {
-  /// Common interface between specialiation context and module context
+  /// Common context interface between specializable builtin and Python function
   sealed interface CodeContext permits ModuleContext, SpecializationContext { }
   record SpecializationContext(Class<?> intrinsicClass) implements CodeContext { }
 
@@ -22,7 +22,7 @@ public final class PyFunction {
     private final boolean varargs;
     private final int captureCount;
 
-    private final CodeContext context;
+    private final CodeContext context;            // null | ModuleContext | SpecializationContext
     private final Stmt.FunctionDef functionDef;   // null if native
 
     // compiled entry (accessed under a lock on this, unless builtin, where the resolution is idempotent)

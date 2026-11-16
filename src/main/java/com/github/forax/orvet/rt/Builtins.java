@@ -12,6 +12,7 @@ import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TruthinessIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -40,11 +41,11 @@ final class Builtins {
         fixed("abs", "x"),
         variadic("bytearray"),
         fixed("bin", "x"),
-        variadic("bool"),
+        specializedVariadic("bool", TypeIntrinsics.class),
         variadic("dict"),
         fixed("divmod", "a", "b"),
         fixed("hex", "x"),
-        variadic("int"),
+        specializedVariadic("int", TypeIntrinsics.class),
         specialized("len", ItemIntrinsics.class, "obj"),
         fixed("oct", "x"),
         fixed("ord", "c"),
@@ -65,12 +66,16 @@ final class Builtins {
     return new PyFunction.Code(name, List.of(parameters), false, 0, null, null);
   }
 
+  private static PyFunction.Code variadic(String name) {
+    return new PyFunction.Code(name, List.of(), true, 0, null, null);
+  }
+
   private static PyFunction.Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
     return new PyFunction.Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
   }
 
-  private static PyFunction.Code variadic(String name) {
-    return new PyFunction.Code(name, List.of(), true, 0, null, null);
+  private static PyFunction.Code specializedVariadic(String name, Class<?> intrinsicClass) {
+    return new PyFunction.Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
   }
 
   /// The entry of a builtin: always a fixed-arity handle. For a variadic builtin the last parameter
@@ -346,13 +351,7 @@ final class Builtins {
     return result;
   }
 
-  @SuppressWarnings("unused")
-  public static Object _bool_(Object... args) {
-    requireCount("bool", args.length, 0, 1);
-    return Boolean.valueOf(args.length != 0 && TruthinessIntrinsics.$truthy$(args[0]));
-  }
-
-  @SuppressWarnings("unused")
+  /*@SuppressWarnings("unused")
   public static Object _int_(Object... args) {
     requireCount("int", args.length, 0, 2);
     if (args.length == 0) {
@@ -387,7 +386,7 @@ final class Builtins {
       default -> throw new PyTypeError("int() argument must be a string, a bytes-like object or a real number, not '"
           + typeName(value) + "'");
     };
-  }
+  }*/
 
   @SuppressWarnings("unused")
   public static Object _divmod_(Object a, Object b) {
@@ -538,125 +537,7 @@ final class Builtins {
     return rounded;
   }
 
-  private static Object parseInteger(String original, int requestedBase) {
-    var text = stripWhitespace(original);
-    if (text.isEmpty()) {
-      throw invalidInteger(original, requestedBase);
-    }
 
-    var sign = "";
-    if (text.charAt(0) == '+' || text.charAt(0) == '-') {
-      sign = text.substring(0, 1);
-      text = text.substring(1);
-    }
-    if (text.isEmpty()) {
-      throw invalidInteger(original, requestedBase);
-    }
-
-    var base = requestedBase;
-    var strippedPrefix = false;
-    if (text.length() >= 2 && text.charAt(0) == '0') {
-      var prefixBase = switch (text.charAt(1)) {
-        case 'b', 'B' -> 2;
-        case 'o', 'O' -> 8;
-        case 'x', 'X' -> 16;
-        default -> 0;
-      };
-      if (prefixBase != 0 && (base == 0 || base == prefixBase)) {
-        base = prefixBase;
-        text = text.substring(2);
-        strippedPrefix = true;
-      }
-    }
-    if (base == 0) {
-      base = 10;
-    }
-    if (strippedPrefix && text.startsWith("_")) {
-      text = text.substring(1);  // one underscore immediately after a base prefix is permitted
-    }
-    if (text.isEmpty()) {
-      throw invalidInteger(original, requestedBase);
-    }
-
-    var digits = new StringBuilder(text.length());
-    boolean previousWasDigit = false;
-    for (var i = 0; i < text.length();) {
-      var cp = text.codePointAt(i);
-      i += Character.charCount(cp);
-      if (cp == '_') {
-        if (!previousWasDigit || i == text.length()
-            || digit(text.codePointAt(i), base) < 0) {
-          throw invalidInteger(original, requestedBase);
-        }
-        previousWasDigit = false;
-        continue;
-      }
-      var digit = digit(cp, base);
-      if (digit < 0) {
-        throw invalidInteger(original, requestedBase);
-      }
-      digits.append(Character.forDigit(digit, base));
-      previousWasDigit = true;
-    }
-    if (digits.isEmpty() || !previousWasDigit) {
-      throw invalidInteger(original, requestedBase);
-    }
-
-    if (requestedBase == 0 && base == 10 && digits.length() > 1
-        && digits.charAt(0) == '0' && !digits.toString().matches("0+")) {
-      throw invalidInteger(original, requestedBase);
-    }
-    try {
-      return normalizeInt(new BigInteger(sign + digits, base));
-    } catch (NumberFormatException e) {
-      throw invalidInteger(original, requestedBase);
-    }
-  }
-
-  private static int digit(int cp, int base) {
-    if (cp >= '0' && cp <= '9') {
-      var value = cp - '0';
-      return value < base ? value : -1;
-    }
-    if (cp >= 'a' && cp <= 'z') {
-      var value = cp - 'a' + 10;
-      return value < base ? value : -1;
-    }
-    if (cp >= 'A' && cp <= 'Z') {
-      var value = cp - 'A' + 10;
-      return value < base ? value : -1;
-    }
-    if (Character.getType(cp) == Character.DECIMAL_DIGIT_NUMBER) {
-      var value = Character.digit(cp, 10);
-      return value >= 0 && value < base ? value : -1;
-    }
-    return -1;
-  }
-
-  private static String stripWhitespace(String value) {
-    var start = 0;
-    var end = value.length();
-    while (start < end) {
-      var cp = value.codePointAt(start);
-      if (!Character.isWhitespace(cp) && !Character.isSpaceChar(cp)) {
-        break;
-      }
-      start += Character.charCount(cp);
-    }
-    while (start < end) {
-      var cp = value.codePointBefore(end);
-      if (!Character.isWhitespace(cp) && !Character.isSpaceChar(cp)) {
-        break;
-      }
-      end -= Character.charCount(cp);
-    }
-    return value.substring(start, end);
-  }
-
-  private static PyValueError invalidInteger(String value, int base) {
-    return new PyValueError("invalid literal for int() with base " + base + ": "
-        + StringIntrinsics.$repr$(value));
-  }
 
   private static int pairSize(Object pair) {
     return switch (pair) {
