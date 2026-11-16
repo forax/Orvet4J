@@ -80,6 +80,6 @@ public final class DictIntrinsics {
   }
 
   private static PyKeyError missingKey(Object key) {
-    return new PyKeyError(StringIntrinsics.$repr$(key));
+    return new PyKeyError((String) StringIntrinsics.$repr$(key));
   }
 }

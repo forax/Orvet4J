@@ -17,6 +17,17 @@ public final class ItemIntrinsics {
   }
 
   @Intrinsic
+  public static Object $len$(Object value) {
+    return switch (value) {
+      case String string -> (long) string.codePointCount(0, string.length());
+      case PyTuple tuple -> TupleIntrinsics.$size$(tuple);
+      case PyList<?> list -> (long) list.size();
+      case PyDict<?,?> dictionary -> DictIntrinsics.$size$(dictionary);
+      default -> throw new PyTypeError("object of type '" + typeName(value) + "' has no len()");
+    };
+  }
+
+  @Intrinsic
   public static Object $getItem$(Object container, Object index) {
     Object result;
     switch (container) {

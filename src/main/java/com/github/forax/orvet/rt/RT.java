@@ -1,6 +1,7 @@
 package com.github.forax.orvet.rt;
 
 import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.math.BigInteger;
@@ -30,7 +31,8 @@ public final class RT {
 
 
   public static CallSite bsmSpecialize(MethodHandles.Lookup unused, String name, MethodType type, Class<?> intrinsicClass) {
-    return SpecializationSupport.specialize(name, type, intrinsicClass);
+    var target = SpecializationSupport.specialize(name, type, intrinsicClass);
+    return new ConstantCallSite(target);
   }
 
   public static CallSite bsmTypeSwitch(MethodHandles.Lookup lookup, String unused, MethodType unused2, Object... bsmArgs) {

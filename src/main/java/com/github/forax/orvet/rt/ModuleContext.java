@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /// Everything a module owns: global cells, builtins, the registered functions and their compiled bodies.
-public final class ModuleContext {
+public final class ModuleContext implements PyFunction.CodeContext {
 
   // can only be get()/put() under a synchronized
   private final IdentityHashMap<Stmt.FunctionDef, FunctionScope> scopes;

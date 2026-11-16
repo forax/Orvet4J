@@ -34,14 +34,13 @@ public final class SpecializationSupport {
     };
   }
 
-  static CallSite specialize(String name, MethodType type, Class<?> intrinsicClass) {
+  static MethodHandle specialize(String name, MethodType type, Class<?> intrinsicClass) {
     var map = SPECIALIZER_CLASS_VALUE.get(intrinsicClass);
     var factory = map.get(name + type.toMethodDescriptorString());
     if (factory == null) {
       throw new BootstrapMethodError("no specialized factory found for " + intrinsicClass.getName() + "." + name + type.toMethodDescriptorString());
     }
-    var target = factory.get();
-    return new ConstantCallSite(target);
+    return factory.get();
   }
 
 

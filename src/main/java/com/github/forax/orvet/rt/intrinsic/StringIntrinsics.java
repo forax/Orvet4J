@@ -43,7 +43,7 @@ public final class StringIntrinsics {
   }
 
   @Intrinsic
-  public static String $repr$(Object value) {
+  public static Object $repr$(Object value) {
     return switch (value) {
       case String s -> quoteString(s);
       case PyTuple t -> tupleRepr(t);

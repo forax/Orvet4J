@@ -12,13 +12,17 @@ import java.util.Objects;
 
 /// A Python function (or a native/builtin one, see [Code#isBuiltin()]).
 public final class PyFunction {
+  /// Common interface between specialiation context and module context
+  sealed interface CodeContext permits ModuleContext, SpecializationContext { }
+  record SpecializationContext(Class<?> intrinsicClass) implements CodeContext { }
+
   static final class Code {
     private final String name;  //FIXME use real Python qualified name
     private final List<String> parameters;
     private final boolean varargs;
     private final int captureCount;
 
-    private final ModuleContext context;          // null if native
+    private final CodeContext context;
     private final Stmt.FunctionDef functionDef;   // null if native
 
     // compiled entry (accessed under a lock on this, unless builtin, where the resolution is idempotent)
@@ -33,7 +37,7 @@ public final class PyFunction {
     MethodHandle thunkEntry;
 
     Code(String name, List<String> parameters, boolean varargs, int captureCount,
-         ModuleContext context, Stmt.FunctionDef functionDef) {
+         CodeContext context, Stmt.FunctionDef functionDef) {
       this.name = name;
       this.parameters = parameters;
       this.varargs = varargs;
@@ -47,7 +51,8 @@ public final class PyFunction {
     List<String> parameters() { return parameters; }
     int captureCount() { return captureCount; }
 
-    ModuleContext context() { return context; }
+    ModuleContext context() { return (ModuleContext) context; }
+    SpecializationContext specializationContext() { return (SpecializationContext) context; }
     Stmt.FunctionDef functionDef() { return functionDef; }
 
     /// A builtin function has no AST. Its rest parameter, if any, is an Object[]

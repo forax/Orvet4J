@@ -6,8 +6,8 @@ import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.PyZeroDivisionError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
-import com.github.forax.orvet.rt.intrinsic.DictIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
+import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TruthinessIntrinsics;
@@ -45,13 +45,13 @@ final class Builtins {
         fixed("divmod", "a", "b"),
         fixed("hex", "x"),
         variadic("int"),
-        fixed("len", "obj"),
+        specialized("len", ItemIntrinsics.class, "obj"),
         fixed("oct", "x"),
         fixed("ord", "c"),
         variadic("pow"),
         variadic("print"),
         variadic("range"),
-        fixed("repr", "obj"),
+        specialized("repr", StringIntrinsics.class, "obj"),
         variadic("round")
     };
     var builtins = new HashMap<String, PyFunction>();
@@ -65,6 +65,10 @@ final class Builtins {
     return new PyFunction.Code(name, List.of(parameters), false, 0, null, null);
   }
 
+  private static PyFunction.Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
+    return new PyFunction.Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+  }
+
   private static PyFunction.Code variadic(String name) {
     return new PyFunction.Code(name, List.of(), true, 0, null, null);
   }
@@ -72,16 +76,23 @@ final class Builtins {
   /// The entry of a builtin: always a fixed-arity handle. For a variadic builtin the last parameter
   /// is an Object[] that call sites fill explicitly (never through the varargs-collector bit).
   static MethodHandle resolve(PyFunction.Code code) {
-    try {
-      return LOOKUP.findStatic(Builtins.class, "_" + code.name() + "_", type(code)).asFixedArity();
-    } catch (NoSuchMethodException | IllegalAccessException e) {
-      throw new AssertionError(e);
-    }
+    var name = code.name();
+    var mh = switch (code.specializationContext()) {
+      case PyFunction.SpecializationContext(var intrinsicClass) ->
+          SpecializationSupport.specialize("$" + name + "$", builtinType(code), intrinsicClass);
+      case null -> {
+        try {
+          yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", builtinType(code)).asFixedArity();
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+          throw new AssertionError(e);
+        }
+      }
+    };
+    return MethodHandles.dropArguments(mh, 0, PyFunction.class);
   }
 
-  private static MethodType type(PyFunction.Code code) {
+  private static MethodType builtinType(PyFunction.Code code) {
     var types = new ArrayList<Class<?>>();
-    types.add(PyFunction.class);
     for (var _ : code.parameters()) {
       types.add(Object.class);
     }
@@ -95,7 +106,7 @@ final class Builtins {
   // -- Builtins
 
   @SuppressWarnings("unused")
-  public static Object _print_(PyFunction func, Object... args) {
+  public static Object _print_(Object... args) {
     var builder = new StringBuilder();
     var separator = "";
     for (var arg : args) {
@@ -110,7 +121,7 @@ final class Builtins {
   /// A range is currently materialized as a list because the runtime does not yet
   /// have a dedicated immutable range type or a range iterator.
   @SuppressWarnings("unused")
-  public static Object _range_(PyFunction func, Object... args) {
+  public static Object _range_(Object... args) {
     requireCount("range", args.length, 1, 3);
     BigInteger start;
     BigInteger stop;
@@ -148,7 +159,7 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _abs_(PyFunction func, Object value) {
+  public static Object _abs_(Object value) {
     return switch (value) {
       case Boolean b -> b ? 1L : 0L;
       case Long l -> l == Long.MIN_VALUE ? BigInteger.valueOf(l).negate() : Math.abs(l);
@@ -159,22 +170,22 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _bin_(PyFunction func, Object value) {
+  public static Object _bin_(Object value) {
     return formatInteger(value, 2, "0b");
   }
 
   @SuppressWarnings("unused")
-  public static Object _hex_(PyFunction func, Object value) {
+  public static Object _hex_(Object value) {
     return formatInteger(value, 16, "0x");
   }
 
   @SuppressWarnings("unused")
-  public static Object _oct_(PyFunction func, Object value) {
+  public static Object _oct_(Object value) {
     return formatInteger(value, 8, "0o");
   }
 
   @SuppressWarnings("unused")
-  public static Object _pow_(PyFunction func, Object... args) {
+  public static Object _pow_(Object... args) {
     requireCount("pow", args.length, 2, 3);
     if (args.length == 2) {
       return ArithmeticIntrinsics.$pow$(args[0], args[1]);
@@ -205,7 +216,7 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _round_(PyFunction func, Object... args) {
+  public static Object _round_(Object... args) {
     requireCount("round", args.length, 1, 2);
     var value = args[0];
     var hasNdigits = args.length == 2 && args[1] != PyNone.INSTANCE;
@@ -223,7 +234,7 @@ final class Builtins {
   /// A bytearray is represented by PyList<long> for now. Each element is an unsigned
   /// byte in the range 0..255; this keeps it iterable and mutable with the current runtime.</long>
   @SuppressWarnings("unused")
-  public static Object _bytearray_(PyFunction func, Object... args) {
+  public static Object _bytearray_(Object... args) {
     if (args.length > 3) {
       throw new PyTypeError("bytearray() takes at most 3 arguments (" + args.length + " given)");
     }
@@ -288,7 +299,7 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _ord_(PyFunction func, Object value) {
+  public static Object _ord_(Object value) {
     if (!(value instanceof String string)) {
       throw new PyTypeError("ord() expected string of length 1, but " + typeName(value) + " found");
     }
@@ -300,7 +311,7 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _dict_(PyFunction func, Object... args) {
+  public static Object _dict_(Object... args) {
     requireCount("dict", args.length, 0, 1);
     var result = new PyDict<>();
     if (args.length == 0) {
@@ -336,13 +347,13 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _bool_(PyFunction func, Object... args) {
+  public static Object _bool_(Object... args) {
     requireCount("bool", args.length, 0, 1);
     return Boolean.valueOf(args.length != 0 && TruthinessIntrinsics.$truthy$(args[0]));
   }
 
   @SuppressWarnings("unused")
-  public static Object _int_(PyFunction func, Object... args) {
+  public static Object _int_(Object... args) {
     requireCount("int", args.length, 0, 2);
     if (args.length == 0) {
       return 0L;
@@ -379,23 +390,7 @@ final class Builtins {
   }
 
   @SuppressWarnings("unused")
-  public static Object _repr_(PyFunction func, Object value) {
-    return StringIntrinsics.$repr$(value);
-  }
-
-  @SuppressWarnings("unused")
-  public static Object _len_(PyFunction func, Object value) {
-    return switch (value) {
-      case String string -> (long) string.codePointCount(0, string.length());
-      case PyTuple tuple -> TupleIntrinsics.$size$(tuple);
-      case PyList<?> list -> (long) list.size();
-      case PyDict<?,?> dictionary -> (long) DictIntrinsics.$size$(dictionary);
-      default -> throw new PyTypeError("object of type '" + typeName(value) + "' has no len()");
-    };
-  }
-
-  @SuppressWarnings("unused")
-  public static Object _divmod_(PyFunction func, Object a, Object b) {
+  public static Object _divmod_(Object a, Object b) {
     if (!isNumeric(a) || !isNumeric(b)) {
       throw new PyTypeError(
           "unsupported operand type(s) for divmod(): '"
@@ -413,7 +408,7 @@ final class Builtins {
     var quotient = ArithmeticIntrinsics.$floorDiv$(a, b);
     var remainder = ArithmeticIntrinsics.$mod$(a, b);
 
-    return TupleIntrinsics.fromArray(quotient, remainder);
+    return new PyTuple.PyTuple2(quotient, remainder);
   }
 
 

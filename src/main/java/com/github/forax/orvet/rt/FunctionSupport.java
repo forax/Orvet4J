@@ -449,7 +449,11 @@ final class FunctionSupport {
         return compiledEntry;
       }
       if (code.isBuiltin()) {
-        return code.compiledEntry = Builtins.resolve(code);  // idempotent, volatile write
+        var mh = Builtins.resolve(code);
+        if (code.specializationContext() != null) {
+          return mh;  // specializable function are not shared
+        }
+        return code.compiledEntry = mh;  // idempotent, volatile write
       }
       synchronized (code) {
         compiledEntry = code.compiledEntry;  // volatile read
