@@ -240,6 +240,51 @@ public final class PyIteratorTest {
       var repeatedError = assertThrows(PyRuntimeError.class, iterator::next);
       assertEquals(error.getMessage(), repeatedError.getMessage());
     }
+
+    @Test
+    public void dictIteratorKeepsThrowingSizeChangeErrorAfterFirstFailure() {
+      var dict = new PyDict<String, Object>();
+      dict.put("first", 1L);
+      var iterator = new PyIterator.DictIterator(dict);
+
+      dict.put("second", 2L);
+
+      var error = assertThrows(PyRuntimeError.class, iterator::next);
+      assertEquals("dictionary changed size during iteration", error.getMessage());
+
+      // Restore the original size: the iterator must remain failed.
+      dict.remove("second");
+
+      for (var i = 0; i < 3; i++) {
+        var repeatedError = assertThrows(PyRuntimeError.class, iterator::next);
+        assertEquals(error.getMessage(), repeatedError.getMessage());
+      }
+    }
+
+    @Test
+    public void dictIteratorKeepsThrowingKeyChangeErrorAfterFirstFailure() {
+      var dict = new PyDict<String, Object>();
+      dict.put("first", 1L);
+      dict.put("second", 2L);
+      var iterator = new PyIterator.DictIterator(dict);
+
+      assertEquals("first", iterator.next());
+
+      // Replace a key without changing the dictionary size.
+      dict.remove("second");
+      dict.put("replacement", 3L);
+
+      var error = assertThrows(PyRuntimeError.class, iterator::next);
+      assertEquals("dictionary keys changed during iteration", error.getMessage());
+
+      // Even a subsequent size change must not replace the original error.
+      dict.clear();
+
+      for (var i = 0; i < 3; i++) {
+        var repeatedError = assertThrows(PyRuntimeError.class, iterator::next);
+        assertEquals(error.getMessage(), repeatedError.getMessage());
+      }
+    }
   }
 
 
