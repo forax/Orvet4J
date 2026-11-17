@@ -158,4 +158,30 @@ public final class PyRangeTest {
             BigInteger.ZERO, BigInteger.ONE,
             BigInteger.ONE, BigInteger.valueOf(-1)));
   }
+
+  @Test
+  public void bigIntegerRangeWithStopOutsideLongBoundary() {
+    var start = BigInteger.ZERO;
+    var stop = BigInteger.ONE.shiftLeft(63);
+    var step = BigInteger.ONE;
+
+    var range = PyRange.of(start, stop, step);
+
+    assertEquals(
+        new PyRangeBig(start, stop, step, stop),
+        range);
+  }
+
+  @Test
+  public void bigIntegerRangeWithStepOutsideLongBoundary() {
+    var start = BigInteger.ZERO;
+    var stop = BigInteger.TEN;
+    var step = BigInteger.ONE.shiftLeft(63);
+
+    var range = PyRange.of(start, stop, step);
+
+    assertEquals(
+        new PyRangeBig(start, stop, step, BigInteger.ONE),
+        range);
+  }
 }
