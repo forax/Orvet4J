@@ -27,7 +27,7 @@ public final class TypeIntrinsics {
     switch (value) {
       case Long _, BigInteger _ -> { return PyType.INT; }
       case Boolean _ -> { return PyType.BOOL; }
-      //case Double _ -> { return PyType.FLOAT; }
+      case Double _ -> { return PyType.FLOAT; }
       case String _ -> { return PyType.STR; }
       case PyNone _ -> { return PyType.NONE_TYPE; }
       case PyTuple _ -> { return PyType.TUPLE; }

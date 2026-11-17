@@ -7,7 +7,7 @@ public enum PyType {
   //TYPE("type"),
   INT("int"),
   BOOL("bool"),
-  //FLOAT("float"),
+  FLOAT("float"),
   STR("str"),
   NONE_TYPE("NoneType"),
   TUPLE("tuple"),

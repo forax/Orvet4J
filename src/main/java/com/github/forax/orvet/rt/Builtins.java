@@ -47,7 +47,7 @@ final class Builtins {
       var constructorCodes = new Code[]{
           specializedVariadic("bool", TypeIntrinsics.class),
           specializedVariadic("int", TypeIntrinsics.class),
-          //specializedVariadic("float", TypeIntrinsics.class),
+          specializedVariadic("float", TypeIntrinsics.class),
           specialized("str", StringIntrinsics.class, "obj"),
           variadic("tuple"),
           variadic("list"),

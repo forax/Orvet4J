@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
@@ -63,11 +64,6 @@ public final class IntrinsicSupport {
     };
   }
 
-  /// The name that type(value).__name__ would report. Raises NotCanonicalException for a non-canonical value.
-  //public static String typeName(Object value) {
-  //  return TypeIntrinsics.$type$(value).name();
-  //}
-
   /// Class check only: whether the value is one of the runtime's representation classes.
   /// (The "BigInteger never fits in a long" invariant is not checked here.)
   public static boolean isCanonical(Object v) {
@@ -94,18 +90,11 @@ public final class IntrinsicSupport {
 
   /// The name that type(value).__name__ would report.
   public static String typeName(Object value) {
-    return switch (value) {
-      case Long _, BigInteger _ -> "int";
-      case Boolean _ -> "bool";
-      case Double _ -> "float";
-      case String _ -> "str";
-      case PyNone _ -> "NoneType";
-      case PyTuple _ -> "tuple";
-      case PyList<?> _ -> "list";
-      case PyDict<?,?> _ -> "dict";
-      case PyFunction _ -> "function";
-      default -> "java_type(" + value.getClass().getName() + ')';
-    };
+    try {
+      return ((PyType) TypeIntrinsics.$type$(value)).function().name();
+    } catch (NotCanonicalException _) {
+      return "java_type(" + value.getClass().getName() + ')';
+    }
   }
 
   static PyTypeError unsupportedOperands(String symbol, Object left, Object right) {
