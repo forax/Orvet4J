@@ -2,7 +2,6 @@ package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.PyRange.PyRangeBig;
 import com.github.forax.orvet.rt.PyRange.PyRangeSmall;
-import com.github.forax.orvet.rt.intrinsic.RangeIntrinsics;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -78,5 +77,85 @@ public final class PyRangeTest {
     assertEquals(
         new PyRangeSmall(0, -1, Long.MIN_VALUE, 1),
         range);
+  }
+
+  @Test
+  public void lengthCalculation() {
+    assertEquals(
+        new PyRangeSmall(0, 10, 3, 4),
+        PyRange.of(0, 10, 3));
+
+    assertEquals(
+        new PyRangeSmall(10, 0, -3, 4),
+        PyRange.of(10, 0, -3));
+
+    assertEquals(
+        new PyRangeSmall(0, 10, 10, 1),
+        PyRange.of(0, 10, 10));
+
+    assertEquals(
+        new PyRangeSmall(0, 10, 11, 1),
+        PyRange.of(0, 10, 11));
+
+    assertEquals(
+        new PyRangeSmall(0, 10, -1, 0),
+        PyRange.of(0, 10, -1));
+
+    assertEquals(
+        new PyRangeSmall(10, 0, 1, 0),
+        PyRange.of(10, 0, 1));
+  }
+
+  @Test
+  public void negativeSpanOverflow() {
+    var range = PyRange.of(Long.MAX_VALUE, Long.MIN_VALUE, -1);
+
+    assertInstanceOf(PyRangeBig.class, range);
+    assertEquals(
+        BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE),
+        ((PyRangeBig) range).length());
+  }
+
+  @Test
+  public void bigIntegerRangeOutsideLongBoundaries() {
+    var start = BigInteger.ONE.shiftLeft(70);
+    var stop = start.add(BigInteger.TEN);
+    var step = BigInteger.valueOf(3);
+
+    var range = PyRange.of(start, stop, step);
+
+    assertEquals(
+        new PyRangeBig(start, stop, step, BigInteger.valueOf(4)),
+        range);
+  }
+
+  @Test
+  public void minimumStepWithLargeSpan() {
+    var range = PyRange.of(
+        Long.MAX_VALUE,
+        Long.MIN_VALUE,
+        Long.MIN_VALUE);
+
+    assertInstanceOf(PyRangeBig.class, range);
+    assertEquals(BigInteger.TWO, ((PyRangeBig) range).length());
+  }
+
+  @Test
+  public void rangeRecordsRejectInvalidValues() {
+    assertThrows(IllegalArgumentException.class,
+        () -> new PyRangeSmall(0, 1, 0, 0));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> new PyRangeSmall(0, 1, 1, -1));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> new PyRangeBig(
+            BigInteger.ZERO, BigInteger.ONE,
+            BigInteger.ZERO, BigInteger.ZERO));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> new PyRangeBig(
+            BigInteger.ZERO, BigInteger.ONE,
+            BigInteger.ONE, BigInteger.valueOf(-1)));
   }
 }
