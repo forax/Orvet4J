@@ -10,6 +10,7 @@ import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
+import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigDecimal;
@@ -27,10 +28,19 @@ public final class RangeIntrinsics {
 
   /// `range(start, stop, step)` for arbitrary Python values. Only ints and bools are accepted.
   public static PyRange newRange(Object start, Object stop, Object step) {
-    if (start instanceof Long s1 && stop instanceof Long s2 && step instanceof Long s3) {
-      return PyRange.of(s1, s2, s3);  // fast path
+    if (start instanceof Long smallStart && stop instanceof Long smallStop && step instanceof Long smallStep) {
+      if (smallStep == 0) {
+        throw new PyValueError("range() arg 3 must not be zero");
+      }
+      return PyRange.of(smallStart, smallStop, smallStep);  // fast path
     }
-    return PyRange.of(asInt(start), asInt(stop), asInt(step));
+    var bigStart = asInt(start);
+    var bigStop = asInt(stop);
+    var bigStep = asInt(step);
+    if (bigStep.signum() == 0) {
+      throw new PyValueError("range() arg 3 must not be zero");
+    }
+    return PyRange.of(bigStart, bigStop, bigStep);
   }
 
   private static BigInteger asInt(Object value) {

@@ -15,7 +15,7 @@ public sealed interface PyRange {
 
   static PyRange of(long start, long stop, long step) {
     if (step == 0) {
-      throw new PyValueError("range() arg 3 must not be zero");
+      throw new IllegalArgumentException("step is zero");
     }
     // Compute the directed span without allowing overflow.
     long span;
@@ -52,7 +52,7 @@ public sealed interface PyRange {
     requireNonNull(stop);
     requireNonNull(step);
     if (step.signum() == 0) {
-      throw new PyValueError("range() arg 3 must not be zero");
+      throw new IllegalArgumentException("step is zero");
     }
     var span = step.signum() > 0 ? stop.subtract(start) : start.subtract(stop);
     var length = span.signum() <= 0
