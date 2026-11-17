@@ -35,10 +35,10 @@ final class Builtins {
   private static final BigInteger MAX_ARRAY_SIZE = BigInteger.valueOf(Integer.MAX_VALUE - 8L);
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
-  static final HashMap<String, PyFunction> BUILTINS;
-  static final HashMap<String, PyFunction> CONSTRUCTORS;
+  static final HashMap<String, PyFunction> CONSTRUCTOR_FUNCTIONS;
+  static final HashMap<String, Object> BUILTINS;
   static {
-    var commonCodes = new Code[] {
+    var constructorCodes = new Code[]{
         specializedVariadic("bool", TypeIntrinsics.class),
         specializedVariadic("int", TypeIntrinsics.class),
         //specializedVariadic("float", TypeIntrinsics.class),
@@ -48,13 +48,16 @@ final class Builtins {
         variadic("dict"),
         variadic("range"),
         variadic("slice"),
-        specialized("type", TypeIntrinsics.class, "obj")
-    };
-    var constructorCodes = new Code[] {
         fixed("NoneType"),
         fixed("function")
     };
-    var builtinCodes = new Code[] {
+    var constructorFunctions = new HashMap<String, PyFunction>();
+    for (var code : constructorCodes) {
+      constructorFunctions.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
+    }
+    CONSTRUCTOR_FUNCTIONS = constructorFunctions;
+
+    var builtinsCodes = new Code[] {
         fixed("abs", "x"),
         variadic("bytearray"),
         fixed("bin", "x"),
@@ -66,24 +69,22 @@ final class Builtins {
         variadic("pow"),
         variadic("print"),
         specialized("repr", StringIntrinsics.class, "obj"),
-        variadic("round")
+        variadic("range"),
+        variadic("round"),
+        specialized("type", TypeIntrinsics.class, "obj")
     };
 
-    var constructors = new HashMap<String, PyFunction>();
-    var builtins = new HashMap<String, PyFunction>();
-    for(var code : commonCodes) {
-      var name = code.name();
-      var function = new PyFunction(code, NO_CAPTURE_ARGS);
-      constructors.put(name, function);
-      builtins.put(name, function);
+    var builtins = new HashMap<String, Object>();
+    var types = PyType.ALL;  // force initialization
+    for(var type : types) {
+      switch (type) {
+        case NONE_TYPE, FUNCTION -> { continue; }  // those are not builtins
+      }
+      builtins.put(type.function().name(), type);
     }
-    for(var code : constructorCodes) {
-      constructors.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
-    }
-    for(var code : builtinCodes) {
+    for(var code : builtinsCodes) {
       builtins.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
     }
-    CONSTRUCTORS = constructors;
     BUILTINS = builtins;
   }
 
@@ -109,10 +110,10 @@ final class Builtins {
     var name = code.name();
     var mh = switch (code.specializationContext()) {
       case PyFunction.SpecializationContext(var intrinsicClass) ->
-          SpecializationSupport.specialize("$" + name + "$", builtinType(code), intrinsicClass);
+          SpecializationSupport.specialize("$" + name + "$", builtinMethodType(code), intrinsicClass);
       case null -> {
         try {
-          yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", builtinType(code)).asFixedArity();
+          yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", builtinMethodType(code)).asFixedArity();
         } catch (NoSuchMethodException | IllegalAccessException e) {
           throw new AssertionError(e);
         }
@@ -121,7 +122,7 @@ final class Builtins {
     return MethodHandles.dropArguments(mh, 0, PyFunction.class);
   }
 
-  private static MethodType builtinType(Code code) {
+  private static MethodType builtinMethodType(Code code) {
     var types = new ArrayList<Class<?>>();
     for (var _ : code.parameters()) {
       types.add(Object.class);

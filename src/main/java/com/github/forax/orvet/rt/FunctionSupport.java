@@ -334,15 +334,15 @@ final class FunctionSupport {
 
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
-    private static final MethodHandle FALLBACK, SAME_FUNCTION, SAME_CODE, CAPTURED_ARGS;
+    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS;
     static {
       var lookup = MethodHandles.lookup();
       LOOKUP = lookup;
       try {
         FALLBACK = lookup.findVirtual(FunctionCallSite.class, "fallback",
             MethodType.methodType(MethodHandle.class, Object.class));
-        SAME_FUNCTION = lookup.findStatic(FunctionCallSite.class, "sameFunction",
-            MethodType.methodType(boolean.class, PyFunction.class, Object.class));
+        SAME_CALLEE = lookup.findStatic(FunctionCallSite.class, "sameCallee",
+            MethodType.methodType(boolean.class, Object.class, Object.class));
         SAME_CODE = lookup.findStatic(FunctionCallSite.class, "sameCode",
             MethodType.methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
@@ -399,7 +399,7 @@ final class FunctionSupport {
       var code = function.code;
       MethodHandle target, test;
       if (code.captureCount() == 0) {
-        test = SAME_FUNCTION.bindTo(function);
+        test = SAME_CALLEE.bindTo(function);
         target = getNoCaptureMH(function);
       } else {
         test = SAME_CODE.bindTo(code);
@@ -466,7 +466,7 @@ final class FunctionSupport {
       }
     }
 
-    private static boolean sameFunction(PyFunction expected, Object callee) {
+    private static boolean sameCallee(Object expected, Object callee) {
       return callee == expected;
     }
 
@@ -530,6 +530,9 @@ final class FunctionSupport {
   static PyFunction asFunction(Object callee) {
     if (callee instanceof PyFunction function) {
       return function;
+    }
+    if (callee instanceof PyType type) {
+      return type.function();
     }
     throw new PyTypeError("'" + IntrinsicSupport.typeName(callee) + "' object is not callable");
   }

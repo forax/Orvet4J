@@ -1,11 +1,12 @@
 package com.github.forax.orvet.rt.intrinsic;
 
+import com.github.forax.orvet.engine.Engine;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
-import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
-import com.github.forax.orvet.rt.RT;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -27,17 +28,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class TypeIntrinsicsTest {
   @Test
   public void typeRecognizesTheCurrentlySupportedRuntimeTypes() {
-    assertSame(RT.constructor("int"), $type$(42L));
-    assertSame(RT.constructor("int"), $type$(BigInteger.ONE.shiftLeft(100)));
-    assertSame(RT.constructor("bool"), $type$(true));
-    assertSame(RT.constructor("str"), $type$("hello"));
-    assertSame(RT.constructor("NoneType"), $type$(PyNone.INSTANCE));
-    assertSame(RT.constructor("dict"), $type$(new PyDict<>()));
-    assertSame(RT.constructor("list"), $type$(new PyList<>()));
-    assertSame(RT.constructor("tuple"), $type$(new PyTuple.PyTuple1(1L)));
+    assertSame(PyType.INT, $type$(42L));
+    assertSame(PyType.INT, $type$(BigInteger.ONE.shiftLeft(100)));
+    assertSame(PyType.BOOL, $type$(true));
+    assertSame(PyType.STR, $type$("hello"));
+    assertSame(PyType.NONE_TYPE, $type$(PyNone.INSTANCE));
+    assertSame(PyType.DICT, $type$(new PyDict<>()));
+    assertSame(PyType.LIST, $type$(new PyList<>()));
+    assertSame(PyType.TUPLE, $type$(new PyTuple.PyTuple1(1L)));
 
-    PyFunction function = RT.constructor("function");
-    assertSame(RT.constructor("function"), $type$(function));
+    var context = new ModuleContext();
+    Engine.run(context, "def f(): pass");
+    var function = context.getGlobal("f");
+    assertSame(PyType.FUNCTION, $type$(function));
   }
 
   @Test

@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyValueError;
 
 import java.math.BigDecimal;
@@ -42,6 +43,7 @@ public final class StringIntrinsics {
       case PyFunction f -> functionRepr(f);
       case PyRange r -> r.toString();
       case PySlice s -> s.toString();
+      case PyType t -> t.toString();
       default -> throw notCanonical("str", value);
     };
   }
@@ -61,6 +63,7 @@ public final class StringIntrinsics {
       case PyFunction f -> functionRepr(f);
       case PyRange r -> r.toString();
       case PySlice s -> s.toString();
+      case PyType t -> t.toString();
       default -> throw notCanonical("repr", value);
     };
   }
@@ -175,9 +178,6 @@ public final class StringIntrinsics {
   private static String functionRepr(PyFunction function) {
     var name = function.name();
     if (function.isBuiltin()) {
-      if (TypeIntrinsics.TYPE_MAP.containsKey(name)) {
-        return "<class '" + name + "'>";
-      }
       return "<built-in function " + name + ">";
     }
     return "<function " + name
