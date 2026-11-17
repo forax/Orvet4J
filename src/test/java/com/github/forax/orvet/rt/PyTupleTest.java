@@ -8,6 +8,9 @@ import com.github.forax.orvet.rt.PyTuple.PyTupleN;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -209,19 +212,21 @@ public final class PyTupleTest {
       assertNotEquals(a, differentLength);
       assertNotEquals(a, "PyTupleN(1, 2, 3, 4, 5)");
     }
-
-    @Test
-    public void tupleNIsEqualToAFixedArityTupleWithTheSameItems() {
-      var n = new PyTupleN(new Object[]{1L, 2L});
-      var two = new PyTuple2(1L, 2L);
-      assertEquals(n, two);
-      assertEquals(two, n);
-    }
   }
 
 
   @Nested
   public final class Shared {
+    private static int arity(PyTuple tuple) {
+      return switch (tuple) {  // no default: this fails to compile if a new shape is added to the sealed interface
+        case PyTuple1 _ -> 1;
+        case PyTuple2 _ -> 2;
+        case PyTuple3 _ -> 3;
+        case PyTuple4 _ -> 4;
+        case PyTupleN n -> n.itemCount();
+      };
+    }
+
 
     @Test
     public void fixedArityRecordsHaveValueEquality() {
@@ -242,14 +247,184 @@ public final class PyTupleTest {
       assertEquals(6, arity(new PyTupleN(new Object[]{1L, 2L, 3L, 4L, 5L, 6L})));
     }
 
-    private static int arity(PyTuple tuple) {
-      return switch (tuple) {  // no default: this fails to compile if a new shape is added to the sealed interface
-        case PyTuple1 _ -> 1;
-        case PyTuple2 _ -> 2;
-        case PyTuple3 _ -> 3;
-        case PyTuple4 _ -> 4;
-        case PyTupleN n -> n.itemCount();
+    @Test
+    public void equalsWorksForEveryTupleImplementationPair() {
+      record TupleCase(String name, Object[] values, PyTuple tuple) {}
+
+      var cases = List.of(
+          new TupleCase("N()", new Object[]{},
+              new PyTupleN(new Object[]{})),
+
+          new TupleCase("1(1)", new Object[]{1L},
+              new PyTuple1(1L)),
+          new TupleCase("1(2)", new Object[]{2L},
+              new PyTuple1(2L)),
+          new TupleCase("N(1)", new Object[]{1L},
+              new PyTupleN(new Object[]{1L})),
+          new TupleCase("N(2)", new Object[]{2L},
+              new PyTupleN(new Object[]{2L})),
+
+          new TupleCase("2(1,a)", new Object[]{1L, "a"},
+              new PyTuple2(1L, "a")),
+          new TupleCase("2(1,b)", new Object[]{1L, "b"},
+              new PyTuple2(1L, "b")),
+          new TupleCase("N(1,a)", new Object[]{1L, "a"},
+              new PyTupleN(new Object[]{1L, "a"})),
+          new TupleCase("N(1,b)", new Object[]{1L, "b"},
+              new PyTupleN(new Object[]{1L, "b"})),
+
+          new TupleCase("3(1,a,true)", new Object[]{1L, "a", true},
+              new PyTuple3(1L, "a", true)),
+          new TupleCase("3(1,a,false)", new Object[]{1L, "a", false},
+              new PyTuple3(1L, "a", false)),
+          new TupleCase("N(1,a,true)", new Object[]{1L, "a", true},
+              new PyTupleN(new Object[]{1L, "a", true})),
+
+          new TupleCase("4(1,a,true,4)", new Object[]{1L, "a", true, 4L},
+              new PyTuple4(1L, "a", true, 4L)),
+          new TupleCase("4(1,a,true,5)", new Object[]{1L, "a", true, 5L},
+              new PyTuple4(1L, "a", true, 5L)),
+          new TupleCase("N(1,a,true,4)", new Object[]{1L, "a", true, 4L},
+              new PyTupleN(new Object[]{1L, "a", true, 4L})),
+
+          new TupleCase("N(1,2,3,4,5)", new Object[]{1L, 2L, 3L, 4L, 5L},
+              new PyTupleN(new Object[]{1L, 2L, 3L, 4L, 5L})),
+          new TupleCase("N(1,2,3,4,6)", new Object[]{1L, 2L, 3L, 4L, 6L},
+              new PyTupleN(new Object[]{1L, 2L, 3L, 4L, 6L}))
+      );
+
+      for (var left : cases) {
+        for (var right : cases) {
+          var expected = Arrays.equals(left.values(), right.values());
+          var message = left.name() + " vs " + right.name();
+
+          assertEquals(expected, left.tuple().equals(right.tuple()), message);
+          assertEquals(expected, right.tuple().equals(left.tuple()), message);
+
+          if (expected) {
+            assertEquals(left.tuple().hashCode(), right.tuple().hashCode(), message);
+          }
+        }
+      }
+    }
+  }
+
+  @Nested
+  public final class JavaAPI {
+    @Test
+    public void sizeReturnsTheNumberOfElements() {
+      var expected = new Object[][] {
+          {},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L, "a", true, 4L, 5L}
       };
+
+      PyTuple[] tuples = {
+          new PyTupleN(new Object[0]),
+          new PyTuple1(1L),
+          new PyTuple2(1L, "a"),
+          new PyTuple3(1L, "a", true),
+          new PyTuple4(1L, "a", true, 4L),
+          new PyTupleN(new Object[]{1L}),
+          new PyTupleN(new Object[]{1L, "a"}),
+          new PyTupleN(new Object[]{1L, "a", true}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L, 5L})
+      };
+
+      for (var i = 0; i < tuples.length; i++) {
+        assertEquals(expected[i].length, tuples[i].size());
+      }
+    }
+
+    @Test
+    public void getReturnsTheElementAtTheGivenIndex() {
+      var expectedArray = new Object[][] {
+          {},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L, "a", true, 4L, 5L}
+      };
+
+      PyTuple[] tupleArray = {
+          new PyTupleN(new Object[0]),
+          new PyTuple1(1L),
+          new PyTuple2(1L, "a"),
+          new PyTuple3(1L, "a", true),
+          new PyTuple4(1L, "a", true, 4L),
+          new PyTupleN(new Object[]{1L}),
+          new PyTupleN(new Object[]{1L, "a"}),
+          new PyTupleN(new Object[]{1L, "a", true}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L, 5L})
+      };
+
+      for (var i = 0; i < tupleArray.length; i++) {
+        for (var j = 0; j < expectedArray[i].length; j++) {
+          assertEquals(expectedArray[i][j], tupleArray[i].get(j));
+        }
+
+        var tuple = tupleArray[i];
+        var expected = expectedArray[i];
+
+        assertThrows(IndexOutOfBoundsException.class, () -> tuple.get(-1));
+        assertThrows(IndexOutOfBoundsException.class, () -> tuple.get(expected.length));
+      }
+    }
+
+    @Test
+    public void asJavaListReturnsAListWithTheSameElements() {
+      var expected = new Object[][] {
+          {},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L},
+          {1L, "a"},
+          {1L, "a", true},
+          {1L, "a", true, 4L},
+          {1L, "a", true, 4L, 5L}
+      };
+
+      PyTuple[] tuples = {
+          new PyTupleN(new Object[0]),
+          new PyTuple1(1L),
+          new PyTuple2(1L, "a"),
+          new PyTuple3(1L, "a", true),
+          new PyTuple4(1L, "a", true, 4L),
+          new PyTupleN(new Object[]{1L}),
+          new PyTupleN(new Object[]{1L, "a"}),
+          new PyTupleN(new Object[]{1L, "a", true}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L}),
+          new PyTupleN(new Object[]{1L, "a", true, 4L, 5L})
+      };
+
+      for (var i = 0; i < tuples.length; i++) {
+        var list = tuples[i].asJavaList();
+        var values = expected[i];
+
+        assertEquals(values.length, list.size());
+
+        for (var j = 0; j < values.length; j++) {
+          assertEquals(values[j], list.get(j));
+        }
+
+        assertEquals(Arrays.asList(values), list);
+      }
     }
   }
 }
