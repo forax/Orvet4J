@@ -5,6 +5,8 @@ import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyOverflowError;
@@ -36,6 +38,8 @@ public final class TypeIntrinsicsTest {
     assertSame(PyType.DICT, $type$(new PyDict<>()));
     assertSame(PyType.LIST, $type$(new PyList<>()));
     assertSame(PyType.TUPLE, $type$(new PyTuple.PyTuple1(1L)));
+    assertSame(PyType.RANGE, $type$(PyRange.of(0, 10, 1)));
+    assertSame(PyType.SLICE, $type$(new PySlice(0L, 10L, 1L)));
 
     var context = new ModuleContext();
     Engine.run(context, "def f(): pass");
