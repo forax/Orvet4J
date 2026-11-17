@@ -782,6 +782,18 @@ public final class BuiltinsTest {
       assertRaises(UnimplementedFeatureError.class,
           "range(-9223372036854775808, 9223372036854775807)");
     }
+
+    @Test
+    public void bigRangeIteration() throws IOException {
+      assertEquals(
+          """
+              -9223372036854775808
+              -1
+              9223372036854775806
+              """,
+          runLoop(
+              "range(-9223372036854775808, 9223372036854775807, 9223372036854775807)"));
+    }
   }
 
 

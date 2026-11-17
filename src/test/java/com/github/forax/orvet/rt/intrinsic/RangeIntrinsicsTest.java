@@ -78,4 +78,21 @@ public final class RangeIntrinsicsTest {
     assertEquals(10L, RangeIntrinsics.$size$(reversed));
     assertEquals(9L, RangeIntrinsics.$get$(reversed, 0));
   }
+
+  @Test
+  public void bigRangeGetAndContainment() {
+    var range = PyRange.of(
+        Long.MIN_VALUE,
+        Long.MAX_VALUE,
+        Long.MAX_VALUE);
+
+    assertInstanceOf(PyRangeBig.class, range);
+
+    assertEquals(Long.MIN_VALUE, RangeIntrinsics.$get$(range, 0));
+    assertEquals(-1L, RangeIntrinsics.$get$(range, 1));
+    assertEquals(Long.MAX_VALUE - 1, RangeIntrinsics.$get$(range, 2));
+
+    assertTrue(RangeIntrinsics.$in$(range, -1L));
+    assertFalse(RangeIntrinsics.$in$(range, 0L));
+  }
 }
