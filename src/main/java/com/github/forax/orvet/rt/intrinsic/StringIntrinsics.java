@@ -15,6 +15,11 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.IdentityHashMap;
 
+import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.normalize;
+import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStart;
+import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStep;
+import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStop;
+
 public final class StringIntrinsics {
   private StringIntrinsics() {
     throw new AssertionError();
@@ -61,7 +66,7 @@ public final class StringIntrinsics {
       case Double d -> floatString(d);
       case PyNone _ -> "None";
       case PyFunction f -> functionRepr(f);
-      case PyRange r -> r.toString();
+      case PyRange r -> rangeRepr(r);
       case PySlice s -> s.toString();
       case PyType t -> t.toString();
       default -> throw notCanonical("repr", value);
@@ -258,6 +263,17 @@ public final class StringIntrinsics {
     } finally {
       leaveRepr(dict);
     }
+  }
+
+  private static String rangeRepr(PyRange range) {
+    var step = normalize(bigStep(range));
+    var builder = new StringBuilder("range(")
+        .append(StringIntrinsics.$repr$(normalize(bigStart(range)))).append(", ")
+        .append(StringIntrinsics.$repr$(normalize(bigStop(range))));
+    if (!step.equals(1L)) {
+      builder.append(", ").append(StringIntrinsics.$repr$(step));
+    }
+    return builder.append(')').toString();
   }
 
   private static boolean enterRepr(Object value) {

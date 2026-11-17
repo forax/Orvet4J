@@ -51,7 +51,7 @@ public final class HashingIntrinsics {
       case PyDict<?,?> _ -> throw unhashable("dict");
       case PyNone _ -> { return HASH_NONE; }
       case PyFunction function -> { return System.identityHashCode(function); }
-      case PyRange range -> { return hashTuple(range.canonicalTuple()); }
+      case PyRange range -> { return hashTuple(RangeIntrinsics.canonicalTuple(range)); }
       case PySlice slice -> { return hashTuple(slice.asTuple()); }
       default -> throw notCanonical(value);
     }

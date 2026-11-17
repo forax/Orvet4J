@@ -86,7 +86,7 @@ public final class ComparisonIntrinsics {
       case PyFunction l -> { return right == l; }  // Python functions compare by identity in this runtime.
       case PyRange l -> {
         switch (right) {
-          case PyRange r -> { return l.sameSequence(r); }
+          case PyRange r -> { return RangeIntrinsics.sameSequence(l, r); }
           default -> { return false; }
         }
       }

@@ -27,7 +27,7 @@ public final class TruthinessIntrinsics {
       case PyList<?> list -> { return !list.isEmpty(); }
       case PyDict<?,?> dict -> { return !dict.isEmpty(); }
       case PyFunction _ -> { return true; }
-      case PyRange range -> { return !range.isEmpty(); }
+      case PyRange range -> { return !RangeIntrinsics.$isEmpty$(range); }
       case PySlice _ -> { return true; }
       default -> throw notCanonical(value);
     }

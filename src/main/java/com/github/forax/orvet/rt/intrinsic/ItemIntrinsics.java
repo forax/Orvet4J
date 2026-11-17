@@ -24,7 +24,7 @@ public final class ItemIntrinsics {
       case PyTuple tuple -> TupleIntrinsics.$size$(tuple);
       case PyList<?> list -> (long) list.size();
       case PyDict<?,?> dictionary -> DictIntrinsics.$size$(dictionary);
-      case PyRange range -> range.size();
+      case PyRange range -> RangeIntrinsics.$size$(range);
       default -> throw new PyTypeError("object of type '" + typeName(value) + "' has no len()");
     };
   }
@@ -105,8 +105,8 @@ public final class ItemIntrinsics {
     return switch (index) {
       case Long l -> RangeIntrinsics.$get$(range, l);
       case Boolean b -> RangeIntrinsics.$get$(range, b ? 1L : 0L);
-      case BigInteger big -> range.getBig(big);          // range[10**20] is legal in CPython
-      case PySlice slice -> range.slice(slice);
+      case BigInteger big -> RangeIntrinsics.getBig(range, big);   // range[10**20] is legal in CPython
+      case PySlice slice -> RangeIntrinsics.$slice$(range, slice);
       default -> throw badIndex("range", index);
     };
   }

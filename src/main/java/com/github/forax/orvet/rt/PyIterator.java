@@ -116,42 +116,47 @@ public sealed interface PyIterator {
     }
   }
 
-  final class RangeIterator implements PyIterator {
-    private final boolean small;
-    private long current, remaining, step;                   // small mode
-    private BigInteger bigCurrent, bigStep, bigRemaining;    // big mode
+  final class SmallRangeIterator implements PyIterator {
+    private final long step;
+    private long current;
+    private long remaining;
 
-    public RangeIterator(PyRange range) {
-      if (range.isSmall()) {
-        small = true;
-        current = range.smallStart();
-        step = range.smallStep();
-        remaining = range.smallLength();
-      } else {
-        small = false;
-        bigCurrent = PyRange.big(range.start());
-        bigStep = PyRange.big(range.step());
-        bigRemaining = range.length();
-      }
+    public SmallRangeIterator(PyRange.PyRangeSmall range) {
+      this.step = range.step();
+      this.current = range.start();
+      this.remaining = range.length();
     }
 
     public Object next() {
-      if (small) {
-        if (remaining == 0) {
-          return null;
-        }
-        var value = current;
-        if (--remaining != 0) {
-          current += step;               // only computed when the next element exists: no overflow
-        }
-        return value;
-      }
-      if (bigRemaining.signum() == 0) {
+      if (remaining == 0) {
         return null;
       }
-      var value = bigCurrent;
-      bigRemaining = bigRemaining.subtract(BigInteger.ONE);
-      bigCurrent = bigCurrent.add(bigStep);
+      var value = current;
+      if (--remaining != 0) {
+        current += step;            // only computed when the next element exists: no overflow
+      }
+      return value;
+    }
+  }
+
+  final class BigRangeIterator implements PyIterator {
+    private final BigInteger step;
+    private BigInteger current;
+    private BigInteger remaining;
+
+    public BigRangeIterator(PyRange.PyRangeBig range) {
+      this.step = range.step();
+      this.current = range.start();
+      this.remaining = range.length();
+    }
+
+    public Object next() {
+      if (remaining.signum() == 0) {
+        return null;
+      }
+      var value = current;
+      remaining = remaining.subtract(BigInteger.ONE);
+      current = current.add(step);
       return IntrinsicSupport.normalize(value);
     }
   }

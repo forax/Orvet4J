@@ -10,6 +10,7 @@ import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.RangeIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
@@ -155,12 +156,11 @@ final class Builtins {
   public static Object _range_(Object... args) {
     requireCount("range", args.length, 1, 3);
     return switch (args.length) {
-      case 1 -> PyRange.of(0L, index(args[0]), 1L);
-      case 2 -> PyRange.of(index(args[0]), index(args[1]), 1L);
-      default -> PyRange.of(index(args[0]), index(args[1]), index(args[2]));
+      case 1 -> RangeIntrinsics.newRange(0L, args[0], 1L);
+      case 2 -> RangeIntrinsics.newRange(args[0], args[1], 1L);
+      default -> RangeIntrinsics.newRange(args[0], args[1], args[2]);
     };
   }
-  private static Object index(Object v) { return normalizeInt(asIndex(v)); }
 
   @SuppressWarnings("unused")
   public static Object _abs_(Object value) {

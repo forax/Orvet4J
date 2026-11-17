@@ -1,6 +1,7 @@
 package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
@@ -72,14 +73,12 @@ public final class StringIntrinsicsTest {
       assertEquals("(nan,)", StringIntrinsics.$str$(new PyTuple1(Double.NaN)));
     }
 
-    // NEW: tuple elements use the integer formatter (and hence the digit limit).
     @Test
     public void strTupleWithBigInteger() {
       assertEquals("(42,)", StringIntrinsics.$str$(new PyTuple1(BigInteger.valueOf(42L))));
       assertEquals("(-42,)", StringIntrinsics.$str$(new PyTuple1(BigInteger.valueOf(-42L))));
     }
 
-    // NEW: nested empty tuples and empty strings.
     @Test
     public void strTupleNestedEmpty() {
       var empty = new PyTupleN(new Object[0]);
@@ -146,6 +145,12 @@ public final class StringIntrinsicsTest {
       assertEquals("(1.5,)", StringIntrinsics.$repr$(new PyTuple1(1.5)));
       assertEquals("(0.1, 1.0)", StringIntrinsics.$repr$(new PyTuple2(0.1, 1.0)));
       assertEquals("(-0.0,)", StringIntrinsics.$repr$(new PyTuple1(-0.0)));
+    }
+
+    @Test
+    public void reprRange() {
+      assertEquals("range(0, 10)", StringIntrinsics.$repr$(RangeIntrinsics.newRange(0L, 10L, 1L)));
+      assertEquals("range(0, 10, 3)", StringIntrinsics.$repr$(RangeIntrinsics.newRange(0L, 10L, 3L)));
     }
 
     @Test
