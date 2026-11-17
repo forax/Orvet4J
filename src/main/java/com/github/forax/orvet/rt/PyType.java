@@ -23,7 +23,7 @@ public enum PyType {
   private final PyFunction function;
 
   PyType(String typeName) {
-    var function = Builtins.CONSTRUCTOR_FUNCTIONS.get(typeName);
+    var function = Builtins.CodeInitialization.CONSTRUCTOR_FUNCTIONS.get(typeName);
     if (function == null) {
       throw new AssertionError("unknown constructor: " + typeName);
     }

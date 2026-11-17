@@ -32,49 +32,75 @@ import java.util.HashMap;
 import java.util.List;
 
 final class Builtins {
-  private static final Object[] NO_CAPTURE_ARGS = new Object[0];
-  private static final BigInteger MAX_ARRAY_SIZE = BigInteger.valueOf(Integer.MAX_VALUE - 8L);
+  // There is a circular dependency between Builtins and PyTuple.
+  // PyTuple function (constructor) are initialized from builtin codes.
+  // Builtin PyTypes need to be stored in the BUILTINS MAP.
+  // This class solved that issue by being the source of truth for both
+  // Builtins and PyTuple.
+  // While this class is syntactically declared inside Builtins,
+  // it should *never* access fields/methods from Builtins
+  static final class CodeInitialization {
+    private static final Object[] NO_CAPTURE_ARGS = new Object[0];
+    static final HashMap<String, PyFunction> CONSTRUCTOR_FUNCTIONS;
+    static final Code[] BUILTINS_CODES;
+    static {
+      var constructorCodes = new Code[]{
+          specializedVariadic("bool", TypeIntrinsics.class),
+          specializedVariadic("int", TypeIntrinsics.class),
+          //specializedVariadic("float", TypeIntrinsics.class),
+          specialized("str", StringIntrinsics.class, "obj"),
+          variadic("tuple"),
+          variadic("list"),
+          variadic("dict"),
+          variadic("range"),
+          variadic("slice"),
+          fixed("NoneType"),
+          fixed("function")
+      };
+      var constructorFunctions = new HashMap<String, PyFunction>();
+      for (var code : constructorCodes) {
+        constructorFunctions.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
+      }
+      CONSTRUCTOR_FUNCTIONS = constructorFunctions;
+
+      BUILTINS_CODES = new Code[]{
+          fixed("abs", "x"),
+          variadic("bytearray"),
+          fixed("bin", "x"),
+          fixed("divmod", "a", "b"),
+          fixed("hex", "x"),
+          specialized("len", ItemIntrinsics.class, "obj"),
+          fixed("oct", "x"),
+          fixed("ord", "c"),
+          variadic("pow"),
+          variadic("print"),
+          specialized("repr", StringIntrinsics.class, "obj"),
+          variadic("range"),
+          variadic("round"),
+          specialized("type", TypeIntrinsics.class, "obj")
+      };
+    }
+
+    private static Code fixed(String name, String... parameters) {
+      return new Code(name, List.of(parameters), false, 0, null, null);
+    }
+
+    private static Code variadic(String name) {
+      return new Code(name, List.of(), true, 0, null, null);
+    }
+
+    private static Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
+      return new Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+    }
+
+    private static Code specializedVariadic(String name, Class<?> intrinsicClass) {
+      return new Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+    }
+  }
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
-  static final HashMap<String, PyFunction> CONSTRUCTOR_FUNCTIONS;
   static final HashMap<String, Object> BUILTINS;
   static {
-    var constructorCodes = new Code[]{
-        specializedVariadic("bool", TypeIntrinsics.class),
-        specializedVariadic("int", TypeIntrinsics.class),
-        //specializedVariadic("float", TypeIntrinsics.class),
-        specialized("str", StringIntrinsics.class, "obj"),
-        variadic("tuple"),
-        variadic("list"),
-        variadic("dict"),
-        variadic("range"),
-        variadic("slice"),
-        fixed("NoneType"),
-        fixed("function")
-    };
-    var constructorFunctions = new HashMap<String, PyFunction>();
-    for (var code : constructorCodes) {
-      constructorFunctions.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
-    }
-    CONSTRUCTOR_FUNCTIONS = constructorFunctions;
-
-    var builtinsCodes = new Code[] {
-        fixed("abs", "x"),
-        variadic("bytearray"),
-        fixed("bin", "x"),
-        fixed("divmod", "a", "b"),
-        fixed("hex", "x"),
-        specialized("len", ItemIntrinsics.class, "obj"),
-        fixed("oct", "x"),
-        fixed("ord", "c"),
-        variadic("pow"),
-        variadic("print"),
-        specialized("repr", StringIntrinsics.class, "obj"),
-        variadic("range"),
-        variadic("round"),
-        specialized("type", TypeIntrinsics.class, "obj")
-    };
-
     var builtins = new HashMap<String, Object>();
     var types = PyType.ALL;  // force initialization
     for(var type : types) {
@@ -83,27 +109,14 @@ final class Builtins {
       }
       builtins.put(type.function().name(), type);
     }
-    for(var code : builtinsCodes) {
-      builtins.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
+    for(var code : CodeInitialization.BUILTINS_CODES) {
+      builtins.put(code.name(), new PyFunction(code, CodeInitialization.NO_CAPTURE_ARGS));
     }
     BUILTINS = builtins;
   }
 
-  private static Code fixed(String name, String... parameters) {
-    return new Code(name, List.of(parameters), false, 0, null, null);
-  }
+  private static final BigInteger MAX_ARRAY_SIZE = BigInteger.valueOf(Integer.MAX_VALUE - 8L);
 
-  private static Code variadic(String name) {
-    return new Code(name, List.of(), true, 0, null, null);
-  }
-
-  private static Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
-    return new Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
-  }
-
-  private static Code specializedVariadic(String name, Class<?> intrinsicClass) {
-    return new Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
-  }
 
   /// The entry of a builtin: always a fixed-arity handle. For a variadic builtin the last parameter
   /// is an Object[] that call sites fill explicitly (never through the varargs-collector bit).
