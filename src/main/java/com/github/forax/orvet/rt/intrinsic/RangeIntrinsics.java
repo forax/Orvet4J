@@ -27,6 +27,9 @@ public final class RangeIntrinsics {
 
   /// `range(start, stop, step)` for arbitrary Python values. Only ints and bools are accepted.
   public static PyRange newRange(Object start, Object stop, Object step) {
+    if (start instanceof Long s1 && stop instanceof Long s2 && step instanceof Long s3) {
+      return PyRange.of(s1, s2, s3);  // fast path
+    }
     return PyRange.of(asInt(start), asInt(stop), asInt(step));
   }
 

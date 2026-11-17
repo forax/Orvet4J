@@ -13,6 +13,40 @@ import static java.util.Objects.requireNonNull;
 /// Both can represent the same sequence (range(0, 2**70, 2**70) and range(0, 1) are both [0]).
 public sealed interface PyRange {
 
+  static PyRange of(long start, long stop, long step) {
+    if (step == 0) {
+      throw new PyValueError("range() arg 3 must not be zero");
+    }
+    // Compute the directed span without allowing overflow.
+    long span;
+    try {
+      span = step > 0
+          ? Math.subtractExact(stop, start)
+          : Math.subtractExact(start, stop);
+    } catch (ArithmeticException e) {
+      // The span doesn't fit in a signed long: use the big representation.
+      return of(
+          BigInteger.valueOf(start),
+          BigInteger.valueOf(stop),
+          BigInteger.valueOf(step));
+    }
+
+    // Compute the length without overflowing.
+    long length;
+    if (span <= 0) {
+      length = 0;
+    } else if (step == Long.MIN_VALUE) {
+      // abs(Long.MIN_VALUE) is 2**63, which doesn't fit in a long.
+      // Since span <= Long.MAX_VALUE, there can only be one element.
+      length = 1;
+    } else {
+      var absStep = Math.abs(step);
+      length = (span - 1) / absStep + 1;
+    }
+
+    return new PyRangeSmall(start, stop, step, length);
+  }
+
   static PyRange of(BigInteger start, BigInteger stop, BigInteger step) {
     requireNonNull(start);
     requireNonNull(stop);

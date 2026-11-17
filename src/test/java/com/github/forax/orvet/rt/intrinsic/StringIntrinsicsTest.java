@@ -149,8 +149,8 @@ public final class StringIntrinsicsTest {
 
     @Test
     public void reprRange() {
-      assertEquals("range(0, 10)", StringIntrinsics.$repr$(RangeIntrinsics.newRange(0L, 10L, 1L)));
-      assertEquals("range(0, 10, 3)", StringIntrinsics.$repr$(RangeIntrinsics.newRange(0L, 10L, 3L)));
+      assertEquals("range(0, 10)", StringIntrinsics.$repr$(PyRange.of(0L, 10L, 1L)));
+      assertEquals("range(0, 10, 3)", StringIntrinsics.$repr$(PyRange.of(0L, 10L, 3L)));
     }
 
     @Test
