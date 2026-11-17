@@ -214,7 +214,7 @@ public final class PyDict<K,V> {
         }
         var index = cache.indexMap.get(key);
         if (index == null) {
-          return null;
+          return defaultValue;
         }
         return values[index];
       }
@@ -240,8 +240,11 @@ public final class PyDict<K,V> {
 
           @Override
           public boolean contains(Object o) {
-            Objects.requireNonNull(o);
-            return containsKey(o);
+            if (!(o instanceof Entry<?, ?> entry)) {
+              return false;
+            }
+            var value = get(entry.getKey());
+            return value != null && value.equals(entry.getValue());
           }
 
           @Override

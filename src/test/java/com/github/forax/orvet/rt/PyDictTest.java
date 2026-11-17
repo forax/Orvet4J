@@ -3,9 +3,13 @@ package com.github.forax.orvet.rt;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -356,5 +360,115 @@ public final class PyDictTest {
     assertThrows(NullPointerException.class, () -> dict.get(null));
     assertThrows(NullPointerException.class, () -> dict.containsKey(null));
     assertThrows(NullPointerException.class, () -> dict.remove(null));
+  }
+
+  @Nested
+  public final class JavaAPI {
+    @Test
+    public void javaMapViewPreservesInsertionOrderAndSkipsDeletedEntries() {
+      var dict = new PyDict<String, Long>();
+
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.put("c", 3L);
+
+      dict.remove("b");
+
+      var map = dict.asJavaMap();
+
+      assertEquals(2, map.size());
+      assertEquals(1L, map.get("a"));
+      assertNull(map.get("b"));
+      assertEquals(3L, map.get("c"));
+
+      assertEquals(
+          List.of(
+              Map.entry("a", 1L),
+              Map.entry("c", 3L)
+          ),
+          new ArrayList<>(map.entrySet())
+      );
+    }
+
+    @Test
+    public void javaMapViewReflectsDictionaryModifications() {
+      var dict = new PyDict<String, Long>();
+      dict.put("a", 1L);
+
+      var map = dict.asJavaMap();
+
+      // Build the cache.
+      assertEquals(1L, map.get("a"));
+
+      // Inserting a new key must invalidate the cache.
+      dict.put("b", 2L);
+      assertEquals(2L, map.get("b"));
+
+      // Replacing a value must be visible without changing the key set.
+      dict.put("a", 10L);
+      assertEquals(10L, map.get("a"));
+
+      // Removing a key must invalidate the cache.
+      dict.remove("a");
+      assertFalse(map.containsKey("a"));
+
+      // Reinsertion must work.
+      dict.put("a", 11L);
+      assertEquals(11L, map.get("a"));
+
+      // Clearing the dictionary must also invalidate the cache.
+      dict.clear();
+      assertEquals(0, map.size());
+      assertNull(map.get("b"));
+    }
+
+    @Test
+    public void javaMapGetOrDefaultReturnsDefaultWhenKeyIsMissing() {
+      var dict = new PyDict<String, Long>();
+      dict.put("a", 1L);
+
+      var map = dict.asJavaMap();
+
+      assertEquals(1L, map.getOrDefault("a", 99L));
+      assertEquals(99L, map.getOrDefault("missing", 99L));
+    }
+
+    @Test
+    public void javaMapEntrySetContainsChecksKeyAndValue() {
+      var dict = new PyDict<String, Long>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+
+      var entries = dict.asJavaMap().entrySet();
+
+      assertTrue(entries.contains(Map.entry("a", 1L)));
+
+      assertFalse(entries.contains(Map.entry("a", 2L)));
+      assertFalse(entries.contains(Map.entry("missing", 1L)));
+
+      // A key alone is not an entry.
+      assertFalse(entries.contains("a"));
+    }
+
+    @Test
+    public void javaMapIteratorDetectsStructuralModifications() {
+      var dict = new PyDict<String, Long>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+
+      var map = dict.asJavaMap();
+      var iterator = map.entrySet().iterator();
+
+      // Value replacement must not invalidate the iterator.
+      dict.put("a", 10L);
+
+      assertEquals(Map.entry("a", 10L), iterator.next());
+
+      // Inserting a new key changes the dictionary layout.
+      dict.put("c", 3L);
+
+      assertThrows(ConcurrentModificationException.class, iterator::next
+      );
+    }
   }
 }
