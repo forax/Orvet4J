@@ -95,8 +95,10 @@ public final class ItemIntrinsics {
     return switch (index) {
       case Long l -> l;
       case Boolean b -> b ? 1L : 0L;
-      case BigInteger b -> throw new PyIndexError("cannot fit 'int' into an index-sized integer");
-      default -> throw new PyTypeError(name + " indices must be integers or slices, not str");
+      case BigInteger _ -> throw new PyIndexError("cannot fit 'int' into an index-sized integer");
+      default -> throw new PyTypeError(name.equals("string")
+          ? "string indices must be integers, not '" + typeName(index) + "'"
+          : name + " indices must be integers or slices, not " + typeName(index));
     };
   }
 
