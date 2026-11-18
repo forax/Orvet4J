@@ -239,7 +239,14 @@ public final class PyList<E> {
 
   @Override
   public String toString() {
-    return asJavaList().toString();
+    var builder = new StringBuilder()
+        .append('[');
+    var separator = "";
+    for (var i = 0; i < size; i++) {
+      builder.append(separator).append(elements[i]);
+      separator = ", ";
+    }
+    return builder.append(']').toString();
   }
 
   // -- helpers
