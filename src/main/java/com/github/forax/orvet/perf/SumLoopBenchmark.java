@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 //SumLoopBenchmark.python_int            avgt    5   22.833 ± 0.079  us/op
 
 // Python 3.14.8
+//Benchmark                              Mode  Cnt    Score   Error  Units
 //                                       avgt    5  223.183 ± 0.711  us/op
 
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
