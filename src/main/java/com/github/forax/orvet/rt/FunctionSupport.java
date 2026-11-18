@@ -3,10 +3,15 @@ package com.github.forax.orvet.rt;
 import com.github.forax.orvet.ast.Stmt;
 import com.github.forax.orvet.engine.BytecodeGenerator;
 import com.github.forax.orvet.engine.ScopeAnalyzer;
+import com.github.forax.orvet.rt.error.PyAttributeError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
+import com.github.forax.orvet.rt.intrinsic.DictIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
+import com.github.forax.orvet.rt.intrinsic.ListIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
@@ -17,6 +22,11 @@ import java.lang.invoke.MutableCallSite;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static java.lang.invoke.MethodHandles.exactInvoker;
+import static java.lang.invoke.MethodHandles.foldArguments;
+import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodType.methodType;
 
 /// Runtime support for Python function definitions, lazy compilation, and dynamic invocations.
 ///
@@ -83,7 +93,7 @@ final class FunctionSupport {
       var lookup = MethodHandles.lookup();
       try {
         PY_FUNCTION = lookup.findConstructor(PyFunction.class,
-            MethodType.methodType(void.class, PyFunction.Code.class, Object[].class));
+            methodType(void.class, PyFunction.Code.class, Object[].class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -173,13 +183,13 @@ final class FunctionSupport {
       ARRAY_ELEMENT = MethodHandles.arrayElementGetter(Object[].class);
       try {
         MEGAMORPHIC = lookup.findStatic(Megamorphic.class, "megamorphic",
-            MethodType.methodType(Object.class, Object.class, Object[].class));
+            methodType(Object.class, Object.class, Object[].class));
         MEGAMORPHIC_WITH_KEYWORDS = lookup.findStatic(Megamorphic.class, "megamorphicWithKeywords",
-            MethodType.methodType(Object.class, Object.class, Object[].class, int.class, String[].class));
+            methodType(Object.class, Object.class, Object[].class, int.class, String[].class));
         REST_TUPLE = lookup.findStatic(Megamorphic.class, "restTuple",
-            MethodType.methodType(PyTuple.class, Object[].class, int.class));
+            methodType(PyTuple.class, Object[].class, int.class));
         BUILTIN_REST = lookup.findStatic(Megamorphic.class, "builtinRest",
-            MethodType.methodType(Object[].class, Object[].class, int.class));
+            methodType(Object[].class, Object[].class, int.class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -257,7 +267,7 @@ final class FunctionSupport {
       var filtered = MethodHandles.filterArguments(handle, 2, filters);
 
       // 4. Every filtered parameter reads the same args array.
-      var type = MethodType.methodType(Object.class, Object[].class, PyFunction.class, Object[].class);
+      var type = methodType(Object.class, Object[].class, PyFunction.class, Object[].class);
       var reorder = new int[filtered.type().parameterCount()];
       reorder[0] = 0;  // captured
       reorder[1] = 1;  // self
@@ -297,16 +307,16 @@ final class FunctionSupport {
       try {
         // collectArguments requires the filter's return type to be exactly the target parameter type (PyTuple),
         // hence the asType that widens PyTupleK to PyTuple
-        TUPLE1 = lookup.findConstructor(PyTuple.PyTuple1.class, MethodType.methodType(void.class, Object.class))
-            .asType(MethodType.methodType(PyTuple.class, Object.class));
-        TUPLE2 = lookup.findConstructor(PyTuple.PyTuple2.class, MethodType.methodType(void.class, Object.class, Object.class))
-            .asType(MethodType.methodType(PyTuple.class, Object.class, Object.class));
-        TUPLE3 = lookup.findConstructor(PyTuple.PyTuple3.class, MethodType.methodType(void.class, Object.class, Object.class, Object.class))
-            .asType(MethodType.methodType(PyTuple.class, Object.class, Object.class, Object.class));
-        TUPLE4 = lookup.findConstructor(PyTuple.PyTuple4.class, MethodType.methodType(void.class, Object.class, Object.class, Object.class, Object.class))
-            .asType(MethodType.methodType(PyTuple.class, Object.class, Object.class, Object.class, Object.class));
-        TUPLE_N = lookup.findConstructor(PyTuple.PyTupleN.class, MethodType.methodType(void.class, Object[].class))
-            .asType(MethodType.methodType(PyTuple.class, Object[].class));
+        TUPLE1 = lookup.findConstructor(PyTuple.PyTuple1.class, methodType(void.class, Object.class))
+            .asType(methodType(PyTuple.class, Object.class));
+        TUPLE2 = lookup.findConstructor(PyTuple.PyTuple2.class, methodType(void.class, Object.class, Object.class))
+            .asType(methodType(PyTuple.class, Object.class, Object.class));
+        TUPLE3 = lookup.findConstructor(PyTuple.PyTuple3.class, methodType(void.class, Object.class, Object.class, Object.class))
+            .asType(methodType(PyTuple.class, Object.class, Object.class, Object.class));
+        TUPLE4 = lookup.findConstructor(PyTuple.PyTuple4.class, methodType(void.class, Object.class, Object.class, Object.class, Object.class))
+            .asType(methodType(PyTuple.class, Object.class, Object.class, Object.class, Object.class));
+        TUPLE_N = lookup.findConstructor(PyTuple.PyTupleN.class, methodType(void.class, Object[].class))
+            .asType(methodType(PyTuple.class, Object[].class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -340,13 +350,13 @@ final class FunctionSupport {
       LOOKUP = lookup;
       try {
         FALLBACK = lookup.findVirtual(FunctionCallSite.class, "fallback",
-            MethodType.methodType(MethodHandle.class, Object.class));
+            methodType(MethodHandle.class, Object.class));
         SAME_CALLEE = lookup.findStatic(FunctionCallSite.class, "sameCallee",
-            MethodType.methodType(boolean.class, Object.class, Object.class));
+            methodType(boolean.class, Object.class, Object.class));
         SAME_CODE = lookup.findStatic(FunctionCallSite.class, "sameCode",
-            MethodType.methodType(boolean.class, PyFunction.Code.class, Object.class));
+            methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
-            MethodType.methodType(Object[].class));
+            methodType(Object[].class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -369,7 +379,7 @@ final class FunctionSupport {
       this.depth = depth;
       super(type);
       this.root = root == null ? this : root;
-      setTarget(MethodHandles.foldArguments(MethodHandles.exactInvoker(type()), FALLBACK.bindTo(this)));
+      setTarget(foldArguments(exactInvoker(type()), FALLBACK.bindTo(this)));
     }
 
     private MethodHandle fallback(Object callee) {
@@ -414,7 +424,7 @@ final class FunctionSupport {
 
       // 5. Install the inlining cache
       var fallback = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1).dynamicInvoker();
-      setTarget(MethodHandles.guardWithTest(test, adapted, fallback));
+      setTarget(guardWithTest(test, adapted, fallback));
 
       return adapted;
     }
@@ -434,7 +444,7 @@ final class FunctionSupport {
 
       var captureCount = code.captureCount();  // != 0
       var spread = compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
-      entry = MethodHandles.foldArguments(spread, CAPTURED_ARGS);
+      entry = foldArguments(spread, CAPTURED_ARGS);
       code.entry = entry;  // racy write
       return entry;
     }
@@ -525,6 +535,73 @@ final class FunctionSupport {
   }
 
 
+  static final class MethodCallSite extends MutableCallSite {
+    private static final MethodHandles.Lookup LOOKUP;
+    private static final MethodHandle FALLBACK, TYPE_CHECK;
+    static {
+      var lookup = MethodHandles.lookup();
+      LOOKUP = lookup;
+      try {
+        FALLBACK = lookup.findVirtual(MethodCallSite.class, "fallback",
+            methodType(MethodHandle.class, Object.class));
+        TYPE_CHECK = lookup.findStatic(MethodCallSite.class, "typeCheck",
+            methodType(boolean.class, Class.class, Object.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private final String name;
+
+    private MethodCallSite(MethodType type, String name) {
+      this.name = name;
+      super(type);
+      setTarget(foldArguments(exactInvoker(type), FALLBACK.bindTo(this)));
+    }
+
+    private MethodHandle fallback(Object receiver) {
+      var intrinsic = intrinsicForClass(receiver);
+      var receiverClass = receiver.getClass();
+      var methodType = MethodType.genericMethodType(type().parameterCount())
+          .changeParameterType(0, receiverClass);
+      MethodHandle mh;
+      try {
+        mh = LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
+      } catch (IllegalAccessException e) {
+        throw new AssertionError(e);
+      } catch (NoSuchMethodException e) {
+        throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
+            "' object has no attribute '" + name + "'");
+      }
+
+      var test = TYPE_CHECK.bindTo(receiverClass);
+      var target = mh.asType(type());
+      var guard = guardWithTest(test, target, new MethodCallSite(type(), name).dynamicInvoker());
+      setTarget(guard);
+
+      return target;
+    }
+
+    private static boolean typeCheck(Class<?> receiverClass, Object receiver) {
+      return receiverClass == receiver.getClass();
+    }
+
+    static CallSite methodCall(String name, MethodType type, int positionalCount, String... keywordNames) {
+      if (keywordNames.length != 0) {
+        throw new UnsupportedOperationException("keyword arguments are not supported yet");
+      }
+      return new MethodCallSite(type, name);
+    }
+
+    private Class<?> intrinsicForClass(Object receiver) {
+      return switch (receiver) {
+        case PyList<?> _ -> ListIntrinsics.class;
+        case PyDict<?, ?> _ -> DictIntrinsics.class;
+        default -> throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) + "' object has no attribute '" + name + "'");
+      };
+    }
+  }
+
   // -- helpers
 
   static PyFunction asFunction(Object callee) {
@@ -596,7 +673,6 @@ final class FunctionSupport {
     }
     return plan;
   }
-
 
   // -- errors
 

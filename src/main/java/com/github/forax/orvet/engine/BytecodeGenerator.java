@@ -79,6 +79,7 @@ public final class BytecodeGenerator {
   private static final Handle BSM_SPECIALIZE = bsm("bsmSpecialize", BSM_PREFIX + "Ljava/lang/Class;" + CALL_SITE);
   private static final Handle BSM_DEF = bsm("bsmDef", BSM_PREFIX + "I" + CALL_SITE);
   private static final Handle BSM_CALL = bsm("bsmCall", BSM_PREFIX + "I[Ljava/lang/String;" + CALL_SITE);
+  private static final Handle BSM_METHOD_CALL = bsm("bsmMethodCall", BSM_PREFIX + "I[Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_GET_GLOBAL = bsm("bsmGetGlobal", BSM_PREFIX + "Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_SET_GLOBAL = bsm("bsmSetGlobal", BSM_PREFIX + "Ljava/lang/String;" + CALL_SITE);
   private static final Handle BSM_CONST = bsm("bsmConst", CONDY_PREFIX + O + ")" + O);
@@ -681,26 +682,16 @@ public final class BytecodeGenerator {
           mv.visitLabel(end);
         }
         case Expr.Call c -> {
-          var argsSize = c.args().positional().size() + c.args().keywords().size();
-          if (argsSize > MAX_CALL_ARGUMENTS) {
-            throw unsupported("call with more than " + MAX_CALL_ARGUMENTS + " arguments", c.line(), c.column());
-          }
           expr(c.func());
-          for (var arg : c.args().positional()) {
-            expr(arg);
-          }
-          for (var keyword : c.args().keywords()) {
-            expr(keyword.value());
-          }
+          var bsmArgs = pushArguments(c.args(), c.line(), c.column());
           var callName = c.func() instanceof Expr.Name name ? name.id() : "call";
-          var bsmArgs = new Object[1 + c.args().keywords().size()];
-          bsmArgs[0] = c.args().positional().size();
-          for(var i = 0; i < c.args().keywords().size(); i++) {
-            bsmArgs[i + 1] = c.args().keywords().get(i).name();
-          }
-          mv.visitInvokeDynamicInsn(callName, "(" + O.repeat(argsSize + 1) + ")" + O, BSM_CALL, bsmArgs);
+          mv.visitInvokeDynamicInsn(callName, callDescriptor(c.args()), BSM_CALL, bsmArgs);
         }
-        case Expr.MethodCall m -> throw unsupported("method call", m.line(), m.column());
+        case Expr.MethodCall m -> {
+          expr(m.receiver());
+          var bsmArgs = pushArguments(m.args(), m.line(), m.column());
+          mv.visitInvokeDynamicInsn(m.name(), callDescriptor(m.args()), BSM_METHOD_CALL, bsmArgs);
+        }
         case Expr.Subscript s -> {
           expr(s.value());
           expr(s.index());
@@ -718,6 +709,32 @@ public final class BytecodeGenerator {
         case Expr.TupleDisplay d -> tupleDisplay(d);
         case Expr.DictDisplay d -> dictDisplay(d);
       }
+    }
+
+    /// Pushes positional then keyword values and returns the bootstrap static arguments
+    /// (positionalCount, keywordNames...). `leading` is 1 for the callee / the receiver.
+    private Object[] pushArguments(Expr.CallArguments args, int line, int column) {
+      var positional = args.positional();
+      var keywords = args.keywords();
+      if (positional.size() + keywords.size() > MAX_CALL_ARGUMENTS) {
+        throw unsupported("call with more than " + MAX_CALL_ARGUMENTS + " arguments", line, column);
+      }
+      for (var arg : positional) {
+        expr(arg);
+      }
+      for (var keyword : keywords) {
+        expr(keyword.value());
+      }
+      var bsmArgs = new Object[1 + keywords.size()];
+      bsmArgs[0] = positional.size();
+      for (var i = 0; i < keywords.size(); i++) {
+        bsmArgs[i + 1] = keywords.get(i).name();
+      }
+      return bsmArgs;
+    }
+
+    private static String callDescriptor(Expr.CallArguments args) {
+      return "(" + O.repeat(1 + args.positional().size() + args.keywords().size()) + ")" + O;
     }
 
     /// Create a fresh dictionary, then insert its entries from left to right.

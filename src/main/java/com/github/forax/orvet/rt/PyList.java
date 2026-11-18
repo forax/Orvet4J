@@ -201,7 +201,6 @@ public final class PyList<E> {
     size = (int) newSize;
   }
 
-
   // -- Java API
 
   public List<E> asJavaList() {
@@ -222,6 +221,26 @@ public final class PyList<E> {
     return new JavaList();
   }
 
+  @Override
+  public boolean equals(Object obj) {
+    return obj instanceof PyList<?> list &&
+        size == list.size &&
+        Arrays.equals(elements, 0, size, list.elements, 0, size);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = 1;
+    for (var i = 0; i < size; i++) {
+      result = 31 * result + elements[i].hashCode();
+    }
+    return result;
+  }
+
+  @Override
+  public String toString() {
+    return asJavaList().toString();
+  }
 
   // -- helpers
 

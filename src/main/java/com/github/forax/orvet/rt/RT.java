@@ -56,6 +56,10 @@ public final class RT {
     return FunctionSupport.FunctionCallSite.call(type, positionalCount, keywordNames);
   }
 
+  public static CallSite bsmMethodCall(MethodHandles.Lookup lookup, String name, MethodType type, int positionalCount, String... keywordNames) {
+    return FunctionSupport.MethodCallSite.methodCall(name, type, positionalCount, keywordNames);
+  }
+
   public static CallSite bsmGetGlobal(MethodHandles.Lookup lookup, String name, MethodType type, String globalName) {
     var loader = (RT.FunctionClassLoader) lookup.lookupClass().getClassLoader();
     return GlobalSupport.getGlobal(loader.context, globalName);

@@ -6,6 +6,7 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.error.PyAttributeError;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyNameError;
@@ -2323,6 +2324,23 @@ public final class BytecodeGeneratorTest {
 
 
   @Nested
+  public final class MethodCall {
+    @Test
+    public void listAppend() {
+      assertEquals(new PyList<Object>(1L), eval("""
+        list = [];
+        list.append(1)
+        """, "list"));
+    }
+
+    @Test
+    public void attributeNotFound() {
+     assertThrows(PyAttributeError.class, () -> run("x = 1\ny = x.m()"));
+    }
+  }
+
+
+  @Nested
   public final class RuntimeError {
 
     @Test
@@ -2338,13 +2356,6 @@ public final class BytecodeGeneratorTest {
     @Test
     public void moreUnsupportedConstructs() {
       assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ndel x"));
-      assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ny = x.m()"));
-    }
-
-    @Test
-    @Disabled
-    public void moreUnsupportedConstructs2() {
-      assertThrows(UnsupportedSyntaxException.class, () -> run("x = 1\ny = x[1:2]"));
     }
 
     @Test
@@ -2353,6 +2364,7 @@ public final class BytecodeGeneratorTest {
       assertThrows(PyTypeError.class, () -> run("x = 1 * None"));
       assertThrows(PyTypeError.class, () -> run("x = 1 << 1.5"));
       assertThrows(PyTypeError.class, () -> run("x = 'a' // 2"));
+      assertThrows(PyTypeError.class, () -> run("x = 1\ny = x[1:2]"));
     }
 
     @Test

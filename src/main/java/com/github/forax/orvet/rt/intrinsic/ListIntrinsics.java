@@ -7,6 +7,8 @@ import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
+import java.util.Objects;
+
 /// Python-list operations.
 ///
 /// These methods are the semantic boundary between PyList's storage operations and the rest of
@@ -175,6 +177,19 @@ public final class ListIntrinsics {
     list.splice(0, items.length, kept);
     return PyNone.INSTANCE;
   }
+
+
+  // -- method table
+
+  @SuppressWarnings("unchecked")
+  public static <E> Object _append_(PyList<E> list, E item) {
+    Objects.requireNonNull(item);
+    list.append(item);
+    return PyNone.INSTANCE;
+  }
+
+
+  // -- helpers
 
   private static Object[] toItems(Object iterable) {
     if (iterable instanceof PyList<?> l) {
