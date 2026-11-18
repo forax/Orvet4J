@@ -8,6 +8,7 @@ import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyType;
+import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyValueError;
 
 import java.math.BigDecimal;
@@ -32,6 +33,40 @@ public final class StringIntrinsics {
   // Shared by recursive tuple/list/dict repr so mixed cycles are handled correctly.
   private static final ThreadLocal<IdentityHashMap<Object, Boolean>> ACTIVE_REPR =
       ThreadLocal.withInitial(IdentityHashMap::new);
+
+  /// Python `string[index]` and `string[slice]`, using Unicode code points.
+  @Intrinsic
+  public static Object $getItem$(String s, Object index) {
+    var i = ItemIntrinsics.$toIndex$(index, "string");
+    int start;
+    if (i < 0) {
+      // Negative index: count backwards from the end.
+      if (i < -(long) s.length()) {
+        throw badIndex("string index out of range");
+      }
+      try {
+        start = s.offsetByCodePoints(s.length(), (int) i);
+      } catch (IndexOutOfBoundsException e) {
+        throw badIndex("string index out of range");
+      }
+    } else {
+      // Positive index: count forwards from the beginning.
+      if (i >= s.length()) {
+        throw badIndex("string index out of range");
+      }
+      try {
+        start = s.offsetByCodePoints(0, (int) i);
+      } catch (IndexOutOfBoundsException e) {
+        throw badIndex("string index out of range");
+      }
+    }
+    var end = start + Character.charCount(s.codePointAt(start));
+    return s.substring(start, end);
+  }
+
+  private static PyIndexError badIndex(String message) {
+    return new PyIndexError(message);
+  }
 
   @Intrinsic
   public static Object $str$(Object value) {
@@ -73,7 +108,19 @@ public final class StringIntrinsics {
     };
   }
 
-  // -- scalar values
+
+  // -- helpers
+
+  private static Object getItemSlice(String s, PySlice  index) {
+    var codePoints = s.codePoints().toArray();
+    var r = index.resolve(codePoints.length);
+    var sb = new StringBuilder();
+    var pos = r.start();
+    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+      sb.appendCodePoint(codePoints[(int) pos]);
+    }
+    return sb.toString();
+  }
 
   private static String intString(BigInteger value) {
     var result = value.toString();
@@ -191,8 +238,8 @@ public final class StringIntrinsics {
         + ">";
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Tuple representation
+
+  // -- tuple representation
 
   private static String tupleRepr(PyTuple tuple) {
     if (!enterRepr(tuple)) {

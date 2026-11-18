@@ -83,6 +83,18 @@ public final class RangeIntrinsics {
     }
   }
 
+  /// Python `range[index]`. Supports bool, arbitrary-size int, and slices.
+  @Intrinsic
+  public static Object $getItem$(PyRange range, Object index) {
+    return switch (index) {
+      case Long l -> $get$(range, l);
+      case Boolean b -> $get$(range, b ? 1L : 0L);
+      case BigInteger big -> getBig(range, big);
+      case PySlice slice -> $slice$(range, slice);
+      default -> throw new PyTypeError("range indices must be integers or slices, not " + typeName(index));
+    };
+  }
+
   /// `item in range`. A non-number can never equal an int, so the answer is false.
   @Intrinsic
   public static boolean $in$(PyRange range, Object item) {

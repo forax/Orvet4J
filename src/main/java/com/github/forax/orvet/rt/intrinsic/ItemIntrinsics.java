@@ -45,8 +45,8 @@ public final class ItemIntrinsics {
           default -> { return TupleIntrinsics.$get$(tuple, $toIndex$(index, "tuple")); }
         }
       }
-      case PyRange range -> { return rangeItem(range, index); }
-      case String string -> { return stringItem(string, index); }
+      case PyRange range -> { return RangeIntrinsics.$getItem$(range, index); }
+      case String string -> { return StringIntrinsics.$getItem$(string, index); }
       default -> throw new PyTypeError("'" + typeName(container) + "' object is not subscriptable");
     }
   }
@@ -101,39 +101,5 @@ public final class ItemIntrinsics {
       default -> throw new PyTypeError(name + " indices must be integers or slices, not " + typeName(index));
     };
 
-  }
-
-
-  private static Object rangeItem(PyRange range, Object index) {
-    return switch (index) {
-      case Long l -> RangeIntrinsics.$get$(range, l);
-      case Boolean b -> RangeIntrinsics.$get$(range, b ? 1L : 0L);
-      case BigInteger big -> RangeIntrinsics.getBig(range, big);   // range[10**20] is legal in CPython
-      case PySlice slice -> RangeIntrinsics.$slice$(range, slice);
-      default -> throw badIndex("range", index);
-    };
-  }
-
-  private static Object stringItem(String s, Object index) {
-    var codePoints = s.codePoints().toArray();           // O(n); correct for supplementary characters
-    if (index instanceof PySlice slice) {
-      var r = slice.resolve(codePoints.length);
-      var sb = new StringBuilder();
-      var pos = r.start();
-      for (var i = 0L; i < r.count(); i++, pos += r.step()) {
-        sb.appendCodePoint(codePoints[(int) pos]);
-      }
-      return sb.toString();
-    }
-    var i = $toIndex$(index, "string");                  // the intrinsic call is rewritten to an indy
-    var n = i < 0 ? i + codePoints.length : i;
-    if (n < 0 || n >= codePoints.length) {
-      throw new PyIndexError("string index out of range");
-    }
-    return new String(codePoints, (int) n, 1);
-  }
-
-  private static PyTypeError badIndex(String name, Object index) {
-    return new PyTypeError(name + " indices must be integers or slices, not " + typeName(index));
   }
 }
