@@ -70,7 +70,6 @@ final class Builtins {
           fixed("all", "iterable"),
           fixed("any", "iterable"),
           fixed("ascii", "object"),
-          variadic("bytearray"),
           fixed("bin", "x"),
           fixed("callable", "object"),
           fixed("chr", "i"),
@@ -106,8 +105,10 @@ final class Builtins {
           variadic("zip"),
 
           // Types
+          variadic("bytearray"),
           variadic("bytes"),
           variadic("complex"),
+          variadic("function"),
           variadic("frozenset"),
           variadic("frozendict"),
           variadic("memoryview"),
@@ -314,73 +315,6 @@ final class Builtins {
     };
   }
 
-  /// A bytearray is represented by PyList<long> for now. Each element is an unsigned
-  /// byte in the range 0..255; this keeps it iterable and mutable with the current runtime.</long>
-  @SuppressWarnings("unused")
-  public static Object _bytearray_(Object... args) {
-    if (args.length > 3) {
-      throw new PyTypeError("bytearray() takes at most 3 arguments (" + args.length + " given)");
-    }
-    if (args.length == 0) {
-      return new PyList<Long>();
-    }
-
-    var source = args[0];
-    if (source instanceof String string) {
-      if (args.length < 2) {
-        throw new PyTypeError("string argument without an encoding");
-      }
-      if (!(args[1] instanceof String encoding)) {
-        throw new PyTypeError("bytearray() argument 'encoding' must be str, not " + typeName(args[1]));
-      }
-      if (args.length == 3 && !(args[2] instanceof String)) {
-        throw new PyTypeError("bytearray() argument 'errors' must be str, not " + typeName(args[2]));
-      }
-      if (args.length == 3 && !args[2].equals("strict")) {
-        throw new PyValueError("only the 'strict' error handler is supported by bytearray()");
-      }
-      try {
-        var encoder = Charset.forName(encoding).newEncoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT);
-        var buffer = encoder.encode(CharBuffer.wrap(string));
-        var bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
-        return bytesToList(bytes);
-      } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-        throw new PyValueError("unknown encoding: " + encoding);
-      } catch (CharacterCodingException e) {
-        throw new PyValueError("bytearray() encoding failed for encoding '" + encoding + "'", e);
-      }
-    }
-
-    if (args.length > 1) {
-      throw new PyTypeError("encoding or errors without a string argument");
-    }
-    if (isInteger(source)) {
-      var size = asIndex(source);
-      if (size.signum() < 0) {
-        throw new PyValueError("negative count");
-      }
-      if (size.compareTo(MAX_ARRAY_SIZE) > 0) {
-        throw new UnimplementedFeatureError("bytearray larger than the maximum Java array size");
-      }
-      return new PyList<Long>(size.intValue());
-    }
-
-    var result = new PyList<Long>();
-    var iterator = IteratorIntrinsics.$iterator$(source);
-    Object item;
-    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
-      var value = asIndex(item);
-      if (value.signum() < 0 || value.compareTo(BigInteger.valueOf(255)) > 0) {
-        throw new PyValueError("byte must be in range(0, 256)");
-      }
-      result.append(value.longValue());
-    }
-    return result;
-  }
-
   @SuppressWarnings("unused")
   public static Object _ord_(Object value) {
     if (!(value instanceof String string)) {
@@ -400,7 +334,6 @@ final class Builtins {
     if (args.length == 0) {
       return result;
     }
-
     var source = args[0];
     if (source instanceof PyDict<?,?> dictionary) {
       for (var i = 0; i < dictionary.entryCount(); i++) {
@@ -410,7 +343,6 @@ final class Builtins {
       }
       return result;
     }
-
     var iterator = IteratorIntrinsics.$iterator$(source);
     Object element;
     var index = 0;
@@ -454,11 +386,6 @@ final class Builtins {
   @SuppressWarnings("unused")
   public static Object _NoneType_() {
     return PyNone.INSTANCE;
-  }
-
-  @SuppressWarnings("unused")
-  public static Object _function_() {
-    throw new UnimplementedFeatureError("function is nor callable");
   }
 
   @SuppressWarnings("unused")
