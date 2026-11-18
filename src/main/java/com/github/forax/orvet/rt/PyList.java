@@ -204,16 +204,17 @@ public final class PyList<E> {
   // -- Java API
 
   public List<E> asJavaList() {
-    checkOwner();
     final class JavaList extends AbstractList<E> implements RandomAccess {
       @Override
       public int size() {
+        checkOwner();
         return size;
       }
 
       @Override
       public E get(int index) {
         Objects.checkIndex(index, size);
+        checkOwner();
         return elements[index];
       }
     }
