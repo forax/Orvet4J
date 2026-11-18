@@ -1,0 +1,4 @@
+order pens 7
+order notebooks 9
+order erasers 20
+updated stock {'pens': 10, 'notebooks': 10, 'erasers': 20, 'folders': 5}
