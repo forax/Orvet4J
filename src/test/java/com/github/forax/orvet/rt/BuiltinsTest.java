@@ -438,6 +438,32 @@ public final class BuiltinsTest {
 
 
   @Nested
+  public final class Float {
+    @Test
+    public void noArguments() throws IOException {
+      assertEquals("0.0", strOf("float()"));
+    }
+
+    @Test
+    public void convertsNumbersAndStrings() throws IOException {
+      assertEquals("1.0", strOf("float(True)"));
+      assertEquals("0.0", strOf("float(False)"));
+      assertEquals("42.0", strOf("float(42)"));
+      assertEquals("-3.5", strOf("float('-3.5')"));
+      assertEquals("1e+20", strOf("float(10**20)"));
+    }
+
+    @Test
+    public void invalidArguments() {
+      assertRaises(PyValueError.class, "float('not a number')");
+      assertRaises(PyValueError.class, "float('1__2')");
+      assertRaises(PyTypeError.class, "float(None)");
+      assertRaises(PyTypeError.class, "float(1, 2)");
+    }
+  }
+
+
+  @Nested
   public final class Len {
     @Test
     public void stringsCountCodePoints() throws IOException {

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigInteger;
 
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$bool$;
+import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$float$;
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$int$;
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$type$;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -151,5 +152,42 @@ public final class TypeIntrinsicsTest {
   public void intRejectsMoreThanTwoArgumentsWithTheCorrectMaximum() {
     var error = assertThrows(PyTypeError.class, () -> $int$(1L, 2L, 3L));
     assertEquals("int() expected at most 2 arguments, got 3", error.getMessage());
+  }
+
+  @Test
+  public void floatConvertsSupportedNumericTypes() {
+    assertEquals(0.0d, $float$());
+    assertEquals(0.0d, $float$(false));
+    assertEquals(1.0d, $float$(true));
+    assertEquals(-42.0d, $float$(-42L));
+    assertEquals(42.0d, $float$(42L));
+    assertEquals(2.5d, $float$(2.5d));
+    assertThrows(PyOverflowError.class, () -> $float$(BigInteger.ONE.shiftLeft(2048)));
+  }
+
+  @Test
+  public void floatParsesPythonFloatStrings() {
+    assertEquals(1234.56d, $float$("1_234.56"));
+    assertEquals(0.125d, $float$(".125"));
+    assertEquals(1.0d, $float$("1."));
+    assertEquals(-0.5d, $float$("  -.5  "));
+    assertEquals(12.5d, $float$("١٢.٥"));
+    assertEquals(Double.POSITIVE_INFINITY, $float$("inf"));
+    assertEquals(Double.NEGATIVE_INFINITY, $float$("-Infinity"));
+    assertTrue(Double.isNaN((Double) $float$("NaN")));
+  }
+
+  @Test
+  public void floatRejectsInvalidStrings() {
+    for (var value : new String[]{"", "+", ".", "1__0", "_1.0", "1_.0", "1e_2", "0x1p0"}) {
+      assertThrows(PyValueError.class, () -> $float$(value));
+    }
+  }
+
+  @Test
+  public void floatRejectsUnsupportedTypesAndExcessArguments() {
+    assertThrows(PyTypeError.class, () -> $float$(PyNone.INSTANCE));
+    var error = assertThrows(PyTypeError.class, () -> $float$(1L, 2L));
+    assertEquals("float expected at most 1 argument, got 2", error.getMessage());
   }
 }
