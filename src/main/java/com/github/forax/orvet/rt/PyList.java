@@ -18,7 +18,8 @@ public final class PyList<E> {
   private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
   private static final Object[] EMPTY_ARRAY = new Object[0];
 
-  private final Thread owner;
+  private final Thread owner;   // should be check before any field access
+
   private E[] elements;
   private int size;
 
@@ -75,16 +76,16 @@ public final class PyList<E> {
 
   /// Raw zero-based Java access. Python negative-index handling is implemented by ListIntrinsics.
   public E get(int index) {
-    Objects.checkIndex(index, size);
     checkOwner();
+    Objects.checkIndex(index, size);
     return elements[index];
   }
 
   /// Raw zero-based Java update. Python negative-index handling is implemented by ListIntrinsics.
   public E set(int index, E value) {
+    checkOwner();
     Objects.checkIndex(index, size);
     Objects.requireNonNull(value);
-    checkOwner();
     var oldValue = elements[index];
     elements[index] = value;
     return oldValue;
@@ -119,11 +120,11 @@ public final class PyList<E> {
 
   /// Inserts at a raw Java index in [0, size]. Python's clamping rules belong in the method intrinsic.
   public void insert(int index, E value) {
+    checkOwner();
     if (index < 0 || index > size) {
       throw new IndexOutOfBoundsException("index: " + index + ", size: " + size);
     }
     Objects.requireNonNull(value);
-    checkOwner();
     ensureCapacity(size + 1);
     System.arraycopy(elements, index, elements, index + 1, size - index);
     elements[index] = value;
@@ -132,8 +133,8 @@ public final class PyList<E> {
 
   /// Removes and returns an element at a raw zero-based Java index.
   public E remove(int index) {
-    Objects.checkIndex(index, size);
     checkOwner();
+    Objects.checkIndex(index, size);
     var removed = elements[index];
     var moved = size - index - 1;
     if (moved > 0) {
@@ -159,9 +160,6 @@ public final class PyList<E> {
 
   /// Repeats this list in place.
   public void repeatInPlace(long count) {
-    if (size != 0 && count > MAX_ARRAY_SIZE / (long) size) {
-      throw tooLarge();
-    }
     checkOwner();
     if (count <= 0) {
       clear();
@@ -169,6 +167,9 @@ public final class PyList<E> {
     }
     if (count == 1 || size == 0) {
       return;
+    }
+    if (count > MAX_ARRAY_SIZE / (long) size) {
+      throw tooLarge();
     }
     var originalSize = size;
     var newSize = (int) (originalSize * count);
@@ -182,11 +183,11 @@ public final class PyList<E> {
   /// Replaces [from, to) with the given items (which must not alias this list's storage).
   @SafeVarargs
   public final void splice(int from, int to, E... items) {
+    checkOwner();
     Objects.checkFromToIndex(from, to, size);
     for (var item : items) {
       Objects.requireNonNull(item);
     }
-    checkOwner();
     var newSize = (long) size - (to - from) + items.length;
     if (newSize > MAX_ARRAY_SIZE) {
       throw tooLarge();
@@ -213,8 +214,8 @@ public final class PyList<E> {
 
       @Override
       public E get(int index) {
-        Objects.checkIndex(index, size);
         checkOwner();
+        Objects.checkIndex(index, size);
         return elements[index];
       }
     }

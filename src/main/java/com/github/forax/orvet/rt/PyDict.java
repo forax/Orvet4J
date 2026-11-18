@@ -1,5 +1,6 @@
 package com.github.forax.orvet.rt;
 
+import com.github.forax.orvet.rt.error.PyRuntimeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.ComparisonIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.HashingIntrinsics;
@@ -23,6 +24,8 @@ public final class PyDict<K,V> {
   private static final int MAX_TABLE_CAPACITY = 1 << 30;
   private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
+  private final Thread owner;  // should be check before any field access
+
   // Insertion-order storage. A null key denotes a deleted entry.
   private K[] keys;
   private V[] values;
@@ -43,21 +46,25 @@ public final class PyDict<K,V> {
     values = (V[]) new Object[MIN_TABLE_CAPACITY];
     hashes = new long[MIN_TABLE_CAPACITY];
     table = new int[MIN_TABLE_CAPACITY];
+    owner = Thread.currentThread();
     super();
   }
 
   /// Number of live key/value pairs.
   public int size() {
+    checkOwner();
     return size;
   }
 
   public boolean isEmpty() {
+    checkOwner();
     return size == 0;
   }
 
   /// Version of the key set. Insertions, deletions and non-empty clears change it; value
   /// replacement does not. Intended for dictionary iterators.
   public long layoutVersion() {
+    checkOwner();
     return keysVersion;
   }
 
@@ -65,6 +72,7 @@ public final class PyDict<K,V> {
   /// this distinguishes absence from every Python value, including `None`.
   public V get(Object key) {
     Objects.requireNonNull(key);
+    checkOwner();
     var hash = HashingIntrinsics.$hash$(key);
     var slot = findSlot(key, hash);
     var entry = table[slot] - 1;
@@ -73,6 +81,7 @@ public final class PyDict<K,V> {
 
   public boolean containsKey(Object key) {
     Objects.requireNonNull(key);
+    checkOwner();
     var hash = HashingIntrinsics.$hash$(key);
     return table[findSlot(key, hash)] > 0;
   }
@@ -82,6 +91,7 @@ public final class PyDict<K,V> {
   public V put(K key, V value) {
     Objects.requireNonNull(key);
     Objects.requireNonNull(value);
+    checkOwner();
     var hash = HashingIntrinsics.$hash$(key);
     var slot = findSlot(key, hash);
     var slotValue = table[slot];
@@ -115,6 +125,7 @@ public final class PyDict<K,V> {
   /// removed key appends it at the end of insertion order.
   public V remove(Object key) {
     Objects.requireNonNull(key);
+    checkOwner();
     var hash = HashingIntrinsics.$hash$(key);
     var slot = findSlot(key, hash);
     var slotValue = table[slot];
@@ -138,6 +149,7 @@ public final class PyDict<K,V> {
   /// Removes every entry and releases oversized backing arrays.
   @SuppressWarnings("unchecked")
   public void clear() {
+    checkOwner();
     if (size == 0 && entryCount == 0) {
       return;
     }
@@ -156,23 +168,27 @@ public final class PyDict<K,V> {
 
   /// Number of insertion-order positions, including positions deleted since the last compaction.
   public int entryCount() {
+    checkOwner();
     return entryCount;
   }
 
   /** True when the insertion-order position currently holds a live entry. */
   public boolean isLive(int entryIndex) {
+    checkOwner();
     Objects.checkIndex(entryIndex, entryCount);
     return keys[entryIndex] != null;
   }
 
   /// Returns a live key at an insertion-order position, or null for a deleted position.
   public K keyAt(int entryIndex) {
+    checkOwner();
     Objects.checkIndex(entryIndex, entryCount);
     return keys[entryIndex];
   }
 
   /// Returns a live value at an insertion-order position, or null for a deleted position.
   public V valueAt(int entryIndex) {
+    checkOwner();
     Objects.checkIndex(entryIndex, entryCount);
     return values[entryIndex];
   }
@@ -201,12 +217,14 @@ public final class PyDict<K,V> {
 
       @Override
       public int size() {
+        checkOwner();
         return size;
       }
 
       @Override
       public V getOrDefault(Object key, V defaultValue) {
         Objects.requireNonNull(key);
+        checkOwner();
         var keysVersion = PyDict.this.keysVersion;
         var cache = this.cache;
         if (cache == null || cache.keysVersion != keysVersion) {
@@ -222,6 +240,7 @@ public final class PyDict<K,V> {
       @Override
       public V get(Object key) {
         Objects.requireNonNull(key);
+        checkOwner();
         return getOrDefault(key, null);
       }
 
@@ -235,11 +254,13 @@ public final class PyDict<K,V> {
         return new AbstractSet<>() {
           @Override
           public int size() {
+            checkOwner();
             return size;
           }
 
           @Override
           public boolean contains(Object o) {
+            checkOwner();
             if (!(o instanceof Entry<?, ?> entry)) {
               return false;
             }
@@ -249,6 +270,7 @@ public final class PyDict<K,V> {
 
           @Override
           public Iterator<Entry<K, V>> iterator() {
+            checkOwner();
             var keysVersion = PyDict.this.keysVersion;
             return new Iterator<>() {
               private int index = nextIndex(0);
@@ -264,11 +286,13 @@ public final class PyDict<K,V> {
 
               @Override
               public boolean hasNext() {
+                checkOwner();
                 return index < entryCount;
               }
 
               @Override
               public Entry<K, V> next() {
+                checkOwner();
                 if (!hasNext()) {
                   throw new NoSuchElementException();
                 }
@@ -422,6 +446,14 @@ public final class PyDict<K,V> {
 
   private static int maxFill(int capacity) {
     return (int) (((long) capacity * 2L) / 3L);
+  }
+
+  // -- helpers
+
+  private void checkOwner() {
+    if (Thread.currentThread() != owner) {
+      throw new PyRuntimeError( "PyList is not owned by the current thread");
+    }
   }
 
   private static UnimplementedFeatureError tooLarge() {
