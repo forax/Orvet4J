@@ -1,5 +1,6 @@
 package com.github.forax.orvet.rt;
 
+import com.github.forax.orvet.rt.error.PyRuntimeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.util.AbstractList;
@@ -17,6 +18,7 @@ public final class PyList<E> {
   private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
   private static final Object[] EMPTY_ARRAY = new Object[0];
 
+  private final Thread owner;
   private E[] elements;
   private int size;
 
@@ -24,6 +26,7 @@ public final class PyList<E> {
   @SuppressWarnings("unchecked")
   public PyList() {
     this.elements = (E[]) EMPTY_ARRAY;
+    this.owner = Thread.currentThread();
     super();
   }
 
@@ -37,6 +40,7 @@ public final class PyList<E> {
       throw tooLarge();
     }
     this.elements = (E[]) new Object[initialCapacity];
+    this.owner = Thread.currentThread();
     super();
   }
 
@@ -53,22 +57,26 @@ public final class PyList<E> {
     }
     this.elements = (E[]) Arrays.copyOf(items, items.length, Object[].class);
     this.size = items.length;
+    this.owner = Thread.currentThread();
     super();
   }
 
   /// Current number of elements.
   public int size() {
+    checkOwner();
     return size;
   }
 
   /// Whether this list is empty.
   public boolean isEmpty() {
+    checkOwner();
     return size == 0;
   }
 
   /// Raw zero-based Java access. Python negative-index handling is implemented by ListIntrinsics.
   public E get(int index) {
     Objects.checkIndex(index, size);
+    checkOwner();
     return elements[index];
   }
 
@@ -76,6 +84,7 @@ public final class PyList<E> {
   public E set(int index, E value) {
     Objects.checkIndex(index, size);
     Objects.requireNonNull(value);
+    checkOwner();
     var oldValue = elements[index];
     elements[index] = value;
     return oldValue;
@@ -84,6 +93,7 @@ public final class PyList<E> {
   /// Appends one canonical runtime value.
   public void append(E value) {
     Objects.requireNonNull(value);
+    checkOwner();
     ensureCapacity(size + 1);
     elements[size++] = value;
   }
@@ -91,6 +101,7 @@ public final class PyList<E> {
   /// Appends a snapshot of another list's current contents. Safe when {@code other == this}.
   public void appendAll(PyList<? extends E> other) {
     Objects.requireNonNull(other);
+    checkOwner();
     var count = other.size;
     if (count == 0) {
       return;
@@ -111,7 +122,8 @@ public final class PyList<E> {
     if (index < 0 || index > size) {
       throw new IndexOutOfBoundsException("index: " + index + ", size: " + size);
     }
-    Objects.requireNonNull(value, "PyList elements must not be Java null");
+    Objects.requireNonNull(value);
+    checkOwner();
     ensureCapacity(size + 1);
     System.arraycopy(elements, index, elements, index + 1, size - index);
     elements[index] = value;
@@ -121,6 +133,7 @@ public final class PyList<E> {
   /// Removes and returns an element at a raw zero-based Java index.
   public E remove(int index) {
     Objects.checkIndex(index, size);
+    checkOwner();
     var removed = elements[index];
     var moved = size - index - 1;
     if (moved > 0) {
@@ -133,26 +146,29 @@ public final class PyList<E> {
   /// Releases the backing array.
   @SuppressWarnings("unchecked")
   public void clear() {
+    checkOwner();
     elements = (E[]) EMPTY_ARRAY;
     size = 0;
   }
 
   /// Returns a defensive copy of the live elements.
   public Object[] toArray() {
+    checkOwner();
     return Arrays.copyOf(elements, size);
   }
 
   /// Repeats this list in place.
   public void repeatInPlace(long count) {
+    if (size != 0 && count > MAX_ARRAY_SIZE / (long) size) {
+      throw tooLarge();
+    }
+    checkOwner();
     if (count <= 0) {
       clear();
       return;
     }
     if (count == 1 || size == 0) {
       return;
-    }
-    if (count > MAX_ARRAY_SIZE / (long) size) {
-      throw tooLarge();
     }
     var originalSize = size;
     var newSize = (int) (originalSize * count);
@@ -170,6 +186,7 @@ public final class PyList<E> {
     for (var item : items) {
       Objects.requireNonNull(item);
     }
+    checkOwner();
     var newSize = (long) size - (to - from) + items.length;
     if (newSize > MAX_ARRAY_SIZE) {
       throw tooLarge();
@@ -187,6 +204,7 @@ public final class PyList<E> {
   // -- Java API
 
   public List<E> asJavaList() {
+    checkOwner();
     final class JavaList extends AbstractList<E> implements RandomAccess {
       @Override
       public int size() {
@@ -203,7 +221,13 @@ public final class PyList<E> {
   }
 
 
-  // --
+  // -- helpers
+
+  private void checkOwner() {
+    if (Thread.currentThread() != owner) {
+      throw new PyRuntimeError( "PyList is not owned by the current thread");
+    }
+  }
 
   private void ensureCapacity(int minimumCapacity) {
     if (minimumCapacity <= elements.length) {
