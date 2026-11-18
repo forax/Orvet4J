@@ -186,7 +186,7 @@ Python 3.14.8
                                        avgt    5  223.183 ± 0.711  us/op
 ```
 
-The whole benchmark is available [SumLoopBenchmark.java](src/main/java/com/github/forax/orvet/perf/SumLoopBenchmark.java)
+The JMH benchmark is [SumLoopBenchmark.java](src/main/java/com/github/forax/orvet/perf/SumLoopBenchmark.java)
 
 And you can run it with
 ```bash
