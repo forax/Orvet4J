@@ -408,34 +408,31 @@ final class Builtins {
   @SuppressWarnings("unused")
   public static Object _list_(Object... args) {
     requireCount("list", args.length, 0, 1);
-    var result = new PyList<>();
-    if (args.length == 1) {
-      var it = IteratorIntrinsics.$iterator$(args[0]);
-      Object item;
-      while ((item = IteratorIntrinsics.$next$(it)) != null) {
-        result.append(item);
-      }
+    if (args.length == 0) {
+      return new PyList<>();
     }
-    throw new UnimplementedFeatureError("???");  // FIXME
+    var result = new PyList<>();
+    var it = IteratorIntrinsics.$iterator$(args[0]);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(it)) != null) {
+      result.append(item);
+    }
+    return result;
   }
 
   @SuppressWarnings("unused")
   public static Object _tuple_(Object... args) {
     requireCount("tuple", args.length, 0, 1);
-    var length = args.length;
-    if (length == 0) {
+    if (args.length == 0) {
       return TupleIntrinsics.empty();
     }
-    if (args.length == 1) {
-      var arrayList = new ArrayList<>();
-      var it = IteratorIntrinsics.$iterator$(args[0]);
-      Object item;
-      while ((item = IteratorIntrinsics.$next$(it)) != null) {
-        arrayList.add(item);
-      }
-      return TupleIntrinsics.fromArray(arrayList.toArray());
+    var arrayList = new ArrayList<>();
+    var it = IteratorIntrinsics.$iterator$(args[0]);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(it)) != null) {
+      arrayList.add(item);
     }
-    throw new UnimplementedFeatureError("???");  //FIXME
+    return TupleIntrinsics.fromArray(arrayList.toArray());
   }
 
 
