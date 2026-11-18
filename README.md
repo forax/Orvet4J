@@ -1,6 +1,7 @@
 # Orvet4J
 
-Orvet is an experimental implementation of a subset of Python that runs on the Java Virtual Machine (JVM).
+Orvet4J (orvet for short) is an experimental implementation of a subset of Python that
+runs on the Java Virtual Machine (JVM).
 
 Unlike an implementation that embeds CPython, Orvet compiles Python source code into JVM bytecode.
 
@@ -69,7 +70,7 @@ Some implementation details are worth noting:
 - Lists and dictionaries are mutable; everything else is immutable.
 - String indexing, iteration and length operate on Unicode code points.
 - Closures are supported but captured local variables cannot be reassigned.
-- The runtime is designed for concurrency (no GIL); mutable objects are confined to their owning thread,
+- The runtime is designed for concurrency (no GIL); mutable objects are confined to their owner thread,
   and global bindings have volatile semantics.
 
 
