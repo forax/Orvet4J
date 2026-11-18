@@ -37,7 +37,7 @@ public final class ListIntrinsics {
   /// Returns Python None for use by the generic assignment intrinsic.
   @Intrinsic
   public static <E> Object $set$(PyList<E> list, long index, E value) {
-    list.set(checkedIndex(index, list.size()), value);
+    list.set(checkedAssignmentIndex(index, list.size()), value);
     return PyNone.INSTANCE;
   }
 
@@ -45,7 +45,7 @@ public final class ListIntrinsics {
   /// Returns Python None for use by the generic deletion intrinsic.
   @Intrinsic
   public static Object $delete$(PyList<?> list, long index) {
-    list.remove(checkedIndex(index, list.size()));
+    list.remove(checkedAssignmentIndex(index, list.size()));
     return PyNone.INSTANCE;
   }
 
@@ -195,6 +195,15 @@ public final class ListIntrinsics {
     var normalized = index < 0 ? index + size : index;
     if (normalized < 0 || normalized >= size) {
       throw new PyIndexError("list index out of range");
+    }
+    return (int) normalized;
+  }
+
+  private static int checkedAssignmentIndex(long index, int size) {
+    // Adding size to a negative long cannot overflow: size is non-negative and at most int-sized.
+    var normalized = index < 0 ? index + size : index;
+    if (normalized < 0 || normalized >= size) {
+      throw new PyIndexError("list assignment index out of range");
     }
     return (int) normalized;
   }

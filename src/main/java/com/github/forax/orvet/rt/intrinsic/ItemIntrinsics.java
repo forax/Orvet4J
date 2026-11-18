@@ -55,6 +55,7 @@ public final class ItemIntrinsics {
   @SuppressWarnings("unchecked")
   public static Object $setItem$(Object container, Object index, Object value) {
     switch (container) {
+      case Long _, BigInteger _ -> throw new PyTypeError("'int' object does not support item assignment");
       case PyList<?> list  -> {
         switch (index) {
           case PySlice slice -> { return ListIntrinsics.$setSlice$((PyList<Object>) list, slice, value); }
@@ -73,6 +74,7 @@ public final class ItemIntrinsics {
   @SuppressWarnings("unchecked")
   public static Object $deleteItem$(Object container, Object index) {
     switch (container) {
+      case Long _, BigInteger _ -> throw new PyTypeError("'int' object doesn't support item deletion");
       case PyList<?> list  -> {
         switch (index) {
           case PySlice slice -> { return ListIntrinsics.$deleteSlice$((PyList<Object>) list, slice); }
@@ -80,9 +82,9 @@ public final class ItemIntrinsics {
         }
       }
       case PyDict<?,?> dict -> { return DictIntrinsics.$delete$((PyDict<Object, ?>) dict, index); }
-      case PyTuple _ -> throw new PyTypeError("'tuple' doesn't support item deletion");
-      case PyRange _ -> throw new PyTypeError("'range' object does not support item deletion");
-      case String _ -> throw new PyTypeError("'str' doesn't support item deletion");
+      case PyTuple _ -> throw new PyTypeError("'tuple' object doesn't support item deletion");
+      case PyRange _ -> throw new PyTypeError("'range' object doesn't support item deletion");
+      case String _ -> throw new PyTypeError("'str' object doesn't support item deletion");
       default -> throw new PyTypeError("'" + typeName(container) + "' object is not subscriptable");
     }
   }
@@ -96,10 +98,9 @@ public final class ItemIntrinsics {
       case Long l -> l;
       case Boolean b -> b ? 1L : 0L;
       case BigInteger _ -> throw new PyIndexError("cannot fit 'int' into an index-sized integer");
-      default -> throw new PyTypeError(name.equals("string")
-          ? "string indices must be integers, not '" + typeName(index) + "'"
-          : name + " indices must be integers or slices, not " + typeName(index));
+      default -> throw new PyTypeError(name + " indices must be integers or slices, not " + typeName(index));
     };
+
   }
 
 

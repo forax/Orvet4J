@@ -12,9 +12,6 @@ import com.github.forax.orvet.rt.error.PyIndexError;
 import java.util.Arrays;
 
 /// Python tuple operations for every tuple shape.
-///
-/// The `switch` selectors are cast to `Object`: javac puts the static type of the selector in the
-/// `typeSwitch` descriptor, and the Specializer only rewrites the `(Object, int) -> int` form.
 public final class TupleIntrinsics {
   private TupleIntrinsics() {
     throw new AssertionError();
