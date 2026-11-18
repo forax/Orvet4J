@@ -8,14 +8,12 @@ import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyType;
-import com.github.forax.orvet.rt.RT;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.HashMap;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.typeName;
 
