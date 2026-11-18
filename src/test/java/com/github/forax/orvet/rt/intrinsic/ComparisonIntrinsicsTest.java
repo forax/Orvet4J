@@ -610,14 +610,14 @@ public final class ComparisonIntrinsicsTest {
 
     @Test
     public void tupleWithDistinctNaNObjects() {
-      Assumptions.assumeFalse(Runtime.version().feature() >= 28);
-
       // Two freshly-boxed NaN objects are not the same reference; NaN != NaN,
       // so the tuples are not equal.
+      var nan1 = (Double) TypeIntrinsics.$float$("nan");
+      var nan2 = (Double) TypeIntrinsics.$float$("nan");
       assertFalse(ComparisonIntrinsics.$eq$(
-          pyTuple(Double.NaN), pyTuple(Double.NaN)));
+          pyTuple(nan1), pyTuple(nan2)));
       assertFalse(ComparisonIntrinsics.$eq$(
-          pyTuple(Double.NaN, 1L), pyTuple(Double.NaN, 1L)));
+          pyTuple(nan1, 1L), pyTuple(nan2, 1L)));
     }
 
     @Test
@@ -652,43 +652,47 @@ public final class ComparisonIntrinsicsTest {
 
     @Test
     public void tuplesCompareAcrossShapesAndRecursively() {
-      Object a2 = new PyTuple2(1L, "a");
-      Object b2 = new PyTuple.PyTupleN(new Object[]{1.0d, "a"});
+      var a2 = new PyTuple2(1L, "a");
+      var b2 = new PyTuple.PyTupleN(new Object[]{1.0d, "a"});
       assertTrue(ComparisonIntrinsics.$eq$(a2, b2), a2 + " == " + b2);
       assertTrue(ComparisonIntrinsics.$eq$(b2, a2), b2 + " == " + a2);
-      Object a1 = new PyTuple1(new PyTuple1(true));
-      Object b1 = new PyTuple1(new PyTuple.PyTupleN(new Object[]{1L}));
+
+      var a1 = new PyTuple1(new PyTuple1(true));
+      var b1 = new PyTuple1(new PyTuple.PyTupleN(new Object[]{1L}));
       assertTrue(ComparisonIntrinsics.$eq$(a1, b1), a1 + " == " + b1);
       assertTrue(ComparisonIntrinsics.$eq$(b1, a1), b1 + " == " + a1);
-      Object a5 = new PyTuple2(1L, "a");
-      Object b4 = new PyTuple2(1L, "b");
+
+      var a5 = new PyTuple2(1L, "a");
+      var b4 = new PyTuple2(1L, "b");
       assertFalse(ComparisonIntrinsics.$eq$(a5, b4), a5 + " == " + b4);
       assertFalse(ComparisonIntrinsics.$eq$(b4, a5), b4 + " == " + a5);
-      Object a4 = new PyTuple1(1L);
-      Object b3 = new PyTuple2(1L, 1L);
+
+      var a4 = new PyTuple1(1L);
+      var b3 = new PyTuple2(1L, 1L);
       assertFalse(ComparisonIntrinsics.$eq$(a4, b3), a4 + " == " + b3);
       assertFalse(ComparisonIntrinsics.$eq$(b3, a4), b3 + " == " + a4);
-      Object a3 = new PyTuple1(1L);
+
+      var a3 = new PyTuple1(1L);
       assertFalse(ComparisonIntrinsics.$eq$(a3, 1L), a3 + " == " + 1L);
       assertFalse(ComparisonIntrinsics.$eq$(1L, a3), 1L + " == " + a3);
-      Object a = new PyTuple.PyTupleN(new Object[0]);
-      Object b = new PyTuple.PyTupleN(new Object[0]);
+
+      var a = new PyTuple.PyTupleN(new Object[0]);
+      var b = new PyTuple.PyTupleN(new Object[0]);
       assertTrue(ComparisonIntrinsics.$eq$(a, b), a + " == " + b);
       assertTrue(ComparisonIntrinsics.$eq$(b, a), b + " == " + a);
     }
 
     @Test
     public void containerElementsUseTheIdentityShortcut() {
-      Assumptions.assumeFalse(Runtime.version().feature() >= 28);
-
       // CPython: x = float('nan'); (x,) == (x,) is True, (float('nan'),) == (float('nan'),) is False
-      Object x = Double.valueOf(Double.NaN);
-      Object a = new PyTuple1(x);
-      Object b = new PyTuple1(x);
+      var x = TypeIntrinsics.$float$("nan");
+      var a = new PyTuple1(x);
+      var b = new PyTuple1(x);
       assertTrue(ComparisonIntrinsics.$eq$(a, b), a + " == " + b);
       assertTrue(ComparisonIntrinsics.$eq$(b, a), b + " == " + a);
-      Object a1 = new PyTuple1(Double.valueOf(Double.NaN));
-      Object b1 = new PyTuple1(Double.valueOf(Double.NaN));
+
+      var a1 = new PyTuple1(TypeIntrinsics.$float$("nan"));
+      var b1 = new PyTuple1(TypeIntrinsics.$float$("nan"));
       assertFalse(ComparisonIntrinsics.$eq$(a1, b1), a1 + " == " + b1);
       assertFalse(ComparisonIntrinsics.$eq$(b1, a1), b1 + " == " + a1);
     }
@@ -801,13 +805,13 @@ public final class ComparisonIntrinsicsTest {
 
     @Test
     public void listEqualityUsesIdentityShortcutBeforeEq() {
-      Assumptions.assumeFalse(Runtime.version().feature() >= 28);
-
-      Double nan = Double.NaN;
+      var nan = (Double) Double.NaN;
       assertFalse(ComparisonIntrinsics.$eq$(nan, nan));
       assertTrue(ComparisonIntrinsics.$eq$(pyList(nan), pyList(nan)));
+
+      var otherNaN = TypeIntrinsics.$float$("nan");
       assertFalse(ComparisonIntrinsics.$eq$(
-          pyList(Double.NaN), pyList(Double.NaN)));
+          pyList(nan), pyList(otherNaN)));
     }
 
     @Test

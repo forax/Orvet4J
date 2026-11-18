@@ -12,8 +12,11 @@ import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.NoSuchElementException;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.typeName;
 
@@ -230,7 +233,8 @@ public final class TypeIntrinsics {
       return negative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
     }
     if (matchesIgnoreCase(text, index, "nan")) {
-      return negative ? -Double.NaN : Double.NaN;
+      var nan = NaNGenerator.nextNaN();
+      return negative ? -nan : nan;
     }
     if (!isValidFloatLiteral(text)) {
       throw invalidFloat(original);
@@ -239,6 +243,38 @@ public final class TypeIntrinsics {
       return Double.parseDouble(text);
     } catch (NumberFormatException e) {
       throw invalidFloat(original);
+    }
+  }
+
+  /// generate a bit pattern different for each NaN, so even with
+  /// Valhalla enable each NaN is different like in Python
+  static final class NaNGenerator {
+    private static final long NAN_BASE = 0x7ff8_0000_0000_0000L;
+    private static final long TOTAL_NANS = 1L << 51;
+
+    // lock free static counter
+    private static final VarHandle COUNTER;
+    static {
+      var lookup = MethodHandles.lookup();
+      try {
+        COUNTER = lookup.findStaticVarHandle(NaNGenerator.class, "counter", long.class);
+      } catch (NoSuchFieldException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private static volatile long counter = 1L;
+
+    static double nextNaN() {
+      for(;;) {
+        var counter = NaNGenerator.counter;   // volatile read
+        if (counter == TOTAL_NANS) {
+          throw new PyOverflowError("NaN pool exhausted");
+        }
+        if (COUNTER.compareAndSet(counter, counter + 1L)) {  // volatile write
+          return Double.longBitsToDouble(NAN_BASE | counter);
+        }
+      }
     }
   }
 

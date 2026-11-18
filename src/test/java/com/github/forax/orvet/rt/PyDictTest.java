@@ -2,6 +2,7 @@ package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
+import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -128,12 +129,10 @@ public final class PyDictTest {
 
   @Test
   public void distinctNanObjectsCanBeUsedAsDifferentKeys() {
-    Assumptions.assumeFalse(Runtime.version().feature() >= 28);
+    var dict = new PyDict<>();
 
-    var dict = new PyDict<Object, Object>();
-
-    var nan1 = Double.valueOf(Double.NaN);
-    var nan2 = Double.valueOf(Double.NaN);
+    var nan1 = TypeIntrinsics.$float$("nan");
+    var nan2 = TypeIntrinsics.$float$("nan");
 
     assertNotSame(nan1, nan2);
 

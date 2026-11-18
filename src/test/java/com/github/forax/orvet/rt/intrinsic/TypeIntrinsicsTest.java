@@ -22,7 +22,6 @@ import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$bool$;
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$float$;
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$int$;
 import static com.github.forax.orvet.rt.intrinsic.TypeIntrinsics.$type$;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -38,6 +37,7 @@ public final class TypeIntrinsicsTest {
     public void typeRecognizesTheCurrentlySupportedRuntimeTypes() {
       assertSame(PyType.INT, $type$(42L));
       assertSame(PyType.INT, $type$(BigInteger.ONE.shiftLeft(100)));
+      assertSame(PyType.FLOAT, $type$(2.5d));
       assertSame(PyType.BOOL, $type$(true));
       assertSame(PyType.STR, $type$("hello"));
       assertSame(PyType.NONE_TYPE, $type$(PyNone.INSTANCE));
@@ -51,14 +51,6 @@ public final class TypeIntrinsicsTest {
       Engine.run(context, "def f(): pass");
       var function = context.getGlobal("f");
       assertSame(PyType.FUNCTION, $type$(function));
-    }
-
-    @Test
-    @Disabled
-    public void typeRecognizesOtherCanonicalRuntimeRepresentations() {
-      // These are canonical runtime values too (IntrinsicSupport.isCanonical),
-      // although TypeIntrinsics currently has no cases for them.
-      assertDoesNotThrow(() -> $type$(2.5d));
     }
 
     @Test
@@ -400,6 +392,50 @@ public final class TypeIntrinsicsTest {
       assertThrows(PyTypeError.class, () -> $float$(PyNone.INSTANCE));
       var error = assertThrows(PyTypeError.class, () -> $float$(1L, 2L));
       assertEquals("float expected at most 1 argument, got 2", error.getMessage());
+    }
+  }
+
+  @Nested
+  public final class NaNGenerator  {
+    @Test
+    public void oneNaNIsEquals() {
+      var nan = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
+
+      assertTrue(Double.isNaN(nan));
+      assertFalse(ComparisonIntrinsics.$eq$(nan, nan));
+    }
+
+    @Test
+    public void twoNaNAreDifferent() {
+      var nan1 = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
+      var nan2 = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
+
+      assertTrue(Double.isNaN((Double) nan1));
+      assertTrue(Double.isNaN((Double) nan2));
+      assertFalse(ComparisonIntrinsics.$eq$(nan1, nan2));
+    }
+
+    @Test
+    public void oneNaNInListAreEquals() {
+      var nan = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
+      var list1 = new PyList<>(nan);
+      var list2 = new PyList<>(nan);
+      assertTrue(ComparisonIntrinsics.$eq$(list1, list2));
+    }
+
+    @Test
+    public void defaultNaNInListAreEquals() {
+      var nan = (Double) Double.NaN;
+      var list1 = new PyList<>(nan);
+      var list2 = new PyList<>(nan);
+      assertTrue(ComparisonIntrinsics.$eq$(list1, list2));
+    }
+
+    @Test
+    public void twoInListAreDifferent() {
+      var list1 = new PyList<>(TypeIntrinsics.NaNGenerator.nextNaN());
+      var list2 = new PyList<>(TypeIntrinsics.NaNGenerator.nextNaN());
+      assertFalse(ComparisonIntrinsics.$eq$(list1, list2));
     }
   }
 }
