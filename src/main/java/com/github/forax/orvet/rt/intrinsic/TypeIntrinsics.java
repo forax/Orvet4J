@@ -67,9 +67,10 @@ public final class TypeIntrinsics {
       case BigInteger b -> { return normalizeInt(b); }
       case Double d -> {
         if (!Double.isFinite(d)) {
-          throw new PyOverflowError(Double.isNaN(d)
-              ? "cannot convert float NaN to integer"
-              : "cannot convert float infinity to integer");
+          if (Double.isNaN(d)) {
+            throw new PyValueError("cannot convert float NaN to integer");
+          }
+          throw new PyOverflowError("cannot convert float infinity to integer");
         }
         return normalizeInt(new BigDecimal(d).toBigInteger());
       }
