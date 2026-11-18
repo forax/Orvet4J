@@ -69,6 +69,7 @@ Some implementation details are worth noting:
 - Lists and dictionaries are mutable; everything else is immutable.
 - String indexing, iteration and length operate on Unicode code points.
 - Closures are supported but captured local variables cannot be reassigned.
+- Everything is thread-safe but there is no Gil
 
 
 ### Implemented builtins
@@ -126,7 +127,7 @@ public class Example {
         result = sum_to(10000)
         """);
 
-    System.out.println(context.getGlobal("result"));
+    IO.println(context.getGlobal("result"));
   }
 }
 ```
@@ -164,7 +165,7 @@ The expected result is `49_995_000`.
 The following results are recorded in `SumLoopBenchmark.java` for Java 28 preview.
 
 Java 28 preview
-```
+```text
 Benchmark                              Mode  Cnt   Score   Error  Units
 SumLoopBenchmark.java_boxed_Long       avgt    5   6.516 ± 0.272  us/op
 SumLoopBenchmark.java_primitive_long   avgt    5   3.041 ± 0.007  us/op
@@ -172,7 +173,7 @@ SumLoopBenchmark.python_int            avgt    5   6.494 ± 0.095  us/op
 ```
 
 Java 27
-````
+```text
 Benchmark                              Mode  Cnt    Score   Error  Units
 SumLoopBenchmark.java_boxed_Long       avgt    5   20.646 ± 0.226  us/op
 SumLoopBenchmark.java_primitive_long   avgt    5    3.039 ± 0.004  us/op
@@ -180,7 +181,7 @@ SumLoopBenchmark.python_int            avgt    5   22,833 ± 0.079  us/op
 ```
 
 Python 3.14.8
-```
+```text
                                        avgt    5  223.183 ± 0.711  us/op
 ```
 
