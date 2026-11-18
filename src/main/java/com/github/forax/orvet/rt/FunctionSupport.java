@@ -597,6 +597,10 @@ final class FunctionSupport {
       return switch (receiver) {
         case PyList<?> _ -> ListIntrinsics.class;
         case PyDict<?, ?> _ -> DictIntrinsics.class;
+        case PyType type -> switch (type) {
+          case PyType.DICT -> DictIntrinsics.class;
+          default -> throw new PyAttributeError("'" + type.function().name() + "' has no attribute '" + name + "'");
+        };
         default -> throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) + "' object has no attribute '" + name + "'");
       };
     }

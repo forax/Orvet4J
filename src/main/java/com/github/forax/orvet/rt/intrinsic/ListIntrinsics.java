@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /// Python-list operations.
@@ -181,15 +182,154 @@ public final class ListIntrinsics {
 
   // -- method table
 
-  @SuppressWarnings("unchecked")
   public static <E> Object _append_(PyList<E> list, E item) {
     Objects.requireNonNull(item);
     list.append(item);
     return PyNone.INSTANCE;
   }
 
+  public static Object _clear_(PyList<?> list) {
+    Objects.requireNonNull(list);
+    list.clear();
+    return PyNone.INSTANCE;
+  }
+
+  public static Object _copy_(PyList<?> list) {
+    Objects.requireNonNull(list);
+    var newList = new PyList<>();
+    newList.appendAll(list);
+    return newList;
+  }
+
+  public static Object _count_(PyList<?> list, Object value) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(value);
+    var count = 0L;
+    for (var i = 0; i < list.size(); i++) {
+      if (ComparisonIntrinsics.$sameOrEq$(list.get(i), value)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  public static Object _extend_(PyList<Object> list, Object iterable) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(iterable);
+    $iadd$(list, iterable);
+    return PyNone.INSTANCE;
+  }
+
+  public static Object _index_(PyList<?> list, Object value) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(value);
+    return index(list, value, 0L, list.size());
+  }
+  public static Object _index_(PyList<?> list, Object value, Object start) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(value);
+    Objects.requireNonNull(start);
+    return index(list, value,
+        ItemIntrinsics.$toIndex$(start, "list"),
+        list.size());
+  }
+  public static Object _index_(PyList<?> list, Object value, Object start, Object stop) {
+    return index(list, value,
+        ItemIntrinsics.$toIndex$(start, "list"),
+        ItemIntrinsics.$toIndex$(stop, "list"));
+  }
+
+  public static <E> Object _insert_(PyList<? super E> list, Object indexObject, E value) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(indexObject);
+    Objects.requireNonNull(value);
+    var index = ItemIntrinsics.$toIndex$(indexObject, "list");
+    var size = list.size();
+    var position = index < 0
+        ? Math.max(0L, index + size)
+        : Math.min(index, size);
+    list.insert((int) position, value);
+    return PyNone.INSTANCE;
+  }
+
+  public static Object _pop_(PyList<?> list) {
+    Objects.requireNonNull(list);
+    return pop(list, -1L);
+  }
+  public static Object _pop_(PyList<?> list, Object indexObject) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(indexObject);
+    return pop(list, ItemIntrinsics.$toIndex$(indexObject, "list"));
+  }
+
+  public static Object _remove_(PyList<?> list, Object value) {
+    Objects.requireNonNull(list);
+    Objects.requireNonNull(value);
+    for (var i = 0; i < list.size(); i++) {
+      if (ComparisonIntrinsics.$sameOrEq$(list.get(i), value)) {
+        list.remove(i);
+        return PyNone.INSTANCE;
+      }
+    }
+    throw new PyValueError("list.remove(x): " + StringIntrinsics.$repr$(value) + " not in list");
+  }
+
+  public static <E> Object _reverse_(PyList<E> list) {
+    Objects.requireNonNull(list);
+    for (int left = 0, right = list.size() - 1; left < right; left++, right--) {
+      var a = list.get(left);
+      var b = list.get(right);
+      list.set(left, b);
+      list.set(right, a);
+    }
+    return PyNone.INSTANCE;
+  }
+
+  public static Object _sort_(PyList<?> list) {
+    Objects.requireNonNull(list);
+    list.sort((left, right) -> {
+      if (ComparisonIntrinsics.$lt$(left, right)) {
+        return -1;
+      }
+      if (ComparisonIntrinsics.$lt$(right, left)) {
+        return 1;
+      }
+      return 0;
+    });
+    return PyNone.INSTANCE;
+  }
+
 
   // -- helpers
+
+  private static Object pop(PyList<?> list, long index) {
+    var size = list.size();
+    if (size == 0) {
+      throw new PyIndexError("pop from empty list");
+    }
+    var normalized = index < 0 ? index + size : index;
+    if (normalized < 0 || normalized >= size) {
+      throw new PyIndexError("pop index out of range");
+    }
+    return list.remove((int) normalized);
+  }
+
+  private static Object index(PyList<?> list, Object value, long start, long stop) {
+    var size = list.size();
+    var from = normalizeBound(start, size);
+    var to = normalizeBound(stop, size);
+    for (var i = from; i < to; i++) {
+      if (ComparisonIntrinsics.$sameOrEq$(list.get(i), value)) {
+        return (long) i;
+      }
+    }
+    throw new PyValueError(StringIntrinsics.$repr$(value) + " is not in list");
+  }
+
+  private static int normalizeBound(long index, int size) {
+    var normalized = index < 0 ? index + size : index;
+    return (int) Math.max(0L, Math.min((long) size, normalized));
+  }
 
   private static Object[] toItems(Object iterable) {
     if (iterable instanceof PyList<?> l) {

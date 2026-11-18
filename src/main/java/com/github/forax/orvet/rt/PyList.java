@@ -5,6 +5,7 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.util.AbstractList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.RandomAccess;
@@ -103,6 +104,7 @@ public final class PyList<E> {
   public void appendAll(PyList<? extends E> other) {
     Objects.requireNonNull(other);
     checkOwner();
+    checkOwner(other);
     var count = other.size;
     if (count == 0) {
       return;
@@ -150,6 +152,12 @@ public final class PyList<E> {
     checkOwner();
     elements = (E[]) EMPTY_ARRAY;
     size = 0;
+  }
+
+  public void sort(Comparator<Object> comparator) {
+    Objects.requireNonNull(comparator);
+    checkOwner();
+    Arrays.sort(elements, 0, size, comparator);
   }
 
   /// Returns a defensive copy of the live elements.
@@ -254,6 +262,12 @@ public final class PyList<E> {
   private void checkOwner() {
     if (Thread.currentThread() != owner) {
       throw new PyRuntimeError( "PyList is not owned by the current thread");
+    }
+  }
+
+  private void checkOwner(PyList<?> list) {
+    if (Thread.currentThread() != list.owner) {
+      throw new PyRuntimeError( "PyList parameter not owned by the current thread");
     }
   }
 
