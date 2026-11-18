@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 //SumLoopBenchmark.java_boxed_hand_made  avgt    5   20,839 ± 0.714  us/op
 //SumLoopBenchmark.java_primitive_long   avgt    5    3.039 ± 0.004  us/op
 //SumLoopBenchmark.python_generic_int    avgt    5   21.669 ± 0.539  us/op
-//SumLoopBenchmark.python_int            avgt    5   22,833 ± 0.079  us/op
+//SumLoopBenchmark.python_int            avgt    5   22.833 ± 0.079  us/op
 
 // Python 3.14.8
 //                                       avgt    5  223.183 ± 0.711  us/op

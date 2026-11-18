@@ -177,7 +177,7 @@ Java 27
 Benchmark                              Mode  Cnt    Score   Error  Units
 SumLoopBenchmark.java_boxed_Long       avgt    5   20.646 ± 0.226  us/op
 SumLoopBenchmark.java_primitive_long   avgt    5    3.039 ± 0.004  us/op
-SumLoopBenchmark.python_int            avgt    5   22,833 ± 0.079  us/op
+SumLoopBenchmark.python_int            avgt    5   22.833 ± 0.079  us/op
 ```
 
 Python 3.14.8
