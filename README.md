@@ -69,7 +69,8 @@ Some implementation details are worth noting:
 - Lists and dictionaries are mutable; everything else is immutable.
 - String indexing, iteration and length operate on Unicode code points.
 - Closures are supported but captured local variables cannot be reassigned.
-- Everything is thread-safe but there is no Gil
+- The runtime is designed for concurrency (no GIL); mutable objects are confined to their owning thread,
+  and global bindings have volatile semantics..
 
 
 ### Implemented builtins
@@ -185,7 +186,7 @@ Python 3.14.8
                                        avgt    5  223.183 ± 0.711  us/op
 ```
 
-The whole benchmark is available [SumLoopBenchmark.java](src/main/java/com.github/forax/orvet/perf/SumLoopBenchmark.java)
+The whole benchmark is available [SumLoopBenchmark.java](src/main/java/com/github/forax/orvet/perf/SumLoopBenchmark.java)
 
 And you can run it with
 ```bash
