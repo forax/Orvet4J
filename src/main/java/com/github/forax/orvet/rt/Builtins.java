@@ -7,11 +7,13 @@ import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.PyZeroDivisionError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.ComparisonIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.RangeIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.TruthinessIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
@@ -48,7 +50,7 @@ final class Builtins {
           specializedVariadic("bool", TypeIntrinsics.class),
           specializedVariadic("int", TypeIntrinsics.class),
           specializedVariadic("float", TypeIntrinsics.class),
-          specialized("str", StringIntrinsics.class, "obj"),
+          specialized("str", StringIntrinsics.class, "object"),
           variadic("tuple"),
           variadic("list"),
           variadic("dict"),
@@ -65,19 +67,81 @@ final class Builtins {
 
       BUILTINS_CODES = new Code[]{
           fixed("abs", "x"),
+          fixed("all", "iterable"),
+          fixed("any", "iterable"),
+          fixed("ascii", "object"),
           variadic("bytearray"),
           fixed("bin", "x"),
+          fixed("callable", "object"),
+          fixed("chr", "i"),
           fixed("divmod", "a", "b"),
+          fixed("hash", "object"),
           fixed("hex", "x"),
-          specialized("len", ItemIntrinsics.class, "obj"),
+          fixed("isinstance", "obj", "classinfo"),
+          fixed("issubclass", "cls", "classinfo"),
+          specialized("len", ItemIntrinsics.class, "object"),
+          variadic("max"),
+          variadic("min"),
           fixed("oct", "x"),
           fixed("ord", "c"),
           variadic("pow"),
           variadic("print"),
-          specialized("repr", StringIntrinsics.class, "obj"),
+          specialized("repr", StringIntrinsics.class, "object"),
           variadic("range"),
           variadic("round"),
-          specialized("type", TypeIntrinsics.class, "obj")
+          variadic("sum"),
+          specialized("type", TypeIntrinsics.class, "object"),
+
+          // -- Not yet implemented --
+
+          // Asynchronous and iterator-related
+          variadic("aiter"),
+          variadic("anext"),
+          variadic("enumerate"),
+          variadic("filter"),
+          variadic("iter"),
+          variadic("map"),
+          variadic("next"),
+          variadic("reversed"),
+          variadic("zip"),
+
+          // Types
+          variadic("bytes"),
+          variadic("complex"),
+          variadic("frozenset"),
+          variadic("frozendict"),
+          variadic("memoryview"),
+          variadic("object"),
+          variadic("set"),
+
+          // Class and descriptor mechanisms
+          variadic("classmethod"),
+          variadic("property"),
+          variadic("staticmethod"),
+          variadic("super"),
+
+          // Attribute and introspection
+          variadic("delattr"),
+          variadic("dir"),
+          variadic("getattr"),
+          variadic("globals"),
+          variadic("hasattr"),
+          variadic("locals"),
+          variadic("setattr"),
+          variadic("vars"),
+
+          // Execution, I/O and other
+          variadic("breakpoint"),
+          variadic("compile"),
+          variadic("eval"),
+          variadic("exec"),
+          variadic("format"),
+          variadic("help"),
+          variadic("id"),
+          variadic("input"),
+          variadic("open"),
+          variadic("__import__"),
+          variadic("sentinel")
       };
     }
 
@@ -128,7 +192,9 @@ final class Builtins {
       case null -> {
         try {
           yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", builtinMethodType(code)).asFixedArity();
-        } catch (NoSuchMethodException | IllegalAccessException e) {
+        } catch (NoSuchMethodException e) {
+          throw new UnimplementedFeatureError("builtin '" + name + "' not yet implemented", e);
+        } catch (IllegalAccessException e) {
           throw new AssertionError(e);
         }
       }
@@ -435,6 +501,150 @@ final class Builtins {
     return TupleIntrinsics.fromArray(arrayList.toArray());
   }
 
+  @SuppressWarnings("unused")
+  public static Object _all_(Object iterable) {
+    var iterator = IteratorIntrinsics.$iterator$(iterable);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+      if (!TruthinessIntrinsics.$truthy$(item)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _any_(Object iterable) {
+    var iterator = IteratorIntrinsics.$iterator$(iterable);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+      if (TruthinessIntrinsics.$truthy$(item)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _ascii_(Object value) {
+    var repr = (String) StringIntrinsics.$repr$(value);
+    var builder = new StringBuilder(repr.length());
+    for (var offset = 0; offset < repr.length();) {
+      var cp = repr.codePointAt(offset);
+      if (cp < 128) {
+        builder.appendCodePoint(cp);
+      } else {
+        var width = cp <= 0xFF ? 2 : cp <= 0xFFFF ? 4 : 8;
+        var prefix = cp <= 0xFF ? "\\x"
+            : cp <= 0xFFFF ? "\\u" : "\\U";
+        var hex = Integer.toHexString(cp);
+        builder.append(prefix)
+            .repeat("0", width - hex.length())
+            .append(hex);
+      }
+      offset += Character.charCount(cp);
+    }
+    return builder.toString();
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _callable_(Object value) {
+    return value instanceof PyFunction || value instanceof PyType;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _chr_(Object value) {
+    var codePoint = asIndex(value);
+
+    if (codePoint.signum() < 0 ||
+        codePoint.compareTo(BigInteger.valueOf(Character.MAX_CODE_POINT)) > 0) {
+      throw new PyValueError("chr() arg not in range(0x110000)");
+    }
+
+    return new String(Character.toChars(codePoint.intValue()));
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _min_(Object... args) {
+    if (args.length == 0) {
+      throw new PyTypeError("min expected at least 1 argument, got 0");
+    }
+    Object best;
+    if (args.length == 1) {
+      var iterator = IteratorIntrinsics.$iterator$(args[0]);
+      best = IteratorIntrinsics.$next$(iterator);
+      if (best == null) {
+        throw new PyValueError("min() arg is an empty sequence");
+      }
+      Object item;
+      while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+        if (ComparisonIntrinsics.$lt$(item, best)) {
+          best = item;
+        }
+      }
+      return best;
+    }
+    best = args[0];
+    for (var i = 1; i < args.length; i++) {
+      var item = args[i];
+      if (ComparisonIntrinsics.$lt$(item, best)) {
+        best = item;
+      }
+    }
+    return best;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _max_(Object... args) {
+    if (args.length == 0) {
+      throw new PyTypeError("max expected at least 1 argument, got 0");
+    }
+    Object best;
+    if (args.length == 1) {
+      var iterator = IteratorIntrinsics.$iterator$(args[0]);
+      best = IteratorIntrinsics.$next$(iterator);
+      if (best == null) {
+        throw new PyValueError("max() arg is an empty sequence");
+      }
+      Object item;
+      while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+        if (ComparisonIntrinsics.$lt$(best, item)) {
+          best = item;
+        }
+      }
+      return best;
+    }
+    best = args[0];
+    for (var i = 1; i < args.length; i++) {
+      var item = args[i];
+      if (ComparisonIntrinsics.$lt$(best, item)) {
+        best = item;
+      }
+    }
+    return best;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _sum_(Object... args) {
+    requireCount("sum", args.length, 1, 2);
+    var total = args.length == 2 ? args[1] : 0L;
+    if (!isNumeric(total)) {
+      throw new PyTypeError(
+          "sum() can't sum " + typeName(total) + " values");
+    }
+    var iterator = IteratorIntrinsics.$iterator$(args[0]);
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+      if (!isNumeric(item)) {
+        throw new PyTypeError(
+            "unsupported operand type(s) for +: '"
+                + typeName(total) + "' and '" + typeName(item) + "'");
+      }
+      total = ArithmeticIntrinsics.$add$(total, item);
+    }
+
+    return total;
+  }
 
   // -- Helpers
 
