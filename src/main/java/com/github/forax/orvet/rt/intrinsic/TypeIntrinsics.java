@@ -181,7 +181,12 @@ public final class TypeIntrinsics {
   }
 
   private static boolean isNotPythonWhitespace(int cp) {
-    return !Character.isWhitespace(cp) && !Character.isSpaceChar(cp);
+    var type = Character.getType(cp);
+    var directionality = Character.getDirectionality(cp);
+    return type != Character.SPACE_SEPARATOR
+        && directionality != Character.DIRECTIONALITY_WHITESPACE
+        && directionality != Character.DIRECTIONALITY_PARAGRAPH_SEPARATOR
+        && directionality != Character.DIRECTIONALITY_SEGMENT_SEPARATOR;
   }
 
   /// Rewrites the candidate starting at the first character that cannot
