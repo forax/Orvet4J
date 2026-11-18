@@ -396,23 +396,29 @@ public final class TypeIntrinsics {
     return builder;
   }
 
+
   private static Object parseIntegerSlow(String original, int requestedBase, StringBuilder candidate) {
-    var text = candidate == null ? original : candidate.toString();
-    if (text.isEmpty()) {
+    // Reuse the candidate when available. Otherwise, copy the original
+    // string once into our working buffer.
+    var text = candidate == null ? new StringBuilder(original) : candidate;
+    var length = text.length();
+    if (length == 0) {
       throw invalidInteger(original, requestedBase);
     }
-    var sign = "";
-    if (text.charAt(0) == '+' || text.charAt(0) == '-') {
-      sign = text.substring(0, 1);
-      text = text.substring(1);
+    var index = 0;
+    // Preserve the optional sign at the beginning of the buffer.
+    if (text.charAt(index) == '+' || text.charAt(index) == '-') {
+      index++;
     }
-    if (text.isEmpty()) {
+    var signEnd = index;
+    if (index == length) {
       throw invalidInteger(original, requestedBase);
     }
     var base = requestedBase;
     var strippedPrefix = false;
-    if (text.length() >= 2 && text.charAt(0) == '0') {
-      var prefixBase = switch (text.charAt(1)) {
+    // Detect radix prefixes.
+    if (length - index >= 2 && text.charAt(index) == '0') {
+      var prefixBase = switch (text.charAt(index + 1)) {
         case 'b', 'B' -> 2;
         case 'o', 'O' -> 8;
         case 'x', 'X' -> 16;
@@ -420,7 +426,7 @@ public final class TypeIntrinsics {
       };
       if (prefixBase != 0 && (base == 0 || base == prefixBase)) {
         base = prefixBase;
-        text = text.substring(2);
+        index += 2;
         strippedPrefix = true;
       }
     }
@@ -428,20 +434,22 @@ public final class TypeIntrinsics {
       base = 10;
     }
     // One underscore immediately after a radix prefix is permitted.
-    if (strippedPrefix && text.startsWith("_")) {
-      text = text.substring(1);
+    if (strippedPrefix && index < length && text.charAt(index) == '_') {
+      index++;
     }
-    if (text.isEmpty()) {
+    if (index == length) {
       throw invalidInteger(original, requestedBase);
     }
-    var digits = new StringBuilder(text.length());
+    // Compact the validated digits in place, removing underscores.
+    // The optional sign is preserved at the beginning.
+    var write = signEnd;
     var previousWasDigit = false;
-    for (var i = 0; i < text.length();) {
-      var cp = text.codePointAt(i);
-      i += Character.charCount(cp);
+    for (; index < length;) {
+      var cp = text.codePointAt(index);
+      index += Character.charCount(cp);
       if (cp == '_') {
-        if (!previousWasDigit || i == text.length()
-            || digit(text.codePointAt(i), base) < 0) {
+        if (!previousWasDigit || index == length
+            || digit(text.codePointAt(index), base) < 0) {
           throw invalidInteger(original, requestedBase);
         }
         previousWasDigit = false;
@@ -451,29 +459,30 @@ public final class TypeIntrinsics {
       if (value < 0) {
         throw invalidInteger(original, requestedBase);
       }
-      digits.append(Character.forDigit(value, base));
+      text.setCharAt(write++, Character.forDigit(value, base));
       previousWasDigit = true;
     }
-    if (digits.isEmpty() || !previousWasDigit) {
+    if (write == signEnd || !previousWasDigit) {
       throw invalidInteger(original, requestedBase);
     }
     // Base zero rejects leading zeros unless all digits are zero.
     if (requestedBase == 0 && base == 10 &&
-        digits.length() > 1 && digits.charAt(0) == '0' &&
-        !allZeros(digits)) {
+        write - signEnd > 1 && text.charAt(signEnd) == '0' &&
+        !allZeros(text, signEnd, write)) {
       throw invalidInteger(original, requestedBase);
     }
-    var literal = sign + digits;
+    // Discard the unused tail of the buffer.
+    text.setLength(write);
     try {
-      return normalizeInt(new BigInteger(literal, base));
+      return normalizeInt(new BigInteger(text.toString(), base));
     } catch (NumberFormatException e) {
       throw invalidInteger(original, requestedBase);
     }
   }
 
-  private static boolean allZeros(StringBuilder digits) {
-    for (var i = 0; i < digits.length(); i++) {
-      if (digits.charAt(i) != '0') {
+  private static boolean allZeros(StringBuilder text, int start, int end) {
+    for (var i = start; i < end; i++) {
+      if (text.charAt(i) != '0') {
         return false;
       }
     }
