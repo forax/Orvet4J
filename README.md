@@ -164,7 +164,7 @@ The expected result is `49_995_000`.
 
 The following results are recorded in `SumLoopBenchmark.java` for Java 28 preview.
 
-Java 28 preview
+Java 28 ``--enable preview`
 ```text
 Benchmark                              Mode  Cnt   Score   Error  Units
 SumLoopBenchmark.java_boxed_Long       avgt    5   6.516 ± 0.272  us/op
