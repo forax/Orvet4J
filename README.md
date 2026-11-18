@@ -70,7 +70,7 @@ Some implementation details are worth noting:
 - String indexing, iteration and length operate on Unicode code points.
 - Closures are supported but captured local variables cannot be reassigned.
 - The runtime is designed for concurrency (no GIL); mutable objects are confined to their owning thread,
-  and global bindings have volatile semantics..
+  and global bindings have volatile semantics.
 
 
 ### Implemented builtins
