@@ -109,7 +109,7 @@ public final class TypeIntrinsicsTest {
 
   @Test
   public void intRejectsNonFiniteFloats() {
-    assertThrows(PyOverflowError.class, () -> $int$(Double.NaN));
+    assertThrows(PyValueError.class, () -> $int$(Double.NaN));
     assertThrows(PyOverflowError.class, () -> $int$(Double.POSITIVE_INFINITY));
     assertThrows(PyOverflowError.class, () -> $int$(Double.NEGATIVE_INFINITY));
   }

@@ -361,7 +361,7 @@ public final class BuiltinsTest {
     public void nonFiniteFloats() {
       assertRaises(PyOverflowError.class, "int(1e309)");
       assertRaises(PyOverflowError.class, "int(-1e309)");
-      assertRaises(PyOverflowError.class, "int(1e309 - 1e309)");
+      assertRaises(PyValueError.class, "int(1e309 - 1e309)");
     }
 
     @Test
