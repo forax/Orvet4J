@@ -23,7 +23,7 @@ public final class Main {
         Orvet4J - a lightweight Python subset running on the JVM
 
         Usage:
-          orvet <script.py>          Run an Orvet script
+          orvet <script.py>          Run an Python script
           orvet --help               Display this help
           orvet --jmh [options]      Run JMH benchmarks
 
