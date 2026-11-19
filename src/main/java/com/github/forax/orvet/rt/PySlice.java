@@ -19,6 +19,13 @@ public final class PySlice {
     this.step = step;
   }
 
+  public static PySlice of(Object start, Object stop, Object step) {
+    Objects.requireNonNull(start);
+    Objects.requireNonNull(stop);
+    Objects.requireNonNull(step);
+    return new PySlice(start, stop, step);
+  }
+
   public Object start() { return start; }
   public Object stop() { return stop; }
   public Object step() { return step; }
@@ -30,13 +37,6 @@ public final class PySlice {
   public String toString() {
     return "slice(" + StringIntrinsics.$repr$(start) + ", "
         + StringIntrinsics.$repr$(stop) + ", " + StringIntrinsics.$repr$(step) + ")";
-  }
-
-  public static PySlice of(Object start, Object stop, Object step) {
-    Objects.requireNonNull(start);
-    Objects.requireNonNull(stop);
-    Objects.requireNonNull(step);
-    return new PySlice(start, stop, step);
   }
 
   public Resolved resolve(long length) {
