@@ -3,6 +3,7 @@ package com.github.forax.orvet.rt.intrinsic;
 import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
+import com.github.forax.orvet.rt.PyIterator;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PySlice;
@@ -125,6 +126,21 @@ public final class ListIntrinsicsTest {
             assertSame(PyNone.INSTANCE, result);
             assertEquals(2L, ListIntrinsics.$size$(list));
             assertEquals(30L, ListIntrinsics.$get$(list, 1));
+        }
+
+        @Test
+        public void listIteratorObservesRemovalBeforeItsCurrentPosition() {
+            var list = new PyList<>("a", "b", "c", "d");
+            var iterator = new PyIterator.ListIterator(list);
+
+            assertEquals("a", iterator.next());
+
+            list.remove(0);
+
+            // The iterator is index-based: after removal, index 1 now contains "c".
+            assertEquals("c", iterator.next());
+            assertEquals("d", iterator.next());
+            assertNull(iterator.next());
         }
 
         @Test

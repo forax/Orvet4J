@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -325,6 +327,39 @@ public final class PyDictTest {
     var version = dict.layoutVersion();
     dict.clear();
     assertEquals(version, dict.layoutVersion());
+  }
+
+  @Test
+  public void randomizedMutationsPreserveLookupAndInsertionOrder() {
+    var dict = new PyDict<Long, Long>();
+    var expected = new LinkedHashMap<Long, Long>();
+    var random = new Random(0xD1C7);
+
+    for (int step = 0; step < 4_000; step++) {
+      var key = (long) random.nextInt(200);
+      if (random.nextBoolean()) {
+        var value = random.nextLong();
+        assertEquals(expected.put(key, value), dict.put(key, value));
+      } else {
+        assertEquals(expected.remove(key), dict.remove(key));
+      }
+
+      assertEquals(expected.size(), dict.size());
+
+      var actualKeys = new ArrayList<Long>();
+      for (var i = 0; i < dict.entryCount(); i++) {
+        if (dict.isLive(i)) {
+          actualKeys.add(dict.keyAt(i));
+        }
+      }
+
+      assertEquals(new ArrayList<>(expected.keySet()), actualKeys);
+
+      for (var entry : expected.entrySet()) {
+        assertTrue(dict.containsKey(entry.getKey()));
+        assertEquals(entry.getValue(), dict.get(entry.getKey()));
+      }
+    }
   }
 
   // Invalid Java values

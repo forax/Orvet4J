@@ -9,6 +9,7 @@ import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -94,5 +95,42 @@ public final class RangeIntrinsicsTest {
 
     assertTrue(RangeIntrinsics.$in$(range, -1L));
     assertFalse(RangeIntrinsics.$in$(range, 0L));
+  }
+
+  @Test
+  public void bigRangeSupportsBigIntegerIndicesAndNegativeSlicing() {
+    var start = BigInteger.ONE.shiftLeft(70);
+    var range = RangeIntrinsics.newRange(
+        start, start.add(BigInteger.valueOf(100)), BigInteger.valueOf(3));
+
+    assertEquals(start,
+        RangeIntrinsics.$getItem$(range, BigInteger.ZERO));
+    assertEquals(start.add(BigInteger.valueOf(99)),
+        RangeIntrinsics.$getItem$(range, BigInteger.valueOf(33)));
+    assertEquals(start.add(BigInteger.valueOf(99)),
+        RangeIntrinsics.$getItem$(range, BigInteger.valueOf(-1)));
+
+    assertThrows(PyIndexError.class,
+        () -> RangeIntrinsics.$getItem$(range, BigInteger.valueOf(34)));
+
+    var actual = RangeIntrinsics.$slice$(range,
+        PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, -2L));
+
+    var expected = PyRange.of(
+        start.add(BigInteger.valueOf(99)),
+        start.subtract(BigInteger.valueOf(3)),
+        BigInteger.valueOf(-6));
+
+    assertTrue(RangeIntrinsics.sameSequence(actual, expected));
+  }
+
+  @Test
+  public void slicingRangeWithUnrepresentableLengthIsRejected() {
+    var range = RangeIntrinsics.newRange(
+        0L, BigInteger.ONE.shiftLeft(70), 1L);
+
+    assertThrows(UnimplementedFeatureError.class,
+        () -> RangeIntrinsics.$slice$(range,
+            PySlice.of(0L, 10L, 1L)));
   }
 }

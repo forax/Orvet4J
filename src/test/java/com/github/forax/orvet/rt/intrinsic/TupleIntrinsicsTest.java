@@ -146,6 +146,18 @@ public final class TupleIntrinsicsTest {
     assertThrows(OutOfMemoryError.class, () -> $repeat$(fromArray(1L), Integer.MAX_VALUE + 1L));
   }
 
+  @Test
+  public void asJavaListIsReadOnly() {
+    var tuple = new PyTuple2(1L, 2L);
+    var view = tuple.asJavaList();
+
+    assertThrows(UnsupportedOperationException.class, () -> view.set(0, 99L));
+    assertThrows(UnsupportedOperationException.class, () -> view.add(3L));
+    assertThrows(UnsupportedOperationException.class, () -> view.remove(0));
+
+    assertEquals(List.of(1L, 2L), view);
+  }
+
 
   @Test
   public void specializedIntrinsicsMatchTheGenericOnes() throws Throwable {
