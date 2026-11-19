@@ -14,6 +14,15 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._clear_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._copy_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._fromkeys_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._get_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._pop_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._popitem_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._setdefault_;
+import static com.github.forax.orvet.rt.intrinsic.DictIntrinsics._update_;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -193,7 +202,7 @@ public final class DictIntrinsicsTest {
     public void removesEveryEntryAndReturnsNone() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      var result = DictIntrinsics._clear_(dict);
+      var result = _clear_(dict);
 
       assertSame(PyNone.INSTANCE, result);
       assertEquals(0, dict.size());
@@ -207,7 +216,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var version = dict.layoutVersion();
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._clear_(dict));
+      assertSame(PyNone.INSTANCE, _clear_(dict));
 
       assertTrue(dict.isEmpty());
       assertEquals(version, dict.layoutVersion());
@@ -218,7 +227,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L);
       var version = dict.layoutVersion();
 
-      DictIntrinsics._clear_(dict);
+      _clear_(dict);
 
       assertTrue(dict.layoutVersion() > version);
     }
@@ -227,7 +236,7 @@ public final class DictIntrinsicsTest {
     public void dictCanBeReusedAfterClear() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      DictIntrinsics._clear_(dict);
+      _clear_(dict);
       dict.put("c", 3L);
       dict.put("a", 4L);
 
@@ -240,8 +249,8 @@ public final class DictIntrinsicsTest {
     public void clearingTwiceIsFine() {
       var dict = dictOf("a", 1L);
 
-      DictIntrinsics._clear_(dict);
-      DictIntrinsics._clear_(dict);
+      _clear_(dict);
+      _clear_(dict);
 
       assertTrue(dict.isEmpty());
     }
@@ -253,7 +262,7 @@ public final class DictIntrinsicsTest {
         dict.put(i, i);
       }
 
-      DictIntrinsics._clear_(dict);
+      _clear_(dict);
 
       assertEquals(0, dict.size());
       assertEquals(0, dict.entryCount());
@@ -261,7 +270,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void nullDictIsRejected() {
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._clear_(null));
+      assertThrows(NullPointerException.class, () -> _clear_(null));
     }
   }
 
@@ -272,7 +281,7 @@ public final class DictIntrinsicsTest {
     public void copyHasTheSameEntriesInTheSameOrder() {
       var dict = dictOf("z", 1L, "a", 2L, "m", 3L);
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       assertEquals(dictOf("z", 1L, "a", 2L, "m", 3L), copy);
       assertEquals(List.of("z", "a", "m"), keysOf(copy));
@@ -285,7 +294,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L);
 
       @SuppressWarnings("unchecked")
-      var copy = (PyDict<Object, Object>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<Object, Object>) _copy_(dict);
       assertNotSame(dict, copy);
 
       copy.put("b", 2L);
@@ -303,7 +312,7 @@ public final class DictIntrinsicsTest {
       var list = new PyList<Object>(1L);
       var dict = dictOf("k", list);
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       var extractedList = (PyList<?>) copy.get("k");
       assertSame(list, extractedList);
@@ -318,7 +327,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       dict.put(key, 1L);
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       assertSame(key, copy.keyAt(0));
     }
@@ -328,7 +337,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L, "b", 2L, "c", 3L);
       dict.remove("b");
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       assertEquals(2, copy.size());
       assertEquals(2, copy.entryCount());  // no tombstone is copied
@@ -337,7 +346,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void copyOfAnEmptyDict() {
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dictOf());
+      var copy = (PyDict<?, ?>) _copy_(dictOf());
 
       assertTrue(copy.isEmpty());
     }
@@ -346,7 +355,7 @@ public final class DictIntrinsicsTest {
     public void copyPreservesNoneValues() {
       var dict = dictOf("a", PyNone.INSTANCE);
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       assertSame(PyNone.INSTANCE, copy.get("a"));
     }
@@ -358,7 +367,7 @@ public final class DictIntrinsicsTest {
       var dict =
           dictOf("a", nan1, "b", nan2);
 
-      var copy = (PyDict<?, ?>) DictIntrinsics._copy_(dict);
+      var copy = (PyDict<?, ?>) _copy_(dict);
 
       assertSame(nan1, copy.get("a"));
       assertSame(nan2, copy.get("b"));
@@ -366,7 +375,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void nullDictIsRejected() {
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._copy_(null));
+      assertThrows(NullPointerException.class, () -> _copy_(null));
     }
   }
 
@@ -375,7 +384,7 @@ public final class DictIntrinsicsTest {
   public final class FromKeysMethod {
     @Test
     public void defaultValueIsNone() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, new PyList<>("a", "b"));
+      var result = (PyDict<?, ?>) _fromkeys_(PyType.DICT, new PyList<>("a", "b"));
 
       assertEquals(dictOf("a", PyNone.INSTANCE, "b", PyNone.INSTANCE), result);
       assertEquals(List.of("a", "b"), keysOf(result));
@@ -386,7 +395,7 @@ public final class DictIntrinsicsTest {
     public void explicitValueIsSharedByAllKeys() {
       var shared = new PyList<>();
 
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(
+      var result = (PyDict<?, ?>) _fromkeys_(
           PyType.DICT, new PyList<Object>("a", "b", "c"), shared);
 
       assertEquals(3, result.size());
@@ -397,7 +406,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void keysCanComeFromATuple() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(
+      var result = (PyDict<?, ?>) _fromkeys_(
           PyType.DICT, TupleIntrinsics.fromArray(1L, 2L, 3L), 0L);
 
       assertEquals(dictOf(1L, 0L, 2L, 0L, 3L, 0L), result);
@@ -407,7 +416,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void keysCanComeFromAStringCodePointByCodePoint() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, "a\uD83D\uDE00b");
+      var result = (PyDict<?, ?>) _fromkeys_(PyType.DICT, "a\uD83D\uDE00b");
 
       assertEquals(dictOf("a", PyNone.INSTANCE, "\uD83D\uDE00", PyNone.INSTANCE, "b", PyNone.INSTANCE), result);
       assertEquals(List.of("a", "\uD83D\uDE00", "b"), keysOf(result));
@@ -415,7 +424,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void keysCanComeFromARange() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, PyRange.of(0L, 3L, 1L), true);
+      var result = (PyDict<?, ?>) _fromkeys_(PyType.DICT, PyRange.of(0L, 3L, 1L), true);
 
       assertEquals(dictOf(0L, true, 1L, true, 2L, true), result);
       assertEquals(List.of(0L, 1L, 2L), keysOf(result));
@@ -426,7 +435,7 @@ public final class DictIntrinsicsTest {
     public void keysCanComeFromADictionary() {
       var source = dictOf("x", 1L, "y", 2L);
 
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, source);
+      var result = (PyDict<?, ?>) _fromkeys_(PyType.DICT, source);
 
       assertEquals(List.of("x", "y"), keysOf(result));
       assertEquals(List.of(PyNone.INSTANCE, PyNone.INSTANCE), valuesOf(result));
@@ -435,7 +444,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void duplicateKeysCollapseKeepingFirstPosition() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(
+      var result = (PyDict<?, ?>) _fromkeys_(
           PyType.DICT, new PyList<Object>("a", "b", "a", "c", "b"), 7L);
 
       assertEquals(List.of("a", "b", "c"), keysOf(result));
@@ -444,7 +453,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void equivalentNumericKeysCollapseKeepingTheFirstKeyObject() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(
+      var result = (PyDict<?, ?>) _fromkeys_(
           PyType.DICT, new PyList<Object>(1L, true, 1.0d));
 
       assertEquals(1, result.size());
@@ -454,20 +463,20 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void emptyIterableGivesAnEmptyDict() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, new PyList<>());
+      var result = (PyDict<?, ?>) _fromkeys_(PyType.DICT, new PyList<>());
 
       assertTrue(result.isEmpty());
     }
 
     @Test
     public void emptyStringAndEmptyTupleGiveAnEmptyDict() {
-      assertTrue(((PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, "")).isEmpty());
-      assertTrue(((PyDict<?, ?>) DictIntrinsics._fromkeys_(PyType.DICT, TupleIntrinsics.empty())).isEmpty());
+      assertTrue(((PyDict<?, ?>) _fromkeys_(PyType.DICT, "")).isEmpty());
+      assertTrue(((PyDict<?, ?>) _fromkeys_(PyType.DICT, TupleIntrinsics.empty())).isEmpty());
     }
 
     @Test
     public void noneCanBeAKeyAndAValue() {
-      var result = (PyDict<?, ?>) DictIntrinsics._fromkeys_(
+      var result = (PyDict<?, ?>) _fromkeys_(
           PyType.DICT, new PyList<>(PyNone.INSTANCE), PyNone.INSTANCE);
 
       assertEquals(dictOf(PyNone.INSTANCE, PyNone.INSTANCE), result);
@@ -478,8 +487,8 @@ public final class DictIntrinsicsTest {
     public void everyCallReturnsANewDictionary() {
       var keys = new PyList<Object>("a");
 
-      var first = DictIntrinsics._fromkeys_(PyType.DICT, keys);
-      var second = DictIntrinsics._fromkeys_(PyType.DICT, keys);
+      var first = _fromkeys_(PyType.DICT, keys);
+      var second = _fromkeys_(PyType.DICT, keys);
 
       assertNotSame(first, second);
     }
@@ -487,32 +496,32 @@ public final class DictIntrinsicsTest {
     @Test
     public void typeOtherThanDictIsRejected() {
       assertThrows(IllegalArgumentException.class,
-          () -> DictIntrinsics._fromkeys_(PyType.LIST, new PyList<>("a")));
+          () -> _fromkeys_(PyType.LIST, new PyList<>("a")));
       assertThrows(IllegalArgumentException.class,
-          () -> DictIntrinsics._fromkeys_(PyType.INT, new PyList<>("a"), 1L));
+          () -> _fromkeys_(PyType.INT, new PyList<>("a"), 1L));
     }
 
     @Test
     public void nonIterableArgumentRaisesTypeError() {
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._fromkeys_(PyType.DICT, 5L));
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._fromkeys_(PyType.DICT, PyNone.INSTANCE));
+      assertThrows(PyTypeError.class, () -> _fromkeys_(PyType.DICT, 5L));
+      assertThrows(PyTypeError.class, () -> _fromkeys_(PyType.DICT, PyNone.INSTANCE));
     }
 
     @Test
     public void unhashableKeyRaisesTypeError() {
       var keys = new PyList<>("a", new PyList<>());
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._fromkeys_(PyType.DICT, keys));
+      assertThrows(PyTypeError.class, () -> _fromkeys_(PyType.DICT, keys));
     }
 
     @Test
     public void nullArgumentsAreRejected() {
       assertThrows(NullPointerException.class,
-          () -> DictIntrinsics._fromkeys_(null, new PyList<>()));
+          () -> _fromkeys_(null, new PyList<>()));
       assertThrows(NullPointerException.class,
-          () -> DictIntrinsics._fromkeys_(PyType.DICT, null));
+          () -> _fromkeys_(PyType.DICT, null));
       assertThrows(NullPointerException.class,
-          () -> DictIntrinsics._fromkeys_(PyType.DICT, new PyList<>(), null));
+          () -> _fromkeys_(PyType.DICT, new PyList<>(), null));
     }
   }
 
@@ -523,37 +532,37 @@ public final class DictIntrinsicsTest {
     public void existingKeyReturnsItsValue() {
       var dict = dictOf("a", 1L);
 
-      assertEquals(1L, DictIntrinsics._get_(dict, "a"));
-      assertEquals(1L, DictIntrinsics._get_(dict, "a", 99L));
+      assertEquals(1L, _get_(dict, "a"));
+      assertEquals(1L, _get_(dict, "a", 99L));
     }
 
     @Test
     public void missingKeyReturnsNoneByDefault() {
       var dict = dictOf("a", 1L);
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._get_(dict, "missing"));
+      assertSame(PyNone.INSTANCE, _get_(dict, "missing"));
     }
 
     @Test
     public void missingKeyReturnsTheProvidedDefault() {
       var dict = dictOf("a", 1L);
 
-      assertEquals(99L, DictIntrinsics._get_(dict, "missing", 99L));
+      assertEquals(99L, _get_(dict, "missing", 99L));
     }
 
     @Test
     public void getOnAnEmptyDict() {
       var dict = dictOf();
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._get_(dict, 1L));
-      assertEquals("d", DictIntrinsics._get_(dict, 1L, "d"));
+      assertSame(PyNone.INSTANCE, _get_(dict, 1L));
+      assertEquals("d", _get_(dict, 1L, "d"));
     }
 
     @Test
     public void getDoesNotInsertTheKey() {
       var dict = dictOf("a", 1L);
 
-      DictIntrinsics._get_(dict, "missing", 5L);
+      _get_(dict, "missing", 5L);
 
       assertEquals(1, dict.size());
       assertEquals(dictOf("a", 1L), dict);
@@ -564,16 +573,16 @@ public final class DictIntrinsicsTest {
     public void aStoredNoneIsReturnedInsteadOfTheDefault() {
       var dict = dictOf("k", PyNone.INSTANCE);
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._get_(dict, "k", 5L));
+      assertSame(PyNone.INSTANCE, _get_(dict, "k", 5L));
     }
 
     @Test
     public void falsyStoredValuesAreNotConfusedWithAbsence() {
       var dict = dictOf("zero", 0L, "empty", "", "false", false);
 
-      assertEquals(0L, DictIntrinsics._get_(dict, "zero", 5L));
-      assertEquals("", DictIntrinsics._get_(dict, "empty", 5L));
-      assertEquals(false, DictIntrinsics._get_(dict, "false", 5L));
+      assertEquals(0L, _get_(dict, "zero", 5L));
+      assertEquals("", _get_(dict, "empty", 5L));
+      assertEquals(false, _get_(dict, "false", 5L));
     }
 
     @Test
@@ -581,42 +590,42 @@ public final class DictIntrinsicsTest {
       var defaultValue1 = new PyList<>();
       var defaultValue2 = TypeIntrinsics.$bool$("nan");
 
-      assertSame(defaultValue1, DictIntrinsics._get_(dictOf(), "a", defaultValue1));
-      assertSame(defaultValue2, DictIntrinsics._get_(dictOf(), "a", defaultValue2));
+      assertSame(defaultValue1, _get_(dictOf(), "a", defaultValue1));
+      assertSame(defaultValue2, _get_(dictOf(), "a", defaultValue2));
     }
 
     @Test
     public void equivalentNumericKeysFindTheSameEntry() {
       var dict = dictOf(1L, "one");
 
-      assertEquals("one", DictIntrinsics._get_(dict, 1.0d));
-      assertEquals("one", DictIntrinsics._get_(dict, true));
-      assertSame(PyNone.INSTANCE, DictIntrinsics._get_(dict, 2L));
+      assertEquals("one", _get_(dict, 1.0d));
+      assertEquals("one", _get_(dict, true));
+      assertSame(PyNone.INSTANCE, _get_(dict, 2L));
     }
 
     @Test
     public void tupleKeys() {
       var dict = dictOf(TupleIntrinsics.fromArray(1L, "a"), "found");
 
-      assertEquals("found", DictIntrinsics._get_(dict, TupleIntrinsics.fromArray(1.0d, "a")));
-      assertSame(PyNone.INSTANCE, DictIntrinsics._get_(dict, TupleIntrinsics.fromArray(1L, "b")));
+      assertEquals("found", _get_(dict, TupleIntrinsics.fromArray(1.0d, "a")));
+      assertSame(PyNone.INSTANCE, _get_(dict, TupleIntrinsics.fromArray(1L, "b")));
     }
 
     @Test
     public void unhashableKeyRaisesTypeError() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._get_(dict, new PyList<Object>()));
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._get_(dict, dictOf(), 1L));
+      assertThrows(PyTypeError.class, () -> _get_(dict, new PyList<Object>()));
+      assertThrows(PyTypeError.class, () -> _get_(dict, dictOf(), 1L));
     }
 
     @Test
     public void nullArgumentsAreRejected() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._get_(null, "a"));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._get_(dict, null));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._get_(dict, "a", null));
+      assertThrows(NullPointerException.class, () -> _get_(null, "a"));
+      assertThrows(NullPointerException.class, () -> _get_(dict, null));
+      assertThrows(NullPointerException.class, () -> _get_(dict, "a", null));
     }
   }
 
@@ -627,7 +636,7 @@ public final class DictIntrinsicsTest {
     public void popReturnsTheValueAndRemovesTheKey() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      assertEquals(1L, DictIntrinsics._pop_(dict, "a"));
+      assertEquals(1L, _pop_(dict, "a"));
 
       assertEquals(1, dict.size());
       assertEquals(dictOf("b", 2L), dict);
@@ -639,10 +648,10 @@ public final class DictIntrinsicsTest {
     public void popOfAMissingKeyRaisesKeyErrorWithTheKeyRepr() {
       var dict = dictOf("a", 1L);
 
-      var stringKey = assertThrows(PyKeyError.class, () -> DictIntrinsics._pop_(dict, "missing"));
+      var stringKey = assertThrows(PyKeyError.class, () -> _pop_(dict, "missing"));
       assertEquals("'missing'", stringKey.getMessage());
 
-      var intKey = assertThrows(PyKeyError.class, () -> DictIntrinsics._pop_(dict, 42L));
+      var intKey = assertThrows(PyKeyError.class, () -> _pop_(dict, 42L));
       assertEquals("42", intKey.getMessage());
     }
 
@@ -650,7 +659,7 @@ public final class DictIntrinsicsTest {
     public void failedPopLeavesTheDictUnchanged() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      assertThrows(PyKeyError.class, () -> DictIntrinsics._pop_(dict, "missing"));
+      assertThrows(PyKeyError.class, () -> _pop_(dict, "missing"));
 
       assertEquals(dictOf("a", 1L, "b", 2L), dict);
       assertEquals(List.of("a", "b"), keysOf(dict));
@@ -659,15 +668,15 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void popOnAnEmptyDictRaisesKeyError() {
-      assertThrows(PyKeyError.class, () -> DictIntrinsics._pop_(dictOf(), "a"));
+      assertThrows(PyKeyError.class, () -> _pop_(dictOf(), "a"));
     }
 
     @Test
     public void popOfAMissingKeyWithDefaultReturnsTheDefault() {
       var dict = dictOf("a", 1L);
 
-      assertEquals(99L, DictIntrinsics._pop_(dict, "missing", 99L));
-      assertSame(PyNone.INSTANCE, DictIntrinsics._pop_(dict, "missing", PyNone.INSTANCE));
+      assertEquals(99L, _pop_(dict, "missing", 99L));
+      assertSame(PyNone.INSTANCE, _pop_(dict, "missing", PyNone.INSTANCE));
 
       assertEquals(1, dict.size());  // the default is never inserted
       assertEquals(dictOf("a", 1L), dict);
@@ -678,7 +687,7 @@ public final class DictIntrinsicsTest {
     public void popOfAnExistingKeyIgnoresTheDefault() {
       var dict = dictOf("a", 1L);
 
-      assertEquals(1L, DictIntrinsics._pop_(dict, "a", 99L));
+      assertEquals(1L, _pop_(dict, "a", 99L));
 
       assertTrue(dict.isEmpty());
     }
@@ -687,12 +696,12 @@ public final class DictIntrinsicsTest {
     public void aStoredNoneIsPoppedInsteadOfRaisingOrUsingTheDefault() {
       var dict = dictOf("k", PyNone.INSTANCE);
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._pop_(dict, "k", 5L));
+      assertSame(PyNone.INSTANCE, _pop_(dict, "k", 5L));
       assertFalse(dict.containsKey("k"));
 
       var other = dictOf("k", PyNone.INSTANCE);
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._pop_(other, "k"));
+      assertSame(PyNone.INSTANCE, _pop_(other, "k"));
       assertTrue(other.isEmpty());
     }
 
@@ -700,17 +709,17 @@ public final class DictIntrinsicsTest {
     public void poppingTwiceThenFailsOrFallsBackToTheDefault() {
       var dict = dictOf("a", 1L);
 
-      DictIntrinsics._pop_(dict, "a");
+      _pop_(dict, "a");
 
-      assertThrows(PyKeyError.class, () -> DictIntrinsics._pop_(dict, "a"));
-      assertEquals("d", DictIntrinsics._pop_(dict, "a", "d"));
+      assertThrows(PyKeyError.class, () -> _pop_(dict, "a"));
+      assertEquals("d", _pop_(dict, "a", "d"));
     }
 
     @Test
     public void reinsertedKeyGoesToTheEnd() {
       var dict = dictOf("a", 1L, "b", 2L, "c", 3L);
 
-      DictIntrinsics._pop_(dict, "a");
+      _pop_(dict, "a");
       dict.put("a", 10L);
 
       assertEquals(dictOf("b", 2L, "c", 3L, "a", 10L), dict);
@@ -721,7 +730,7 @@ public final class DictIntrinsicsTest {
     public void equivalentNumericKeyPopsTheSameEntry() {
       var dict = dictOf(1L, "one");
 
-      assertEquals("one", DictIntrinsics._pop_(dict, 1.0d));
+      assertEquals("one", _pop_(dict, 1.0d));
       assertTrue(dict.isEmpty());
     }
 
@@ -730,15 +739,15 @@ public final class DictIntrinsicsTest {
       var value = new PyList<>();
       var dict = dictOf("a", value);
 
-      assertSame(value, DictIntrinsics._pop_(dict, "a"));
+      assertSame(value, _pop_(dict, "a"));
     }
 
     @Test
     public void unhashableKeyRaisesTypeError() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._pop_(dict, new PyList<Object>()));
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._pop_(dict, new PyList<Object>(), 1L));
+      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<Object>()));
+      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<Object>(), 1L));
     }
 
     @Test
@@ -749,24 +758,24 @@ public final class DictIntrinsicsTest {
       }
 
       for (long i = 0; i < 15; i++) {
-        assertEquals(i * 10, DictIntrinsics._pop_(dict, i));
+        assertEquals(i * 10, _pop_(dict, i));
       }
 
       assertEquals(5, dict.size());
       assertEquals(dictOf(15L, 150L, 16L, 160L, 17L, 170L, 18L, 180L, 19L, 190L), dict);
       assertEquals(List.of(15L, 16L, 17L, 18L, 19L), keysOf(dict));
       assertEquals(List.of(150L, 160L, 170L, 180L, 190L), valuesOf(dict));
-      assertEquals(170L, DictIntrinsics._get_(dict, 17L));
+      assertEquals(170L, _get_(dict, 17L));
     }
 
     @Test
     public void nullArgumentsAreRejected() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._pop_(null, "a"));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._pop_(dict, null));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._pop_(dict, "a", null));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._pop_(dict, null, 1L));
+      assertThrows(NullPointerException.class, () -> _pop_(null, "a"));
+      assertThrows(NullPointerException.class, () -> _pop_(dict, null));
+      assertThrows(NullPointerException.class, () -> _pop_(dict, "a", null));
+      assertThrows(NullPointerException.class, () -> _pop_(dict, null, 1L));
     }
   }
 
@@ -777,16 +786,16 @@ public final class DictIntrinsicsTest {
     public void popitemRemovesTheLastInsertedEntryFirst() {
       var dict = dictOf("a", 1L, "b", 2L, "c", 3L);
 
-      assertEquals(TupleIntrinsics.fromArray("c", 3L), DictIntrinsics._popitem_(dict));
-      assertEquals(TupleIntrinsics.fromArray("b", 2L), DictIntrinsics._popitem_(dict));
-      assertEquals(TupleIntrinsics.fromArray("a", 1L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("c", 3L), _popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("b", 2L), _popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("a", 1L), _popitem_(dict));
 
       assertTrue(dict.isEmpty());
     }
 
     @Test
     public void popitemOnAnEmptyDictRaisesKeyError() {
-      var error = assertThrows(PyKeyError.class, () -> DictIntrinsics._popitem_(dictOf()));
+      var error = assertThrows(PyKeyError.class, () -> _popitem_(dictOf()));
 
       assertEquals("'popitem(): dictionary is empty'", error.getMessage());
     }
@@ -795,9 +804,9 @@ public final class DictIntrinsicsTest {
     public void popitemOnADrainedDictRaisesKeyError() {
       var dict = dictOf("a", 1L);
 
-      DictIntrinsics._popitem_(dict);
+      _popitem_(dict);
 
-      assertThrows(PyKeyError.class, () -> DictIntrinsics._popitem_(dict));
+      assertThrows(PyKeyError.class, () -> _popitem_(dict));
       assertTrue(dict.isEmpty());
     }
 
@@ -806,7 +815,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L, "b", 2L, "c", 3L);
       dict.remove("c");
 
-      assertEquals(TupleIntrinsics.fromArray("b", 2L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("b", 2L), _popitem_(dict));
 
       assertEquals(dictOf("a", 1L), dict);
       assertEquals(List.of("a"), keysOf(dict));
@@ -817,8 +826,8 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L, "b", 2L, "c", 3L);
       dict.remove("b");
 
-      assertEquals(TupleIntrinsics.fromArray("c", 3L), DictIntrinsics._popitem_(dict));
-      assertEquals(TupleIntrinsics.fromArray("a", 1L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("c", 3L), _popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("a", 1L), _popitem_(dict));
       assertTrue(dict.isEmpty());
     }
 
@@ -828,8 +837,8 @@ public final class DictIntrinsicsTest {
       dict.remove("a");
       dict.put("a", 10L);  // "a" is now the last entry
 
-      assertEquals(TupleIntrinsics.fromArray("a", 10L), DictIntrinsics._popitem_(dict));
-      assertEquals(TupleIntrinsics.fromArray("b", 2L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("a", 10L), _popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("b", 2L), _popitem_(dict));
     }
 
     @Test
@@ -837,21 +846,21 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L, "b", 2L);
       dict.put("a", 10L);  // replacing a value keeps the position
 
-      assertEquals(TupleIntrinsics.fromArray("b", 2L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("b", 2L), _popitem_(dict));
     }
 
     @Test
     public void popitemWithANoneValue() {
       var dict = dictOf("a", PyNone.INSTANCE);
 
-      assertEquals(TupleIntrinsics.fromArray("a", PyNone.INSTANCE), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray("a", PyNone.INSTANCE), _popitem_(dict));
     }
 
     @Test
     public void popitemShrinksTheDictAndRemovesTheKey() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      DictIntrinsics._popitem_(dict);
+      _popitem_(dict);
 
       assertEquals(1, dict.size());
       assertEquals(dictOf("a", 1L), dict);
@@ -863,7 +872,7 @@ public final class DictIntrinsicsTest {
     public void popitemReturnsAPairTuple() {
       var dict = dictOf("a", 1L);
 
-      var result = (com.github.forax.orvet.rt.PyTuple) DictIntrinsics._popitem_(dict);
+      var result = (com.github.forax.orvet.rt.PyTuple) _popitem_(dict);
 
       assertEquals(2, result.size());
       assertEquals("a", result.get(0));
@@ -880,8 +889,8 @@ public final class DictIntrinsicsTest {
         dict.remove(i);  // triggers a compaction of the insertion-order arrays
       }
 
-      assertEquals(TupleIntrinsics.fromArray(19L, 190L), DictIntrinsics._popitem_(dict));
-      assertEquals(TupleIntrinsics.fromArray(18L, 180L), DictIntrinsics._popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray(19L, 190L), _popitem_(dict));
+      assertEquals(TupleIntrinsics.fromArray(18L, 180L), _popitem_(dict));
 
       assertEquals(dictOf(15L, 150L, 16L, 160L, 17L, 170L), dict);
       assertEquals(List.of(15L, 16L, 17L), keysOf(dict));
@@ -895,7 +904,7 @@ public final class DictIntrinsicsTest {
       }
 
       for (long i = 99; i >= 0; i--) {
-        assertEquals(TupleIntrinsics.fromArray(i, i), DictIntrinsics._popitem_(dict));
+        assertEquals(TupleIntrinsics.fromArray(i, i), _popitem_(dict));
       }
 
       assertTrue(dict.isEmpty());
@@ -903,7 +912,7 @@ public final class DictIntrinsicsTest {
 
     @Test
     public void nullDictIsRejected() {
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._popitem_(null));
+      assertThrows(NullPointerException.class, () -> _popitem_(null));
     }
   }
 
@@ -914,7 +923,7 @@ public final class DictIntrinsicsTest {
     public void missingKeyIsInsertedWithNoneByDefault() {
       var dict = dictOf();
 
-      var result = DictIntrinsics._setdefault_(dict, "a");
+      var result = _setdefault_(dict, "a");
 
       assertSame(PyNone.INSTANCE, result);
       assertEquals(1, dict.size());
@@ -926,7 +935,7 @@ public final class DictIntrinsicsTest {
     public void missingKeyIsInsertedWithTheProvidedDefault() {
       var dict = dictOf();
 
-      var result = DictIntrinsics._setdefault_(dict, "a", 42L);
+      var result = _setdefault_(dict, "a", 42L);
 
       assertEquals(42L, result);
       assertEquals(dictOf("a", 42L), dict);
@@ -937,8 +946,8 @@ public final class DictIntrinsicsTest {
     public void existingKeyIsNotModified() {
       var dict = dictOf("a", 1L);
 
-      assertEquals(1L, DictIntrinsics._setdefault_(dict, "a", 99L));
-      assertEquals(1L, DictIntrinsics._setdefault_(dict, "a"));
+      assertEquals(1L, _setdefault_(dict, "a", 99L));
+      assertEquals(1L, _setdefault_(dict, "a"));
 
       assertEquals(1, dict.size());
       assertEquals(dictOf("a", 1L), dict);
@@ -949,7 +958,7 @@ public final class DictIntrinsicsTest {
     public void existingNoneValueIsKeptAndReturned() {
       var dict = dictOf("a", PyNone.INSTANCE);
 
-      assertSame(PyNone.INSTANCE, DictIntrinsics._setdefault_(dict, "a", 99L));
+      assertSame(PyNone.INSTANCE, _setdefault_(dict, "a", 99L));
       assertEquals(dictOf("a", PyNone.INSTANCE), dict);
       assertSame(PyNone.INSTANCE, dict.get("a"));
     }
@@ -958,8 +967,8 @@ public final class DictIntrinsicsTest {
     public void existingFalsyValuesAreKept() {
       var dict = dictOf("zero", 0L, "empty", "");
 
-      assertEquals(0L, DictIntrinsics._setdefault_(dict, "zero", 5L));
-      assertEquals("", DictIntrinsics._setdefault_(dict, "empty", "x"));
+      assertEquals(0L, _setdefault_(dict, "zero", 5L));
+      assertEquals("", _setdefault_(dict, "empty", "x"));
 
       assertEquals(dictOf("zero", 0L, "empty", ""), dict);
       assertEquals(0L, dict.get("zero"));
@@ -970,8 +979,8 @@ public final class DictIntrinsicsTest {
     public void insertedKeyGoesToTheEnd() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      DictIntrinsics._setdefault_(dict, "c", 3L);
-      DictIntrinsics._setdefault_(dict, "a", 100L);  // present: position unchanged
+      _setdefault_(dict, "c", 3L);
+      _setdefault_(dict, "a", 100L);  // present: position unchanged
 
       assertEquals(dictOf("a", 1L, "b", 2L, "c", 3L), dict);
       assertEquals(List.of("a", "b", "c"), keysOf(dict));
@@ -984,13 +993,13 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var list = new PyList<Object>();
 
-      var result = DictIntrinsics._setdefault_(dict, "a", list);
+      var result = _setdefault_(dict, "a", list);
 
       assertSame(list, result);
       assertSame(list, dict.get("a"));
 
       // The classic "group by" idiom: the returned list is the stored list.
-      ((PyList<Object>) DictIntrinsics._setdefault_(dict, "a", new PyList<>())).append(1L);
+      ((PyList<Object>) _setdefault_(dict, "a", new PyList<>())).append(1L);
 
       assertEquals(1, list.size());
       assertEquals(dictOf("a", new PyList<>(1L)), dict);
@@ -1000,8 +1009,8 @@ public final class DictIntrinsicsTest {
     public void equivalentNumericKeyFindsTheExistingEntry() {
       var dict = dictOf(1L, "one");
 
-      assertEquals("one", DictIntrinsics._setdefault_(dict, 1.0d, "other"));
-      assertEquals("one", DictIntrinsics._setdefault_(dict, true, "other"));
+      assertEquals("one", _setdefault_(dict, 1.0d, "other"));
+      assertEquals("one", _setdefault_(dict, true, "other"));
 
       assertEquals(1, dict.size());
       assertEquals(dictOf(1L, "one"), dict);
@@ -1011,12 +1020,12 @@ public final class DictIntrinsicsTest {
     @Test
     public void tupleKeys() {
       var dict = dictOf();
-      DictIntrinsics._setdefault_(dict, TupleIntrinsics.fromArray(1L, 2L), "t");
+      _setdefault_(dict, TupleIntrinsics.fromArray(1L, 2L), "t");
 
       assertEquals(1, dict.size());
       assertEquals(dictOf(TupleIntrinsics.fromArray(1L, 2L), "t"), dict);
 
-      assertEquals("t", DictIntrinsics._setdefault_(dict, TupleIntrinsics.fromArray(1.0d, 2L), "u"));
+      assertEquals("t", _setdefault_(dict, TupleIntrinsics.fromArray(1.0d, 2L), "u"));
 
 
       assertEquals(1, dict.size());
@@ -1027,8 +1036,8 @@ public final class DictIntrinsicsTest {
     public void unhashableKeyRaisesTypeErrorAndDoesNotModifyTheDict() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._setdefault_(dict, new PyList<>()));
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._setdefault_(dict, new PyList<>(), 1L));
+      assertThrows(PyTypeError.class, () -> _setdefault_(dict, new PyList<>()));
+      assertThrows(PyTypeError.class, () -> _setdefault_(dict, new PyList<>(), 1L));
 
       assertEquals(List.of("a"), keysOf(dict));
     }
@@ -1037,10 +1046,10 @@ public final class DictIntrinsicsTest {
     public void nullArgumentsAreRejected() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._setdefault_(null, "a"));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._setdefault_(dict, null));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._setdefault_(null, "a", 1L));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._setdefault_(dict, null, 1L));
+      assertThrows(NullPointerException.class, () -> _setdefault_(null, "a"));
+      assertThrows(NullPointerException.class, () -> _setdefault_(dict, null));
+      assertThrows(NullPointerException.class, () -> _setdefault_(null, "a", 1L));
+      assertThrows(NullPointerException.class, () -> _setdefault_(dict, null, 1L));
     }
   }
 
@@ -1052,7 +1061,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L, "b", 2L);
       var other = dictOf("b", 20L, "c", 3L);
 
-      var result = DictIntrinsics._update_(dict, other);
+      var result = _update_(dict, other);
 
       assertSame(PyNone.INSTANCE, result);
       assertEquals(dictOf("a", 1L, "b", 20L, "c", 3L), dict);
@@ -1065,7 +1074,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L);
       var other = dictOf("b", 2L);
 
-      DictIntrinsics._update_(dict, other);
+      _update_(dict, other);
 
       assertEquals(dictOf("b", 2L), other);
       assertEquals(List.of("b"), keysOf(other));
@@ -1079,7 +1088,7 @@ public final class DictIntrinsicsTest {
       dict.put(original, 1L);
       dict.put("z", 2L);
 
-      DictIntrinsics._update_(dict, dictOf(new String("k"), 10L));
+      _update_(dict, dictOf(new String("k"), 10L));
 
       assertSame(original, dict.keyAt(0));
       assertEquals(10L, dict.get("k"));
@@ -1093,7 +1102,7 @@ public final class DictIntrinsicsTest {
       other.remove("b");
       var dict = dictOf();
 
-      DictIntrinsics._update_(dict, other);
+      _update_(dict, other);
 
       assertEquals(dictOf("a", 1L, "c", 3L), other);
       assertEquals(List.of("a", "c"), keysOf(dict));
@@ -1103,9 +1112,9 @@ public final class DictIntrinsicsTest {
     public void updateWithAnEmptyDictOrIterableIsANoOp() {
       var dict = dictOf("a", 1L);
 
-      DictIntrinsics._update_(dict, dictOf());
-      DictIntrinsics._update_(dict, new PyList<Object>());
-      DictIntrinsics._update_(dict, TupleIntrinsics.empty());
+      _update_(dict, dictOf());
+      _update_(dict, new PyList<Object>());
+      _update_(dict, TupleIntrinsics.empty());
 
       assertEquals(dictOf("a", 1L), dict);
       assertEquals(List.of("a"), keysOf(dict));
@@ -1116,7 +1125,7 @@ public final class DictIntrinsicsTest {
     public void updateAnEmptyDictFromAnotherDict() {
       var dict = dictOf();
 
-      DictIntrinsics._update_(dict, dictOf("a", 1L));
+      _update_(dict, dictOf("a", 1L));
 
       assertEquals(dictOf("a", 1L), dict);
       assertEquals(List.of("a"), keysOf(dict));
@@ -1126,7 +1135,7 @@ public final class DictIntrinsicsTest {
     public void updateWithItselfChangesNothing() {
       var dict = dictOf("a", 1L, "b", 2L);
 
-      DictIntrinsics._update_(dict, dict);
+      _update_(dict, dict);
 
       assertEquals(dictOf("a", 1L, "b", 2L), dict);
       assertEquals(List.of("a", "b"), keysOf(dict));
@@ -1140,7 +1149,7 @@ public final class DictIntrinsicsTest {
           TupleIntrinsics.fromArray("a", 10L),
           TupleIntrinsics.fromArray("b", 2L));
 
-      DictIntrinsics._update_(dict, pairs);
+      _update_(dict, pairs);
 
       assertEquals(dictOf("a", 10L, "b", 2L), dict);
       assertEquals(List.of("a", "b"), keysOf(dict));
@@ -1154,7 +1163,7 @@ public final class DictIntrinsicsTest {
           new PyList<>("a", 1L),
           new PyList<>("b", 2L));
 
-      DictIntrinsics._update_(dict, pairs);
+      _update_(dict, pairs);
 
       assertEquals(dictOf("a", 1L, "b", 2L), dict);
       assertEquals(List.of("a", "b"), keysOf(dict));
@@ -1166,7 +1175,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var pairs = new PyList<>("ab", "cd");
 
-      DictIntrinsics._update_(dict, pairs);
+      _update_(dict, pairs);
 
       assertEquals(dictOf("a", "b", "c", "d"), dict);
       assertEquals("b", dict.get("a"));
@@ -1180,7 +1189,7 @@ public final class DictIntrinsicsTest {
           TupleIntrinsics.fromArray("a", 1L),
           TupleIntrinsics.fromArray("a", 2L));
 
-      DictIntrinsics._update_(dict, pairs);
+      _update_(dict, pairs);
 
       assertEquals(1, dict.size());
       assertEquals(dictOf("a", 2L), dict);
@@ -1192,7 +1201,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var pairs = new PyList<Object>(TupleIntrinsics.fromArray(PyNone.INSTANCE, PyNone.INSTANCE));
 
-      DictIntrinsics._update_(dict, pairs);
+      _update_(dict, pairs);
 
       assertEquals(dictOf(PyNone.INSTANCE, PyNone.INSTANCE), dict);
       assertSame(PyNone.INSTANCE, dict.get(PyNone.INSTANCE));
@@ -1203,11 +1212,11 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
 
       var empty = assertThrows(PyValueError.class,
-          () -> DictIntrinsics._update_(dict, new PyList<Object>(TupleIntrinsics.empty())));
+          () -> _update_(dict, new PyList<Object>(TupleIntrinsics.empty())));
       assertEquals("dictionary update sequence element #0 has length 0; 2 is required", empty.getMessage());
 
       var one = assertThrows(PyValueError.class,
-          () -> DictIntrinsics._update_(dict, new PyList<Object>(TupleIntrinsics.fromArray("a"))));
+          () -> _update_(dict, new PyList<Object>(TupleIntrinsics.fromArray("a"))));
       assertEquals("dictionary update sequence element #0 has length 1; 2 is required", one.getMessage());
     }
 
@@ -1216,11 +1225,11 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
 
       var three = assertThrows(PyValueError.class,
-          () -> DictIntrinsics._update_(dict, new PyList<Object>(TupleIntrinsics.fromArray(1L, 2L, 3L))));
+          () -> _update_(dict, new PyList<Object>(TupleIntrinsics.fromArray(1L, 2L, 3L))));
       assertEquals("dictionary update sequence element #0 has length 3; 2 is required", three.getMessage());
 
       var five = assertThrows(PyValueError.class,
-          () -> DictIntrinsics._update_(dict, new PyList<Object>(TupleIntrinsics.fromArray(1L, 2L, 3L, 4L, 5L))));
+          () -> _update_(dict, new PyList<Object>(TupleIntrinsics.fromArray(1L, 2L, 3L, 4L, 5L))));
       assertEquals("dictionary update sequence element #0 has length 5; 2 is required", five.getMessage());
     }
 
@@ -1232,7 +1241,7 @@ public final class DictIntrinsicsTest {
           TupleIntrinsics.fromArray("b", 2L),
           TupleIntrinsics.fromArray("c"));
 
-      var error = assertThrows(PyValueError.class, () -> DictIntrinsics._update_(dict, pairs));
+      var error = assertThrows(PyValueError.class, () -> _update_(dict, pairs));
 
       assertEquals("dictionary update sequence element #2 has length 1; 2 is required", error.getMessage());
     }
@@ -1242,7 +1251,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var pairs = new PyList<Object>(TupleIntrinsics.fromArray("a", 1L), 42L);
 
-      var error = assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, pairs));
+      var error = assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
 
       assertEquals("cannot convert dictionary update sequence element #1 to a sequence", error.getMessage());
     }
@@ -1253,7 +1262,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var pairs = new PyList<Object>(TupleIntrinsics.fromArray("a", 1L), 42L);
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, pairs));
+      assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
 
       assertEquals(List.of("a"), keysOf(dict));
     }
@@ -1262,7 +1271,7 @@ public final class DictIntrinsicsTest {
     public void updateFromAStringIsAnErrorBecauseItsElementsAreNotPairs() {
       var dict = dictOf();
 
-      var error = assertThrows(PyValueError.class, () -> DictIntrinsics._update_(dict, "ab"));
+      var error = assertThrows(PyValueError.class, () -> _update_(dict, "ab"));
 
       assertEquals("dictionary update sequence element #0 has length 1; 2 is required", error.getMessage());
     }
@@ -1271,15 +1280,15 @@ public final class DictIntrinsicsTest {
     public void updateFromAnIterableOfNonIterablesRaisesTypeError() {
       var dict = dictOf();
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, PyRange.of(0L, 3L, 1L)));
+      assertThrows(PyTypeError.class, () -> _update_(dict, PyRange.of(0L, 3L, 1L)));
     }
 
     @Test
     public void updateFromANonIterableRaisesTypeError() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, 5L));
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, PyNone.INSTANCE));
+      assertThrows(PyTypeError.class, () -> _update_(dict, 5L));
+      assertThrows(PyTypeError.class, () -> _update_(dict, PyNone.INSTANCE));
       assertEquals(List.of("a"), keysOf(dict));
     }
 
@@ -1288,7 +1297,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf();
       var pairs = new PyList<Object>(TupleIntrinsics.fromArray(new PyList<Object>(), 1L));
 
-      assertThrows(PyTypeError.class, () -> DictIntrinsics._update_(dict, pairs));
+      assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
       assertTrue(dict.isEmpty());
     }
 
@@ -1296,7 +1305,7 @@ public final class DictIntrinsicsTest {
     public void equivalentNumericKeysReplaceTheSameEntry() {
       var dict = dictOf(1L, "one");
 
-      DictIntrinsics._update_(dict, dictOf(1.0d, "uno", true, "eins"));
+      _update_(dict, dictOf(1.0d, "uno", true, "eins"));
 
       assertEquals(1, dict.size());
       assertEquals(dictOf(1L, "eins"), dict);
@@ -1312,7 +1321,7 @@ public final class DictIntrinsicsTest {
         other.put(i, i * 2);
       }
 
-      DictIntrinsics._update_(dict, other);
+      _update_(dict, other);
 
       assertEquals(500, dict.size());
       for (var i = 0L; i < 500L; i++) {
@@ -1325,8 +1334,8 @@ public final class DictIntrinsicsTest {
     public void nullArgumentsAreRejected() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._update_(null, dictOf()));
-      assertThrows(NullPointerException.class, () -> DictIntrinsics._update_(dict, null));
+      assertThrows(NullPointerException.class, () -> _update_(null, dictOf()));
+      assertThrows(NullPointerException.class, () -> _update_(dict, null));
     }
   }
 }
