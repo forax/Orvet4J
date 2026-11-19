@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class BytecodeGeneratorTest {
   private static ModuleContext run(String source) {
@@ -851,6 +852,7 @@ public final class BytecodeGeneratorTest {
       assertEquals(3L, eval(source, "r"));
     }
 
+
     // -- for
 
     @Test
@@ -1037,6 +1039,27 @@ public final class BytecodeGeneratorTest {
           """;
 
       assertEquals(21L, eval(source, "r"));
+    }
+
+    @Test
+    public void mixedNestedLoopsRestoreTheirParentTargets() {
+      var source = """
+      total = 0
+      for outer in [1, 2]:
+          inner = 0
+          while inner < 3:
+              inner += 1
+              if inner == 2:
+                  continue
+              if outer == 2 and inner == 3:
+                  break
+              total += 1
+          else:
+              total += 10
+      result = total
+      """;
+
+      assertEquals(13L, eval(source, "result"));
     }
   }
 
@@ -2478,6 +2501,180 @@ public final class BytecodeGeneratorTest {
           """;
 
       assertEquals(21L, eval(source, "r"));
+    }
+
+    @Test
+    public void functionLocalSlotsBeyond255UseWideInstructions() {
+      var source = new StringBuilder("""
+          def calculate():
+              total = 0
+          """);
+
+      var expected = 0L;
+      for (var i = 0; i < 300; i++) {
+        source.append("    value").append(i)
+            .append(" = ").append(i).append('\n');
+        source.append("    total += value").append(i).append('\n');
+        expected += i;
+      }
+
+      source.append("""
+          for item in [1, 2]:
+              total += item
+          return total
+      
+      result = calculate()
+      """);
+
+      assertEquals(expected + 3, eval(source.toString(), "result"));
+    }
+
+    private String callWithArguments(int count) {
+      var source = new StringBuilder("""
+          def count(*args):
+              return len(args)
+          result = count(
+          """);
+
+      for (var i = 0; i < count; i++) {
+        if (i != 0) {
+          source.append(", ");
+        }
+        source.append(i);
+      }
+
+      return source.append(")\n").toString();
+    }
+
+    @Test
+    public void maximumSupportedCallArguments() {
+      assertEquals(252L, eval(callWithArguments(252), "result"));
+    }
+
+    @Test
+    public void tooManyCallArgumentsAreRejected() {
+      var error = assertThrows(
+          SemanticErrorException.class, () -> run(callWithArguments(253)));
+
+      assertTrue(error.getMessage().contains("call with more than 252 arguments"));
+      assertEquals(3, error.line());
+    }
+
+    private String closureWithCaptures(int count) {
+      var source = new StringBuilder("def outer():\n");
+      for (int i = 0; i < count; i++) {
+        source.append("    value").append(i)
+            .append(" = ").append(i).append('\n');
+      }
+
+      source.append("    def inner():\n        return ");
+      for (int i = 0; i < count; i++) {
+        if (i != 0) {
+          source.append(" + ");
+        }
+        source.append("value").append(i);
+      }
+      source.append('\n');
+
+      source.append("""
+              return inner
+          result = outer()()
+          """);
+      return source.toString();
+    }
+
+    @Test
+    public void maximumSupportedNumberOfCapturedVariables() {
+      // Sum of 0 through 252.
+      assertEquals(31_626L, eval(closureWithCaptures(252), "result"));
+    }
+
+    @Test
+    public void tooManyCapturedVariablesAreRejected() {
+      var error = assertThrows(
+          SemanticErrorException.class,
+          () -> run(closureWithCaptures(253)));
+
+      assertTrue(error.getMessage().contains(
+              "too many parameters and captured variables"));
+    }
+
+    @Test
+    public void longForwardConditionalBranchIsHandled() {
+      var source = new StringBuilder("""
+      def calculate():
+          value = 0
+          if False:
+      """);
+
+      // Produce a branch body large enough to exceed a short JVM branch offset.
+      source.repeat("        value += 1\n", 4_000);
+
+      source.append("""
+          return value
+      result = calculate()
+      """);
+
+      assertEquals(0L, eval(source.toString(), "result"));
+    }
+
+    @Test
+    public void deeplyNestedIfStatements() {
+      var depth = 64;
+
+      var source = new StringBuilder();
+      for (var i = 0; i < depth; i++) {
+        source.repeat("    ", i)
+            .append("if True:\n");
+      }
+      source.repeat("    ", depth)
+          .append("result = 42\n");
+
+      assertEquals(42L, eval(source.toString(), "result"));
+    }
+
+    @Test
+    public void veryLargeTupleLiteral() {
+      var source = new StringBuilder("result = (");
+      for (var i = 0; i < 1_000; i++) {
+        if (i != 0) {
+          source.append(", ");
+        }
+        source.append(i);
+      }
+      source.append(")\n");
+
+      var tuple = (PyTuple) eval(source.toString(), "result");
+
+      assertEquals(1_000, tuple.size());
+      assertEquals(0L, tuple.get(0));
+      assertEquals(500L, tuple.get(500));
+      assertEquals(999L, tuple.get(999));
+    }
+
+    private String oversizedFunction() {
+      var source = new StringBuilder("""
+          def huge():
+              total = 0
+          """);
+
+      source.repeat("    total += 1\n", 10_000);
+
+      source.append("""
+              return total
+          result = huge()
+          """);
+      return source.toString();
+    }
+
+    @Test
+    public void oversizedGeneratedMethodHasUsefulDiagnostic() {
+      var error = assertThrows(
+          SemanticErrorException.class,
+          () -> run(oversizedFunction()));
+
+      assertTrue(error.getMessage().contains("method bytecode limit"));
+      assertEquals(1, error.line());
     }
   }
 }

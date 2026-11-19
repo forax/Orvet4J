@@ -16,6 +16,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodTooLargeException;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -37,7 +38,7 @@ import static org.objectweb.asm.Opcodes.*;
 public final class BytecodeGenerator {
   private BytecodeGenerator() { throw new AssertionError(); }
 
-  private static final int MAX_PARAMETERS = 254;           // JVM and MethodHandle limit
+  private static final int MAX_PARAMETERS = 253;           // JVM and MethodHandle limit
   private static final int MAX_CALL_ARGUMENTS = MAX_PARAMETERS - 1;
   private static final int LDC_CHUNK = 20_000;             // 3 bytes per char at most, 65535 bytes per constant
 
@@ -180,7 +181,12 @@ public final class BytecodeGenerator {
     mv.visitMaxs(0, 0);
     mv.visitEnd();
     cw.visitEnd();
-    return cw.toByteArray();
+
+    try {
+      return cw.toByteArray();
+    } catch (MethodTooLargeException _) {
+      throw new SemanticErrorException("method bytecode limit", def.line(), def.column());
+    }
   }
 
   private static ClassWriter newClassWriter(String internalName) {
@@ -198,6 +204,10 @@ public final class BytecodeGenerator {
 
   private static UnsupportedSyntaxException unsupported(String construct, int line, int column) {
     return new UnsupportedSyntaxException(construct, line, column);
+  }
+
+  private static SemanticErrorException semanticError(String message, int line, int column) {
+    return new SemanticErrorException(message, line, column);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -715,7 +725,7 @@ public final class BytecodeGenerator {
       var positional = args.positional();
       var keywords = args.keywords();
       if (positional.size() + keywords.size() > MAX_CALL_ARGUMENTS) {
-        throw unsupported("call with more than " + MAX_CALL_ARGUMENTS + " arguments", line, column);
+        throw semanticError("call with more than " + MAX_CALL_ARGUMENTS + " arguments", line, column);
       }
       for (var arg : positional) {
         expr(arg);
