@@ -1813,6 +1813,28 @@ public final class BytecodeGeneratorTest {
     }
 
     @Test
+    public void listSliceAssignmentAndDeletionWorkEndToEnd() {
+      var module = run("""
+                xs = [0, 1, 2, 3, 4, 5]
+                full = xs[:]
+                stepped = xs[1:6:2]
+                reversed = xs[::-1]
+                
+                xs[::2] = [10, 20, 30]
+                del xs[::-2]
+                """);
+
+      assertEquals(new PyList<>(0L, 1L, 2L, 3L, 4L, 5L),
+          module.getGlobal("full"));
+      assertEquals(new PyList<>(1L, 3L, 5L),
+          module.getGlobal("stepped"));
+      assertEquals(new PyList<>(5L, 4L, 3L, 2L, 1L, 0L),
+          module.getGlobal("reversed"));
+      assertEquals(new PyList<>(10L, 20L, 30L),
+          module.getGlobal("xs"));
+    }
+
+    @Test
     public void invalidIndexTypesRaiseTypeError() {
       assertThrows(PyTypeError.class, () -> eval("x = [1]; y = x['0']", "y"));
       assertThrows(PyTypeError.class, () -> eval("x = [1]; y = x[0.0]", "y"));
