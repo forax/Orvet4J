@@ -5,6 +5,7 @@ import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyTypeError;
@@ -244,6 +245,111 @@ public final class ListIntrinsicsTest {
             ListIntrinsics.$imul$(list, 0);
 
             assertTrue(list.isEmpty());
+        }
+    }
+
+
+    @Nested
+    public final class Slicing {
+        @Test
+        public void readsForwardAndBackwardSlices() {
+            var list = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+
+            assertArrayEquals(new Object[]{1L, 2L, 3L},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(1L, 4L, PyNone.INSTANCE)).toArray());
+
+            assertArrayEquals(new Object[]{0L, 2L, 4L},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, 2L)).toArray());
+
+            assertArrayEquals(new Object[]{5L, 3L, 1L},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, -2L)).toArray());
+
+            assertArrayEquals(new Object[]{},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(3L, 3L, 1L)).toArray());
+        }
+
+        @Test
+        public void hugeSliceBoundsAreClamped() {
+            var list = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+            var huge = BigInteger.TEN.pow(100);
+
+            assertArrayEquals(new Object[]{0L, 1L, 2L, 3L, 4L, 5L},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(huge.negate(), huge, 1L)).toArray());
+
+            // A huge negative step selects the final element.
+            assertArrayEquals(new Object[]{5L},
+                ListIntrinsics.$slice$(list,
+                    PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE,
+                        huge.negate())).toArray());
+        }
+
+        @Test
+        public void assigningToAnExtendedSliceReplacesSelectedElements() {
+            var list = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+
+            ListIntrinsics.$setSlice$(list,
+                PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, 2L),
+                pyList(10L, 20L, 30L));
+
+            assertArrayEquals(
+                new Object[]{10L, 1L, 20L, 3L, 30L, 5L},
+                list.toArray());
+        }
+
+        @Test
+        public void assigningTheListToItsOwnFullSliceIsSafe() {
+            var list = pyList(1L, 2L, 3L);
+
+            ListIntrinsics.$setSlice$(list,
+                PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, PyNone.INSTANCE),
+                list);
+
+            assertArrayEquals(new Object[]{1L, 2L, 3L}, list.toArray());
+        }
+
+        @Test
+        public void extendedSliceAssignmentRequiresExactLength() {
+            var list = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+            var original = list.toArray();
+
+            assertThrows(PyValueError.class, () ->
+                ListIntrinsics.$setSlice$(list,
+                    PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, 2L),
+                    pyList(10L, 20L)));
+
+            assertArrayEquals(original, list.toArray());
+        }
+
+        @Test
+        public void deletesForwardAndBackwardExtendedSlices() {
+            var forward = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+            ListIntrinsics.$deleteSlice$(forward,
+                PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, 2L));
+
+            assertArrayEquals(new Object[]{1L, 3L, 5L}, forward.toArray());
+
+            var backward = pyList(0L, 1L, 2L, 3L, 4L, 5L);
+            ListIntrinsics.$deleteSlice$(backward,
+                PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, -2L));
+
+            assertArrayEquals(new Object[]{0L, 2L, 4L}, backward.toArray());
+        }
+
+        @Test
+        public void zeroStepIsRejectedWithoutModifyingTheList() {
+            var list = pyList(0L, 1L, 2L);
+            var original = list.toArray();
+
+            assertThrows(PyValueError.class, () ->
+                ListIntrinsics.$deleteSlice$(list,
+                    PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, 0L)));
+
+            assertArrayEquals(original, list.toArray());
         }
     }
 
