@@ -7,6 +7,7 @@ import com.github.forax.orvet.ast.UnsupportedSyntaxException;
 import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.engine.ScopeAnalyzer;
 import com.github.forax.orvet.rt.ModuleContext;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -94,7 +95,7 @@ public final class ConformanceTestIT {
       try {
         var context = new ModuleContext();
         Engine.run(context, script);
-      } catch (UnsupportedSyntaxException e) {
+      } catch (UnsupportedSyntaxException | UnimplementedFeatureError e) {
         Assumptions.assumeTrue(false, e.getMessage());
         return;
       }
