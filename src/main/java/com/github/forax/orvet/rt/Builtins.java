@@ -70,6 +70,7 @@ final class Builtins {
           fixed("divmod", "a", "b"),
           fixed("hash", "object"),
           fixed("hex", "x"),
+          fixed("id", "object"),
           fixed("isinstance", "obj", "classinfo"),
           fixed("issubclass", "cls", "classinfo"),
           specialized("len", ItemIntrinsics.class, "object"),
@@ -132,7 +133,6 @@ final class Builtins {
           variadic("exec"),
           variadic("format"),
           variadic("help"),
-          variadic("id"),
           variadic("input"),
           variadic("open"),
           variadic("__import__"),
@@ -565,6 +565,13 @@ final class Builtins {
     }
 
     return total;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _id_(Object object) {
+    // Let's fake it
+    return ((long) System.identityHashCode(object.getClass())) << 32L |
+        (long) System.identityHashCode(object);
   }
 
   // -- Helpers
