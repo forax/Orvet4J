@@ -1,5 +1,7 @@
 package com.github.forax.orvet.rt.intrinsic;
 
+import com.github.forax.orvet.rt.PyDict;
+import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
@@ -171,6 +173,56 @@ public final class StringIntrinsicsTest {
       assertEquals("repr of a non canonical value: java.lang.Character",
           assertThrows(NotCanonicalException.class,
               () -> StringIntrinsics.$repr$('c')).getMessage());
+    }
+  }
+
+
+  @Nested
+  public final class RecursiveRepr {
+    @Test
+    public void selfReferentialList() {
+      var list = new PyList<>();
+      list.append(list);
+
+      assertEquals("[[...]]", StringIntrinsics.$repr$(list));
+    }
+
+    @Test
+    public void selfReferentialDict() {
+      var dict = new PyDict<>();
+      dict.put("self", dict);
+
+      assertEquals("{'self': {...}}", StringIntrinsics.$repr$(dict));
+    }
+
+    @Test
+    public void cycleAcrossTupleAndList() {
+      var list = new PyList<>();
+      var tuple = new PyTuple1(list);
+      list.append(tuple);
+
+      assertEquals("([(...)],)", StringIntrinsics.$repr$(tuple));
+    }
+
+    @Test
+    public void repeatedReferenceIsNotAMCycle() {
+      var child = new PyList<>(1L);
+      var list = new PyList<>(child, child);
+
+      assertEquals("[[1], [1]]", StringIntrinsics.$repr$(list));
+    }
+
+    @Test
+    public void reprStateIsCleanedUpAfterAnException() {
+      var list = new PyList<>();
+      list.append(list);
+      list.append(new Object());  // Not a canonical Python value
+
+      assertThrows(NotCanonicalException.class, () -> StringIntrinsics.$repr$(list));
+
+      list.set(1, 42L);
+
+      assertEquals("[[...], 42]", StringIntrinsics.$repr$(list));
     }
   }
 
