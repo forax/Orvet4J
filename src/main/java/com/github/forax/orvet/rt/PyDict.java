@@ -452,7 +452,7 @@ public final class PyDict<K,V> {
 
   private void checkOwner() {
     if (Thread.currentThread() != owner) {
-      throw new PyRuntimeError( "PyList is not owned by the current thread");
+      throw new PyRuntimeError( "PyDict is not owned by the current thread");
     }
   }
 
