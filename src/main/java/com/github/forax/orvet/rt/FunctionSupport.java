@@ -22,9 +22,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.exactInvoker;
 import static java.lang.invoke.MethodHandles.foldArguments;
 import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodHandles.throwException;
 import static java.lang.invoke.MethodType.methodType;
 
 /// Runtime support for Python function definitions, lazy compilation, and dynamic invocations.
@@ -244,14 +246,14 @@ final class FunctionSupport {
       // 1. (Object[] captured, PyFunction self, <declared parameters> [, rest])
       var captureCount = code.captureCount();
       var handle = captureCount == 0
-          ? MethodHandles.dropArguments(compiledEntry, 0, Object[].class)
+          ? dropArguments(compiledEntry, 0, Object[].class)
           : compiledEntry.asSpreader(0, Object[].class, captureCount);
 
       // 2. No rest parameter: spread the declared parameters (or ignore the array if there is none).
       var arity = code.parameters().size();
       if (!code.isVariadic()) {
         return arity == 0
-            ? MethodHandles.dropArguments(handle, 2, Object[].class)
+            ? dropArguments(handle, 2, Object[].class)
             : handle.asSpreader(2, Object[].class, arity);
       }
 
@@ -431,7 +433,7 @@ final class FunctionSupport {
     static MethodHandle getNoCaptureMH(PyFunction function) {
       var compiledEntry = getCompiledEntry(function.code);
       var bound = compiledEntry.bindTo(function);
-      return MethodHandles.dropArguments(bound, 0, Object.class);  // drop the callee
+      return dropArguments(bound, 0, Object.class);  // drop the callee
     }
 
     static MethodHandle getEntry(PyFunction.Code code) {
@@ -566,8 +568,8 @@ final class FunctionSupport {
     }
 
     private MethodHandle fallback(Object receiver) {
-      var intrinsic = intrinsicForClass(receiver);
       var receiverClass = receiver.getClass();
+      var intrinsic = intrinsicForClass(receiver);
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
 
@@ -614,7 +616,8 @@ final class FunctionSupport {
 
     static CallSite methodCall(String name, MethodType type, int positionalCount, String... keywordNames) {
       if (keywordNames.length != 0) {
-        throw new UnsupportedOperationException("keyword arguments are not supported yet");
+        return new ConstantCallSite(throwMH(type,
+            new UnimplementedFeatureError("method calls with keyword arguments are not supported yet")));
       }
       return new MethodCallSite(type, name);
     }
@@ -629,6 +632,12 @@ final class FunctionSupport {
         };
         default -> throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) + "' object has no attribute '" + name + "'");
       };
+    }
+
+    private static MethodHandle throwMH(MethodType type, Throwable throwable) {
+      return dropArguments(
+          throwException(type.returnType(), throwable.getClass()).bindTo(throwable),
+          0, type.parameterArray());
     }
   }
 
