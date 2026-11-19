@@ -698,12 +698,10 @@ public final class BytecodeGenerator {
           intrinsic(ITEM, "$getItem$", BINARY);
         }
         case Expr.Slice s -> {
-          mv.visitTypeInsn(NEW, PY_SLICE);                       // PY_SLICE = "com/github/forax/orvet/rt/PySlice"
-          mv.visitInsn(DUP);
-          expr(s.lower());                                       // omitted parts are NoneLiteral
+          expr(s.lower());                           // omitted parts are NoneLiteral
           expr(s.upper());
           expr(s.step());
-          mv.visitMethodInsn(INVOKESPECIAL, PY_SLICE, "<init>", "(" + O + O + O + ")V", false);
+          mv.visitMethodInsn(INVOKESTATIC, PY_SLICE, "of", "(" + O + O + O + ")L" + PY_SLICE + ';', false);
         }
         case Expr.ListDisplay d -> listDisplay(d);
         case Expr.TupleDisplay d -> tupleDisplay(d);

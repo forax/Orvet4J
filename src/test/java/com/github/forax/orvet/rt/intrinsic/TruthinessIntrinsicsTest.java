@@ -65,6 +65,6 @@ public final class TruthinessIntrinsicsTest {
 
   @Test
   public void slicesAreAlwaysTruthy() {
-    assertTrue(truthy(new PySlice(PyNone.INSTANCE, PyNone.INSTANCE, PyNone.INSTANCE)));
+    assertTrue(truthy(PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, PyNone.INSTANCE)));
   }
 }

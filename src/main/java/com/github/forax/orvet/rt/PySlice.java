@@ -32,6 +32,13 @@ public final class PySlice {
         + StringIntrinsics.$repr$(stop) + ", " + StringIntrinsics.$repr$(step) + ")";
   }
 
+  public static PySlice of(Object start, Object stop, Object step) {
+    Objects.requireNonNull(start);
+    Objects.requireNonNull(stop);
+    Objects.requireNonNull(step);
+    return new PySlice(start, stop, step);
+  }
+
   public Resolved resolve(long length) {
     var stepValue = step == PyNone.INSTANCE ? 1L : index(step);
     if (stepValue == 0) {

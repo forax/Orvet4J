@@ -70,11 +70,11 @@ public final class RangeIntrinsicsTest {
 
   @Test
   public void slicing() {
-    var sliced = RangeIntrinsics.$slice$(range(0, 10, 1), new PySlice(2L, 8L, 2L));
+    var sliced = RangeIntrinsics.$slice$(range(0, 10, 1), PySlice.of(2L, 8L, 2L));
     assertTrue(RangeIntrinsics.sameSequence(sliced, range(2, 8, 2)));
 
     var reversed = RangeIntrinsics.$slice$(range(0, 10, 1),
-        new PySlice(PyNone.INSTANCE, PyNone.INSTANCE, -1L));
+        PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, -1L));
     assertEquals(10L, RangeIntrinsics.$size$(reversed));
     assertEquals(9L, RangeIntrinsics.$get$(reversed, 0));
   }

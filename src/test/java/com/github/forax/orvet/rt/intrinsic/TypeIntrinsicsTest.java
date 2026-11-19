@@ -45,7 +45,7 @@ public final class TypeIntrinsicsTest {
       assertSame(PyType.LIST, $type$(new PyList<>()));
       assertSame(PyType.TUPLE, $type$(new PyTuple.PyTuple1(1L)));
       assertSame(PyType.RANGE, $type$(PyRange.of(0, 10, 1)));
-      assertSame(PyType.SLICE, $type$(new PySlice(0L, 10L, 1L)));
+      assertSame(PyType.SLICE, $type$(PySlice.of(0L, 10L, 1L)));
 
       var context = new ModuleContext();
       Engine.run(context, "def f(): pass");

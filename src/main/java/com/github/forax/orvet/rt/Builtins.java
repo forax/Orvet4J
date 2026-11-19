@@ -392,9 +392,9 @@ final class Builtins {
   public static Object _slice_(Object... a) {
     requireCount("slice", a.length, 1, 3);
     return switch (a.length) {
-      case 1 -> new PySlice(PyNone.INSTANCE, a[0], PyNone.INSTANCE);
-      case 2 -> new PySlice(a[0], a[1], PyNone.INSTANCE);
-      default -> new PySlice(a[0], a[1], a[2]);
+      case 1 -> PySlice.of(PyNone.INSTANCE, a[0], PyNone.INSTANCE);
+      case 2 -> PySlice.of(a[0], a[1], PyNone.INSTANCE);
+      default -> PySlice.of(a[0], a[1], a[2]);
     };
   }
 
