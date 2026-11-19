@@ -22,6 +22,7 @@ import java.lang.invoke.MutableCallSite;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.invoke.MethodHandles.exactInvoker;
 import static java.lang.invoke.MethodHandles.foldArguments;
@@ -551,6 +552,13 @@ final class FunctionSupport {
       }
     }
 
+    private static final ClassValue<ConcurrentHashMap<String, MethodHandle>> METHOD_CACHE = new ClassValue<>() {
+      @Override
+      protected ConcurrentHashMap<String, MethodHandle> computeValue(Class<?> type) {
+        return new ConcurrentHashMap<>();
+      }
+    };
+
     private final String name;
 
     private MethodCallSite(MethodType type, String name) {
@@ -564,12 +572,11 @@ final class FunctionSupport {
       var receiverClass = receiver.getClass();
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
+
       MethodHandle mh;
       try {
-        mh = LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
-      } catch (IllegalAccessException e) {
-        throw new AssertionError(e);
-      } catch (NoSuchMethodException e) {
+        mh = resolve(intrinsic, name, methodType);
+      } catch(NoSuchMethodError _) {
         throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
             "' object has no attribute '" + name + "'");
       }
@@ -584,6 +591,27 @@ final class FunctionSupport {
 
     private static boolean typeCheck(Class<?> receiverClass, Object receiver) {
       return receiverClass == receiver.getClass();
+    }
+
+    private static MethodHandle resolve(Class<?> intrinsic, String name, MethodType methodType) {
+      var methodMap = METHOD_CACHE.get(intrinsic);
+      var key = name + "/" + methodType.parameterCount();
+      var mh = methodMap.get(key);
+      if (mh != null) {
+        return mh;
+      }
+      try {
+        mh = LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
+      } catch (IllegalAccessException e) {
+        throw new AssertionError(e);
+      } catch (NoSuchMethodException e) {
+        throw (NoSuchMethodError) new NoSuchMethodError().initCause(e);
+      }
+      if (methodMap.putIfAbsent(key, mh) != null) {
+        // the methodMap has been updated by another thread
+        mh = methodMap.get(key);
+      }
+      return mh;
     }
 
     static CallSite methodCall(String name, MethodType type, int positionalCount, String... keywordNames) {
