@@ -9,6 +9,7 @@ import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -309,6 +310,68 @@ public final class PyDict<K,V> {
         };
       }
     };
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    checkOwner();
+    if (!(obj instanceof PyDict<?,?> dict)) {
+      return false;
+    }
+    dict.checkOwner();
+    if (dict.size != size) {
+      return false;
+    }
+    for (var i = 0; i < entryCount; i++) {
+      var key = keys[i];
+      if (key == null) {
+        continue;
+      }
+      var otherValue = dict.get(key);
+      if (otherValue == null) {
+        return false;
+      }
+      var value = values[i];
+      if (!value.equals(otherValue)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    checkOwner();
+    var h = 0;
+    for (var i = 0; i < entryCount; i++) {
+      var key = keys[i];
+      if (key == null) {
+        continue;
+      }
+      var value = values[i];
+      h += key.hashCode() ^ value.hashCode();
+    }
+    return h;
+  }
+
+  @Override
+  public String toString() {
+    var builder = new StringBuilder().append("PyDict{");
+    var separator = "";
+    for (var i = 0; i < entryCount; i++) {
+      var key = keys[i];
+      if (key == null) {
+        continue;
+      }
+      var value = values[i];
+      builder.append(separator);
+      builder.append(key);
+      builder.append('=');
+      builder.append(value);
+      separator = ", ";
+    }
+    builder.append('}');
+    return builder.toString();
   }
 
   // -- Hash-table implementation

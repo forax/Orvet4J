@@ -251,7 +251,7 @@ public final class PyList<E> {
   public String toString() {
     checkOwner();
     var builder = new StringBuilder()
-        .append('[');
+        .append("PyList[");
     var separator = "";
     for (var i = 0; i < size; i++) {
       builder.append(separator).append(elements[i]);
