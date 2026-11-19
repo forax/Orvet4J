@@ -3,7 +3,7 @@
 Orvet4J (orvet for short) is an experimental implementation of a subset of Python that
 runs on the Java Virtual Machine (JVM).
 
-Unlike an implementation that embeds CPython, Orvet compiles Python source code into JVM bytecode.
+Orvet compiles Python source code into JVM bytecode.
 
 The goal is to support a useful subset of Python while taking advantage of JVM optimizations,
 including `invokedynamic` and specialized runtime operations.
