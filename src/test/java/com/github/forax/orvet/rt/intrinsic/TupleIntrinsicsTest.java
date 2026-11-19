@@ -1,6 +1,7 @@
 package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
@@ -69,6 +70,24 @@ public final class TupleIntrinsicsTest {
         assertEquals("tuple index out of range", error.getMessage());
       }
     }
+  }
+
+  @Test
+  public void slicingSupportsIdentityEmptyAndNegativeStepCases() {
+    var tuple = fromArray(0L, 1L, 2L, 3L, 4L, 5L);
+
+    // A full slice with step 1 returns the original immutable tuple.
+    assertSame(tuple, $slice$(tuple,
+        PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, PyNone.INSTANCE)));
+
+    assertEquals(fromArray(1L, 3L, 5L),
+        $slice$(tuple, PySlice.of(1L, PyNone.INSTANCE, 2L)));
+
+    assertEquals(fromArray(5L, 3L, 1L),
+        $slice$(tuple, PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, -2L)));
+
+    assertEquals(fromArray(),
+        $slice$(tuple, PySlice.of(3L, 3L, 1L)));
   }
 
   @Test
