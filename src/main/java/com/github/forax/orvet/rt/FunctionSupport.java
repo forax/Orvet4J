@@ -9,9 +9,7 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.DictIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ListIntrinsics;
-import com.github.forax.orvet.rt.intrinsic.NotCanonicalException;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
-import com.github.forax.orvet.rt.intrinsic.TypeIntrinsics;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
