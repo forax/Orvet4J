@@ -9,6 +9,7 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.DictIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ListIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.TupleIntrinsics;
 
 import java.lang.invoke.CallSite;
@@ -624,6 +625,7 @@ final class FunctionSupport {
 
     private Class<?> intrinsicForClass(Object receiver) {
       return switch (receiver) {
+        case String _ -> StringIntrinsics.class;
         case PyList<?> _ -> ListIntrinsics.class;
         case PyDict<?, ?> _ -> DictIntrinsics.class;
         case PyType type -> switch (type) {

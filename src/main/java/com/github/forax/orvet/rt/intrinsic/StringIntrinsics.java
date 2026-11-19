@@ -9,12 +9,17 @@ import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyIndexError;
+import com.github.forax.orvet.rt.error.PyOverflowError;
+import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.IdentityHashMap;
+import java.util.Locale;
+import java.util.function.IntPredicate;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.normalize;
 import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStart;
@@ -413,6 +418,309 @@ public final class StringIntrinsics {
     for (var shift = (width - 1) * 4; shift >= 0; shift -= 4) {
       builder.append(HEX[(value >>> shift) & 0xf]);
     }
+  }
+
+
+  // -- method table
+
+  public static Object _lower_(String s) {
+    return s.toLowerCase(Locale.ROOT);
+  }
+
+  public static Object _upper_(String s) {
+    return s.toUpperCase(Locale.ROOT);
+  }
+
+  public static Object _capitalize_(String s) {
+    if (s.isEmpty()) {
+      return s;
+    }
+    var first = s.codePointAt(0);
+    var firstString =
+        new String(Character.toChars(Character.toTitleCase(first)));
+    var rest = s.substring(Character.charCount(first))
+        .toLowerCase(Locale.ROOT);
+    return firstString + rest;
+  }
+
+  public static Object _swapcase_(String s) {
+    var builder = new StringBuilder();
+    for (int i = 0; i < s.length();) {
+      var cp = s.codePointAt(i);
+      i += Character.charCount(cp);
+      var character = new String(Character.toChars(cp));
+      if (Character.isUpperCase(cp) || Character.isTitleCase(cp)) {
+        builder.append(character.toLowerCase(Locale.ROOT));
+      } else if (Character.isLowerCase(cp)) {
+        builder.append(character.toUpperCase(Locale.ROOT));
+      } else {
+        builder.appendCodePoint(cp);
+      }
+    }
+    return builder.toString();
+  }
+
+
+  public static Object _find_(String s, Object sub) {
+    return find(s, requireString(sub, "find", "sub"),
+        0, codePointLength(s), false);
+  }
+
+  public static Object _find_(
+      String s, Object sub, Object start) {
+
+    return find(s, requireString(sub, "find", "sub"),
+        normalizeBound(asIndex(start), codePointLength(s)),
+        codePointLength(s), false);
+  }
+
+  public static Object _find_(
+      String s, Object sub, Object start, Object end) {
+
+    var length = codePointLength(s);
+
+    return find(s, requireString(sub, "find", "sub"),
+        normalizeBound(asIndex(start), length),
+        normalizeBound(asIndex(end), length), false);
+  }
+
+  public static Object _rfind_(String s, Object sub) {
+    return find(s, requireString(sub, "rfind", "sub"),
+        0, codePointLength(s), true);
+  }
+
+  public static Object _index_(String s, Object sub) {
+    return find(s, requireString(sub, "index", "sub"),
+        0, codePointLength(s), false, true);
+  }
+
+  public static Object _rindex_(String s, Object sub) {
+    return find(s, requireString(sub, "rindex", "sub"),
+        0, codePointLength(s), true, true);
+  }
+
+
+  public static Object _partition_(String s, Object sep) {
+    var separator = requireString(sep, "partition", "sep");
+    if (separator.isEmpty()) {
+      throw new PyValueError("empty separator");
+    }
+    var index = s.indexOf(separator);
+    if (index < 0) {
+      return TupleIntrinsics.fromArray(
+          new Object[] { s, "", "" });
+    }
+    return TupleIntrinsics.fromArray(new Object[] {
+        s.substring(0, index),
+        separator,
+        s.substring(index + separator.length())
+    });
+  }
+
+  public static Object _rpartition_(String s, Object sep) {
+    var separator = requireString(sep, "rpartition", "sep");
+    if (separator.isEmpty()) {
+      throw new PyValueError("empty separator");
+    }
+    var index = s.lastIndexOf(separator);
+    if (index < 0) {
+      return TupleIntrinsics.fromArray(
+          new Object[] { "", "", s });
+    }
+    return TupleIntrinsics.fromArray(new Object[] {
+        s.substring(0, index),
+        separator,
+        s.substring(index + separator.length())
+    });
+  }
+
+  public static Object _join_(String separator, Object iterable) {
+    var builder = new StringBuilder();
+    var iterator = IteratorIntrinsics.$iterator$(iterable);
+    var first = true;
+    var index = 0;
+    Object item;
+    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+      if (!(item instanceof String string)) {
+        throw new PyTypeError("sequence item " + index
+            + ": expected str instance, "
+            + IntrinsicSupport.typeName(item)
+            + " found");
+      }
+      if (!first) {
+        builder.append(separator);
+      }
+      builder.append(string);
+      first = false;
+      index++;
+    }
+    return builder.toString();
+  }
+
+  public static Object _removeprefix_(String s, Object prefix) {
+    var p = requireString(prefix, "removeprefix", "prefix");
+    return s.startsWith(p) ? s.substring(p.length()) : s;
+  }
+
+  public static Object _removesuffix_(String s, Object suffix) {
+    var p = requireString(suffix, "removesuffix", "suffix");
+    return !p.isEmpty() && s.endsWith(p)
+        ? s.substring(0, s.length() - p.length())
+        : s;
+  }
+
+
+  public static Object _zfill_(String s, Object width) {
+    var requested = asIndex(width);
+    var length = codePointLength(s);
+    if (requested <= length) {
+      return s;
+    }
+    if (requested - length > Integer.MAX_VALUE) {
+      throw new UnimplementedFeatureError(
+          "string padding exceeds the maximum Java string size");
+    }
+    var padding = "0".repeat((int) (requested - length));
+    if (s.startsWith("+") || s.startsWith("-")) {
+      return s.substring(0, 1) + padding + s.substring(1);
+    }
+    return padding + s;
+  }
+
+
+  public static Object _isascii_(String s) {
+    return s.codePoints().allMatch(cp -> cp < 128);
+  }
+
+  public static Object _isalpha_(String s) {
+    return allCodePoints(s, cp -> {
+      var type = Character.getType(cp);
+      return type == Character.UPPERCASE_LETTER
+          || type == Character.LOWERCASE_LETTER
+          || type == Character.TITLECASE_LETTER
+          || type == Character.MODIFIER_LETTER
+          || type == Character.OTHER_LETTER;
+    });
+  }
+
+  public static Object _isdecimal_(String s) {
+    return allCodePoints(s, cp ->
+        Character.getType(cp) == Character.DECIMAL_DIGIT_NUMBER);
+  }
+
+
+  // -- helpers
+
+  private static boolean allCodePoints(String s, IntPredicate predicate) {
+    if (s.isEmpty()) {
+      return false;
+    }
+    return s.codePoints().allMatch(predicate);
+  }
+
+  private static long find(String s, String sub, int start, int end, boolean reverse) {
+    return find(s, sub, start, end, reverse, false);
+  }
+
+  private static long find(String s, String sub, int start, int end,
+      boolean reverse, boolean raiseIfMissing) {
+    var length = codePointLength(s);
+    start = normalizeBound(start, length);
+    end = normalizeBound(end, length);
+
+    long result = -1;
+    if (start <= end) {
+      var endOffset = offset(s, end);
+      if (sub.isEmpty()) {
+        // The empty string matches at every position.
+        result = reverse ? end : start;
+      } else if (reverse) {
+        // Search from right to left.
+        var candidateOffset = endOffset;
+        for (var i = end; i >= start; i--) {
+          var matchEnd = (long) candidateOffset + sub.length();
+          if (matchEnd <= endOffset &&
+              s.regionMatches(candidateOffset, sub, 0, sub.length()) &&
+              isCodePointBoundary(s, (int) matchEnd)) {
+            result = i;
+            break;
+          }
+          if (i == start) {
+            break;
+          }
+          var previous = s.codePointBefore(candidateOffset);
+          candidateOffset -= Character.charCount(previous);
+        }
+      } else {
+        // Search from left to right.
+        var candidateOffset = offset(s, start);
+        for (var i = start; i < end; i++) {
+          var matchEnd = (long) candidateOffset + sub.length();
+          if (matchEnd <= endOffset
+              && s.regionMatches(candidateOffset, sub, 0, sub.length())
+              && isCodePointBoundary(s, (int) matchEnd)) {
+            result = i;
+            break;
+          }
+          var cp = s.codePointAt(candidateOffset);
+          candidateOffset += Character.charCount(cp);
+        }
+      }
+    }
+    if (result < 0 && raiseIfMissing) {
+      throw new PyValueError("substring not found");
+    }
+    return result;
+  }
+
+  private static boolean isCodePointBoundary(String s, int offset) {
+    return offset == 0 ||
+        offset == s.length() ||
+        !Character.isHighSurrogate(s.charAt(offset - 1)) ||
+        !Character.isLowSurrogate(s.charAt(offset));
+  }
+
+  private static String requireString(Object value, String method, String argument) {
+    if (value instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError(method + "() argument " + argument
+        + " must be str, not " + IntrinsicSupport.typeName(value));
+  }
+
+  private static long asIndex(Object value) {
+    return switch (value) {
+      case Boolean b -> b ? 1L : 0L;
+      case Long l -> l;
+      case BigInteger b -> {
+        try {
+          yield b.longValueExact();
+        } catch (ArithmeticException e) {
+          throw new PyOverflowError(
+              "Python int too large to convert to C ssize_t");
+        }
+      }
+      default -> throw new PyTypeError(
+          "'" + IntrinsicSupport.typeName(value)
+              + "' object cannot be interpreted as an integer");
+    };
+  }
+
+  private static int normalizeBound(long index, int length) {
+    if (index < 0) {
+      index = Math.max(0L, index + length);
+    } else {
+      index = Math.min(index, length);
+    }
+    return (int) index;
+  }
+
+  private static int offset(String s, int codePointIndex) {
+    return s.offsetByCodePoints(0, codePointIndex);
+  }
+
+  private static int codePointLength(String s) {
+    return s.codePointCount(0, s.length());
   }
 
   private static NotCanonicalException notCanonical(String name, Object value) {
