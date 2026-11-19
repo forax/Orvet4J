@@ -123,10 +123,10 @@ public final class ListIntrinsics {
 
   @Intrinsic
   public static <E> PyList<E> $slice$(PyList<E> list, PySlice slice) {
-    var r = slice.resolve(list.size());
-    var result = new PyList<E>((int) r.count());
-    var pos = r.start();
-    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+    var resolved = slice.resolve(list.size());
+    var result = new PyList<E>((int) resolved.count());
+    var pos = resolved.start();
+    for (var i = 0L; i < resolved.count(); i++, pos += resolved.step()) {
       result.append(list.get((int) pos));
     }
     return result;
@@ -135,17 +135,17 @@ public final class ListIntrinsics {
   @Intrinsic
   public static Object $setSlice$(PyList<Object> list, PySlice slice, Object iterable) {
     var items = toItems(iterable);                       // snapshot: l[:] = l is safe
-    var r = slice.resolve(list.size());
-    if (r.step() == 1) {
-      var from = (int) r.start();
-      list.splice(from, from + (int) r.count(), items);  // count == 0 inserts at `from`, as CPython
+    var resolved = slice.resolve(list.size());
+    if (resolved.step() == 1) {
+      var from = (int) resolved.start();
+      list.splice(from, from + (int) resolved.count(), items);  // count == 0 inserts at `from`, as CPython
     } else {
-      if (items.length != r.count()) {
+      if (items.length != resolved.count()) {
         throw new PyValueError("attempt to assign sequence of size " + items.length
-            + " to extended slice of size " + r.count());
+            + " to extended slice of size " + resolved.count());
       }
-      var pos = r.start();
-      for (var i = 0; i < items.length; i++, pos += r.step()) {
+      var pos = resolved.start();
+      for (var i = 0; i < items.length; i++, pos += resolved.step()) {
         list.set((int) pos, items[i]);
       }
     }
@@ -155,21 +155,21 @@ public final class ListIntrinsics {
   @Intrinsic
   @SuppressWarnings("unchecked")
   public static <E> Object $deleteSlice$(PyList<E> list, PySlice slice) {
-    var r = slice.resolve(list.size());
-    if (r.count() == 0) {
+    var resolved = slice.resolve(list.size());
+    if (resolved.count() == 0) {
       return PyNone.INSTANCE;
     }
-    if (r.step() == 1) {
-      list.splice((int) r.start(), (int) (r.start() + r.count()), (E[]) new Object[0]);
+    if (resolved.step() == 1) {
+      list.splice((int) resolved.start(), (int) (resolved.start() + resolved.count()), (E[]) new Object[0]);
       return PyNone.INSTANCE;
     }
     var items = (E[]) list.toArray();
     var removed = new boolean[items.length];
-    var pos = r.start();
-    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+    var pos = resolved.start();
+    for (var i = 0L; i < resolved.count(); i++, pos += resolved.step()) {
       removed[(int) pos] = true;
     }
-    var kept = (E[]) new Object[items.length - (int) r.count()];
+    var kept = (E[]) new Object[items.length - (int) resolved.count()];
     for (int i = 0, k = 0; i < items.length; i++) {
       if (!removed[i]) {
         kept[k++] = items[i];

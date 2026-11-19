@@ -9,14 +9,14 @@ import java.util.Objects;
 
 public final class PySlice {
   /// Result of PySlice_AdjustIndices: `start`/`stop` are clamped as CPython does, `count` is the length of the selection.
-  public record Resolved(long start, long stop, long step, long count) {}
+  public /*value*/ record Resolved(long start, long stop, long step, long count) {}
 
   private final Object start, stop, step;
 
-  public PySlice(Object start, Object stop, Object step) {
-    this.start = Objects.requireNonNull(start);
-    this.stop = Objects.requireNonNull(stop);
-    this.step = Objects.requireNonNull(step);
+  private PySlice(Object start, Object stop, Object step) {
+    this.start = start;
+    this.stop = stop;
+    this.step = step;
   }
 
   public Object start() { return start; }

@@ -174,16 +174,16 @@ public final class TupleIntrinsics {
   @Intrinsic
   public static PyTuple $slice$(PyTuple tuple, PySlice slice) {
     var size = $size$(tuple);
-    var r = slice.resolve(size);
-    if (r.step() == 1 && r.count() == size) {
+    var resolved = slice.resolve(size);
+    if (resolved.step() == 1 && resolved.count() == size) {
       return tuple;                                      // t[:] is t, as in CPython
     }
-    if (r.count() == 0) {
+    if (resolved.count() == 0) {
       return TUPLE_EMPTY;
     }
-    var items = new Object[(int) r.count()];
-    var pos = r.start();
-    for (var i = 0; i < items.length; i++, pos += r.step()) {
+    var items = new Object[(int) resolved.count()];
+    var pos = resolved.start();
+    for (var i = 0; i < items.length; i++, pos += resolved.step()) {
       items[i] = $get$(tuple, pos);
     }
     return fromArray(items);

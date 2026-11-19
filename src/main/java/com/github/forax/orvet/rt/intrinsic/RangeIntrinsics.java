@@ -117,13 +117,13 @@ public final class RangeIntrinsics {
     if (length.bitLength() > 63) {
       throw new UnimplementedFeatureError("slicing a range with more than 2**63-1 elements");
     }
-    var r = slice.resolve(length.longValue());
+    var resolved = slice.resolve(length.longValue());
     var start = bigStart(range);
     var step = bigStep(range);
     return PyRange.of(
-        start.add(BigInteger.valueOf(r.start()).multiply(step)),
-        start.add(BigInteger.valueOf(r.stop()).multiply(step)),
-        step.multiply(BigInteger.valueOf(r.step())));
+        start.add(BigInteger.valueOf(resolved.start()).multiply(step)),
+        start.add(BigInteger.valueOf(resolved.stop()).multiply(step)),
+        step.multiply(BigInteger.valueOf(resolved.step())));
   }
 
   // ------------------------------------------------------------------ operations (not intrinsics)

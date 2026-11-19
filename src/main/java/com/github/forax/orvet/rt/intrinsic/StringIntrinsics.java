@@ -113,10 +113,10 @@ public final class StringIntrinsics {
 
   private static Object getItemSlice(String s, PySlice  index) {
     var codePoints = s.codePoints().toArray();
-    var r = index.resolve(codePoints.length);
+    var resolved = index.resolve(codePoints.length);
     var sb = new StringBuilder();
-    var pos = r.start();
-    for (var i = 0L; i < r.count(); i++, pos += r.step()) {
+    var pos = resolved.start();
+    for (var i = 0L; i < resolved.count(); i++, pos += resolved.step()) {
       sb.appendCodePoint(codePoints[(int) pos]);
     }
     return sb.toString();
