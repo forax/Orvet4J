@@ -1694,7 +1694,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
     public void indexAndRindexNotFound() {
       assertThrowsWithMessage(PyValueError.class, "substring not found",
           () -> StringIntrinsics._index_("abc", "z"));
@@ -1703,7 +1702,7 @@ public final class StringIntrinsicsTest {
       assertThrowsWithMessage(PyValueError.class, "substring not found",
           () -> StringIntrinsics._index_("abc", "", 4L));
       assertThrowsWithMessage(PyValueError.class, "substring not found",
-          () -> StringIntrinsics._rindex_("abcabc", "c", 0L, 5L));
+          () -> StringIntrinsics._rindex_("abcabc", "c", 0L, 2L));
       assertThrowsWithMessage(PyValueError.class, "substring not found",
           () -> StringIntrinsics._index_("😀", "\uD83D"));
     }
