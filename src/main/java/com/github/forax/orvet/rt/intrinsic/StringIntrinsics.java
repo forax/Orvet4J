@@ -562,14 +562,17 @@ public final class StringIntrinsics {
   }
 
   public static Object _removeprefix_(String s, Object prefix) {
-    var p = requireString(prefix, "removeprefix", "prefix");
-    return s.startsWith(p) ? s.substring(p.length()) : s;
+    var p = requireArgumentString(prefix, "removeprefix");
+    return s.startsWith(p) && isCodePointBoundary(s, p.length())
+        ? s.substring(p.length())
+        : s;
   }
 
   public static Object _removesuffix_(String s, Object suffix) {
-    var p = requireString(suffix, "removesuffix", "suffix");
-    return !p.isEmpty() && s.endsWith(p)
-        ? s.substring(0, s.length() - p.length())
+    var p = requireArgumentString(suffix, "removesuffix");
+    var cut = s.length() - p.length();
+    return !p.isEmpty() && s.endsWith(p) && isCodePointBoundary(s, cut)
+        ? s.substring(0, cut)
         : s;
   }
 
