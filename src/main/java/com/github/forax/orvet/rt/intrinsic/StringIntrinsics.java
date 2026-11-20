@@ -507,14 +507,13 @@ public final class StringIntrinsics {
 
 
   public static Object _partition_(String s, Object sep) {
-    var separator = requireString(sep, "partition", "sep");
+    var separator = requireOperandString(sep);
     if (separator.isEmpty()) {
       throw new PyValueError("empty separator");
     }
-    var index = s.indexOf(separator);
+    var index = indexOfAligned(s, separator, 0, s.length());
     if (index < 0) {
-      return TupleIntrinsics.fromArray(
-          new Object[] { s, "", "" });
+      return TupleIntrinsics.fromArray(new Object[] { s, "", "" });
     }
     return TupleIntrinsics.fromArray(new Object[] {
         s.substring(0, index),
@@ -524,14 +523,13 @@ public final class StringIntrinsics {
   }
 
   public static Object _rpartition_(String s, Object sep) {
-    var separator = requireString(sep, "rpartition", "sep");
+    var separator = requireOperandString(sep);
     if (separator.isEmpty()) {
       throw new PyValueError("empty separator");
     }
-    var index = s.lastIndexOf(separator);
+    var index = lastIndexOfAligned(s, separator, 0, s.length());
     if (index < 0) {
-      return TupleIntrinsics.fromArray(
-          new Object[] { "", "", s });
+      return TupleIntrinsics.fromArray(new Object[] { "", "", s });
     }
     return TupleIntrinsics.fromArray(new Object[] {
         s.substring(0, index),
