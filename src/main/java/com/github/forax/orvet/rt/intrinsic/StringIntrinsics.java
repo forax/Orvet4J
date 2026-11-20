@@ -119,17 +119,6 @@ public final class StringIntrinsics {
 
   // -- helpers
 
-  private static Object getItemSlice(String s, PySlice  index) {
-    var codePoints = s.codePoints().toArray();
-    var resolved = index.resolve(codePoints.length);
-    var sb = new StringBuilder();
-    var pos = resolved.start();
-    for (var i = 0L; i < resolved.count(); i++, pos += resolved.step()) {
-      sb.appendCodePoint(codePoints[(int) pos]);
-    }
-    return sb.toString();
-  }
-
   private static String intString(BigInteger value) {
     var result = value.toString();
     var digits = result.charAt(0) == '-'
