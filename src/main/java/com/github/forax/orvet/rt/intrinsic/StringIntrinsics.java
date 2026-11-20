@@ -730,7 +730,9 @@ public final class StringIntrinsics {
 
   private static long find(String s, Object subObject, Object startObject, Object endObject,
                            boolean reverse, boolean raiseIfMissing, String method) {
-    var sub   = requireString(subObject, method, "1");
+    if (!(subObject instanceof String sub)) {
+      throw new PyTypeError(method + "() argument 1 must be str, not " + IntrinsicSupport.typeName(subObject));
+    }
     var start = asSliceIndex(startObject, 0L);
     var end = asSliceIndex(endObject, Long.MAX_VALUE);
 
@@ -775,14 +777,6 @@ public final class StringIntrinsics {
         offset == s.length() ||
         !Character.isHighSurrogate(s.charAt(offset - 1)) ||
         !Character.isLowSurrogate(s.charAt(offset));
-  }
-
-  private static String requireString(Object value, String method, String argument) {
-    if (value instanceof String s) {
-      return s;
-    }
-    throw new PyTypeError(method + "() argument " + argument
-        + " must be str, not " + IntrinsicSupport.typeName(value));
   }
 
   private static long asIndex(Object value) {
