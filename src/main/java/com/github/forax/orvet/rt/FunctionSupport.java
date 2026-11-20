@@ -574,10 +574,8 @@ final class FunctionSupport {
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
 
-      MethodHandle mh;
-      try {
-        mh = resolve(intrinsic, name, methodType);
-      } catch(NoSuchMethodError _) {
+      var mh = resolve(intrinsic, name, methodType);
+      if (mh == null) {
         throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
             "' object has no attribute '" + name + "'");
       }
@@ -606,7 +604,7 @@ final class FunctionSupport {
       } catch (IllegalAccessException e) {
         throw new AssertionError(e);
       } catch (NoSuchMethodException e) {
-        throw (NoSuchMethodError) new NoSuchMethodError().initCause(e);
+        return null;
       }
       if (methodMap.putIfAbsent(key, mh) != null) {
         // the methodMap has been updated by another thread
