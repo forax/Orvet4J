@@ -496,7 +496,7 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void finalSigmaUsesOriginalContext() {    // FAILS TODAY (produces σ, not ς)
+    public void finalSigmaUsesOriginalContext() {
       assertEquals("\u03BF\u03B4\u03BF\u03C2",
           StringIntrinsics._swapcase_("\u039F\u0394\u039F\u03A3"));  // ΟΔΟΣ -> οδος (final ς)
       assertEquals("\u03C3\u03C2",
@@ -506,7 +506,7 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void sigmaIsNotFinalWhenFollowedByCased() { // FAILS TODAY for the Α'ΣΒ case
+    public void sigmaIsNotFinalWhenFollowedByCased() {
       assertEquals("\u03C3a", StringIntrinsics._swapcase_("\u03A3A"));       // ΣA -> σa
       assertEquals("\u03B1'\u03C3\u03B2",
           StringIntrinsics._swapcase_("\u0391'\u03A3\u0392"));               // Α'ΣΒ -> α'σβ
@@ -533,7 +533,7 @@ public final class StringIntrinsicsTest {
   public final class Capitalize {
 
     @Test
-    public void fullTitleMappingExpansions() {        // FAILS TODAY (first char left unchanged)
+    public void fullTitleMappingExpansions() {
       assertEquals("Ssabc", StringIntrinsics._capitalize_("ßabc"));
       assertEquals("Fflabc", StringIntrinsics._capitalize_("ﬄabc"));
       assertEquals("Ffi", StringIntrinsics._capitalize_("ﬃ"));
@@ -560,7 +560,7 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void restLowercaseKeepsOriginalSigmaContext() { // FAILS TODAY (rest lowered in isolation)
+    public void restLowercaseKeepsOriginalSigmaContext() {
       assertEquals("\u03A3\u03C2", StringIntrinsics._capitalize_("\u03A3\u03A3")); // ΣΣ -> Σς
       assertEquals("A\u03C2", StringIntrinsics._capitalize_("A\u03A3"));           // AΣ -> Aς
       assertEquals("A'\u03C2", StringIntrinsics._capitalize_("A'\u03A3"));         // A'Σ -> A'ς
@@ -589,7 +589,7 @@ public final class StringIntrinsicsTest {
   public final class Find {
 
     @Test
-    public void emptySubWithStartBeyondLength() {     // FAILS TODAY (returns 3 / 0 instead of -1)
+    public void emptySubWithStartBeyondLength() {
       assertEquals(-1L, StringIntrinsics._find_("abc", "", 4L));
       assertEquals(-1L, StringIntrinsics._find_("abc", "", 10L));
       assertEquals(-1L, StringIntrinsics._rfind_("abc", "", 4L));
@@ -605,7 +605,7 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void hugeIntegerBoundsAreClampedNotOverflow() { // FAILS TODAY (throws PyOverflowError)
+    public void hugeIntegerBoundsAreClampedNotOverflow() {
       var huge = BigInteger.TEN.pow(100);
       assertEquals(-1L, StringIntrinsics._find_("abc", "a", huge));
       assertEquals(0L, StringIntrinsics._find_("abc", "a", huge.negate()));
@@ -613,14 +613,14 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void longExtremeBounds() {                 // FAILS TODAY for the empty-sub cases
+    public void longExtremeBounds() {
       assertEquals(-1L, StringIntrinsics._find_("abc", "", Long.MAX_VALUE));
       assertEquals(0L, StringIntrinsics._find_("abc", "", Long.MIN_VALUE));
       assertEquals(-1L, StringIntrinsics._find_("abc", "a", Long.MAX_VALUE));
     }
 
     @Test
-    public void noneBoundsUseDefaults() {             // FAILS TODAY (throws PyTypeError)
+    public void noneBoundsUseDefaults() {
       assertEquals(0L, StringIntrinsics._find_("abc", "a", PyNone.INSTANCE));
       assertEquals(2L, StringIntrinsics._find_("abc", "c", PyNone.INSTANCE, PyNone.INSTANCE));
       assertEquals(3L, StringIntrinsics._rfind_("abc", "", PyNone.INSTANCE, PyNone.INSTANCE));
@@ -632,14 +632,14 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void indexRaisesValueErrorOnHugeBound() {  // FAILS TODAY (throws PyOverflowError)
+    public void indexRaisesValueErrorOnHugeBound() {
       var ex = assertThrows(PyValueError.class,
           () -> StringIntrinsics._index_("abc", "a", BigInteger.TEN.pow(100)));
       assertEquals("substring not found", ex.getMessage());
     }
 
     @Test
-    public void wrongTypeBoundMessage() {             // FAILS TODAY (different message)
+    public void wrongTypeBoundMessage() {
       var ex = assertThrows(PyTypeError.class,
           () -> StringIntrinsics._find_("abc", "a", 1.0));
       assertEquals("slice indices must be integers or None or have an __index__ method",
