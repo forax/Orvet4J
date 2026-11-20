@@ -17,6 +17,7 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.function.IntPredicate;
@@ -535,21 +536,29 @@ public final class StringIntrinsics {
     } catch (PyTypeError _) {
       throw new PyTypeError("can only join an iterable");
     }
+
+    // Python implementation drains the iterable before looking at any item
+    // This is not really necessary now given that all our iterators have no side effects
+    var items = new ArrayList<>();
+    {
+      Object item;
+      while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+        items.add(item);
+      }
+    }
+
+    var sep = "";
     var builder = new StringBuilder();
-    var index = 0;
-    Object item;
-    while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+    for (var index = 0; index < items.size(); index++) {
+      var item = items.get(index);
       if (!(item instanceof String string)) {
         throw new PyTypeError("sequence item " + index
             + ": expected str instance, "
             + IntrinsicSupport.typeName(item)
             + " found");
       }
-      if (index != 0) {
-        builder.append(separator);
-      }
-      builder.append(string);
-      index++;
+      builder.append(sep).append(string);
+      sep = separator;
     }
     return builder.toString();
   }

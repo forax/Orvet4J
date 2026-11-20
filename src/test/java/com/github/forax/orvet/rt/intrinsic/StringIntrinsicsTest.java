@@ -17,6 +17,7 @@ import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -821,7 +822,7 @@ public final class StringIntrinsicsTest {
       if (ours.precision() >= 2) {
         var jdk = new BigDecimal(Double.toString(v)).stripTrailingZeros();
         assertEquals(0, ours.compareTo(jdk), () -> "not the shortest repr for " + v + ": " + s
-            + " (JDK: " + Double.toString(v) + ")");
+            + " (JDK: " + v + ")");
       }
     }
   }
@@ -1245,6 +1246,9 @@ public final class StringIntrinsicsTest {
       assertEquals("\u03b1\u03c2", StringIntrinsics._lower_("\u0391\u03a3"));                           // ΑΣ -> ας
       assertEquals("\u03bf\u03b4\u03bf\u03c2 \u03bf\u03b4\u03bf\u03c2",
           StringIntrinsics._lower_("\u039f\u0394\u039f\u03a3 \u039f\u0394\u039f\u03a3"));
+
+      assertEquals("ας_α", StringIntrinsics._lower_("ΑΣ_Α"));
+      assertEquals("α_σ", StringIntrinsics._lower_("Α_Σ"));
     }
 
     @Test
@@ -2348,6 +2352,14 @@ public final class StringIntrinsicsTest {
       assertThrows(UnimplementedFeatureError.class, () -> StringIntrinsics._zfill_("a", 1L << 62));
       assertThrows(UnimplementedFeatureError.class, () -> StringIntrinsics._zfill_("a", (long) Integer.MAX_VALUE + 1));
       assertThrows(UnimplementedFeatureError.class, () -> StringIntrinsics._zfill_("-a", Long.MAX_VALUE));
+    }
+
+    @Test
+    @Disabled
+    public void zfillHugeWidthIsRejectedBeforeAllocating() {
+      var s = "x".repeat(100);
+      var width = (long) Integer.MAX_VALUE + 42;
+      assertThrows(UnimplementedFeatureError.class, () -> StringIntrinsics._zfill_(s, width));
     }
   }
 
