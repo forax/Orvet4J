@@ -464,52 +464,46 @@ public final class StringIntrinsics {
 
 
   public static Object _find_(String s, Object sub) {
-    return find(s, requireString(sub, "find", "sub"), 0, Long.MAX_VALUE, false, false);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, false);
   }
   public static Object _find_(String s, Object sub, Object start) {
-    return find(s, requireString(sub, "find", "sub"),
-        asSliceIndex(start, 0), Long.MAX_VALUE, false, false);
+    return find(s, sub, start, PyNone.INSTANCE, false, false);
   }
   public static Object _find_(String s, Object sub, Object start, Object end) {
-    return find(s, requireString(sub, "find", "sub"),
-        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), false, false);
+    return find(s, sub, start, end, false, false);
   }
 
   public static Object _rfind_(String s, Object sub) {
-    return find(s, requireString(sub, "rfind", "sub"), 0, Long.MAX_VALUE, true, false);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, false);
   }
   public static Object _rfind_(String s, Object sub, Object start) {
-    return find(s, requireString(sub, "rfind", "sub"),
-        asSliceIndex(start, 0), Long.MAX_VALUE, true, false);
+    return find(s, sub, start, PyNone.INSTANCE, true, false);
   }
   public static Object _rfind_(String s, Object sub, Object start, Object end) {
-    return find(s, requireString(sub, "rfind", "sub"),
-        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), true, false);
+    return find(s, sub, start, end, true, false);
   }
 
   public static Object _index_(String s, Object sub) {
-    return find(s, requireString(sub, "index", "sub"), 0, Long.MAX_VALUE, false, true);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, true);
   }
   public static Object _index_(String s, Object sub, Object start) {
-    return find(s, requireString(sub, "index", "sub"),
-        asSliceIndex(start, 0), Long.MAX_VALUE, false, true);
+    return find(s, sub, start, PyNone.INSTANCE, false, true);
   }
   public static Object _index_(String s, Object sub, Object start, Object end) {
-    return find(s, requireString(sub, "index", "sub"),
-        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), false, true);
+    return find(s, sub, start, end, false, true);
   }
 
   public static Object _rindex_(String s, Object sub) {
-    return find(s, requireString(sub, "rindex", "sub"), 0, Long.MAX_VALUE, true, true);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, true);
   }
   public static Object _rindex_(String s, Object sub, Object start) {
-    return find(s, requireString(sub, "rindex", "sub"),
-        asSliceIndex(start, 0), Long.MAX_VALUE, true, true);
+    return find(s, sub, start, PyNone.INSTANCE, true, true);
   }
   public static Object _rindex_(String s, Object sub, Object start, Object end) {
-    return find(s, requireString(sub, "rindex", "sub"),
-        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), true, true);
+    return find(s, sub, start, end, true, true);
   }
+
+
 
 
   public static Object _partition_(String s, Object sep) {
@@ -623,6 +617,44 @@ public final class StringIntrinsics {
 
   // -- helpers
 
+  private static String requireOperandString(Object value) {
+    if (value instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError("must be str, not " + IntrinsicSupport.typeName(value));
+  }
+
+  private static String requireArgumentString(Object value, String method) {
+    if (value instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError(method + "() argument must be str, not "
+        + IntrinsicSupport.typeName(value));
+  }
+
+  private static int indexOfAligned(String s, String sub, int from, int to) {
+    var limit = to - sub.length();
+    var index = s.indexOf(sub, from);
+    while (index >= 0 && index <= limit) {
+      if (isCodePointBoundary(s, index) && isCodePointBoundary(s, index + sub.length())) {
+        return index;
+      }
+      index = s.indexOf(sub, index + 1);
+    }
+    return -1;
+  }
+
+  private static int lastIndexOfAligned(String s, String sub, int from, int to) {
+    var index = s.lastIndexOf(sub, to - sub.length());
+    while (index >= from) {
+      if (isCodePointBoundary(s, index) && isCodePointBoundary(s, index + sub.length())) {
+        return index;
+      }
+      index = s.lastIndexOf(sub, index - 1);
+    }
+    return -1;
+  }
+
   private static int loweredCharCount(int cp) {
     return cp == 0x0130 ? 2 : Character.charCount(cp);
   }
@@ -701,9 +733,14 @@ public final class StringIntrinsics {
     return s.codePoints().allMatch(predicate);
   }
 
-  private static long find(String s, String sub, long start, long end,
+  private static long find(String s, Object subObject, Object startObject, Object endObject,
                            boolean reverse, boolean raiseIfMissing) {
-    var length = codePointLength(s);
+    var start = asSliceIndex(startObject, 0L);
+    var end = asSliceIndex(endObject, Long.MAX_VALUE);
+    var sub = requireOperandString(subObject);
+    var charLength = s.length();
+    var length = s.codePointCount(0, charLength);
+
     if (end > length) {
       end = length;
     } else if (end < 0) {
@@ -713,42 +750,21 @@ public final class StringIntrinsics {
       start = Math.max(0L, start + length);
     }
 
-    var subLength = codePointLength(sub);
-    long result = -1;
+    var result = -1L;
+    var subLength = sub.codePointCount(0, sub.length());
     if (end - start >= subLength) {
-      var first = (int) start;
-      var last = (int) end;
       if (sub.isEmpty()) {
-        result = reverse ? last : first;
+        result = reverse ? end : start;
       } else {
-        var endOffset = offset(s, last);
-        if (reverse) {
-          var candidateOffset = endOffset;
-          for (var i = last; i >= first; i--) {
-            var matchEnd = (long) candidateOffset + sub.length();
-            if (matchEnd <= endOffset
-                && s.regionMatches(candidateOffset, sub, 0, sub.length())
-                && isCodePointBoundary(s, (int) matchEnd)) {
-              result = i;
-              break;
-            }
-            if (i == first) {
-              break;
-            }
-            candidateOffset -= Character.charCount(s.codePointBefore(candidateOffset));
-          }
-        } else {
-          var candidateOffset = offset(s, first);
-          for (var i = first; i < last; i++) {
-            var matchEnd = (long) candidateOffset + sub.length();
-            if (matchEnd <= endOffset
-                && s.regionMatches(candidateOffset, sub, 0, sub.length())
-                && isCodePointBoundary(s, (int) matchEnd)) {
-              result = i;
-              break;
-            }
-            candidateOffset += Character.charCount(s.codePointAt(candidateOffset));
-          }
+        // No surrogate pair in s: code point index == char index.
+        var simple = length == charLength;
+        var startOffset = simple ? (int) start : s.offsetByCodePoints(0, (int) start);
+        var endOffset = simple ? (int) end : s.offsetByCodePoints(startOffset, (int) (end - start));
+        var offset = reverse
+            ? lastIndexOfAligned(s, sub, startOffset, endOffset)
+            : indexOfAligned(s, sub, startOffset, endOffset);
+        if (offset >= 0) {
+          result = simple ? offset : start + s.codePointCount(startOffset, offset);
         }
       }
     }
