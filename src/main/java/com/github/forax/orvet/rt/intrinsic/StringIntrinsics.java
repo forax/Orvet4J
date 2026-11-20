@@ -17,6 +17,7 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.function.IntPredicate;
@@ -541,7 +542,6 @@ public final class StringIntrinsics {
   public static Object _join_(String separator, Object iterable) {
     var builder = new StringBuilder();
     var iterator = IteratorIntrinsics.$iterator$(iterable);
-    var first = true;
     var index = 0;
     Object item;
     while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
@@ -551,11 +551,10 @@ public final class StringIntrinsics {
             + IntrinsicSupport.typeName(item)
             + " found");
       }
-      if (!first) {
+      if (index != 0) {
         builder.append(separator);
       }
       builder.append(string);
-      first = false;
       index++;
     }
     return builder.toString();
