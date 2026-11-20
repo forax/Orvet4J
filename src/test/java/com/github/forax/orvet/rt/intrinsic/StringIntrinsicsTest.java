@@ -1,5 +1,7 @@
 package com.github.forax.orvet.rt.intrinsic;
 
+import com.github.forax.orvet.engine.Engine;
+import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
@@ -7,7 +9,10 @@ import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
+import com.github.forax.orvet.rt.error.PyOverflowError;
+import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -473,8 +478,270 @@ public final class StringIntrinsicsTest {
 
 
   @Nested
-  public final class ErrorMessage {
+  public final class Swapcase {
+
+    @Test
+    public void titlecaseCharactersAreUnchanged() {
+      assertEquals("\u01C5", StringIntrinsics._swapcase_("\u01C5")); // ǅ stays ǅ
+      assertEquals("\u01C5\u01C8\u01CB\u01F2",
+          StringIntrinsics._swapcase_("\u01C5\u01C8\u01CB\u01F2"));  // ǅǈǋǲ
+      assertEquals("\u1F88\u1FCC\u1FFC",
+          StringIntrinsics._swapcase_("\u1F88\u1FCC\u1FFC"));        // ᾈῌῼ
+      assertEquals("\u01C5a", StringIntrinsics._swapcase_("\u01C5A"));
+    }
+
+    @Test
+    public void lowercaseDigraphMapsToUppercaseNotTitlecase() {
+      assertEquals("\u01F1", StringIntrinsics._swapcase_("\u01F3")); // ǳ -> Ǳ (not ǲ)
+    }
+
+    @Test
+    public void finalSigmaUsesOriginalContext() {    // FAILS TODAY (produces σ, not ς)
+      assertEquals("\u03BF\u03B4\u03BF\u03C2",
+          StringIntrinsics._swapcase_("\u039F\u0394\u039F\u03A3"));  // ΟΔΟΣ -> οδος (final ς)
+      assertEquals("\u03C3\u03C2",
+          StringIntrinsics._swapcase_("\u03A3\u03A3"));              // ΣΣ -> σς
+      assertEquals("\u03B1'\u03C2",
+          StringIntrinsics._swapcase_("\u0391'\u03A3"));             // Α'Σ -> α'ς (case-ignorable ')
+    }
+
+    @Test
+    public void sigmaIsNotFinalWhenFollowedByCased() { // FAILS TODAY for the Α'ΣΒ case
+      assertEquals("\u03C3a", StringIntrinsics._swapcase_("\u03A3A"));       // ΣA -> σa
+      assertEquals("\u03B1'\u03C3\u03B2",
+          StringIntrinsics._swapcase_("\u0391'\u03A3\u0392"));               // Α'ΣΒ -> α'σβ
+    }
+
+    @Test
+    public void fullUppercaseExpansions() {
+      assertEquals("SS", StringIntrinsics._swapcase_("ß"));
+      assertEquals("FFL", StringIntrinsics._swapcase_("ﬄ"));
+      assertEquals("SSi\u0307FFL", StringIntrinsics._swapcase_("ßİﬄ"));
+    }
+
+    @Test
+    public void otherUppercaseAndSupplementary() {
+      assertEquals("\u2170\u24D0", StringIntrinsics._swapcase_("\u2160\u24B6")); // ⅠⒶ -> ⅰⓐ
+      assertEquals("\uD801\uDC28\uD801\uDC00",
+          StringIntrinsics._swapcase_("\uD801\uDC00\uD801\uDC28"));              // 𐐀𐐨 -> 𐐨𐐀
+      assertEquals("123 !?", StringIntrinsics._swapcase_("123 !?"));
+      assertEquals("", StringIntrinsics._swapcase_(""));
+    }
+  }
+
+  @Nested
+  public final class Capitalize {
+
+    @Test
+    public void fullTitleMappingExpansions() {        // FAILS TODAY (first char left unchanged)
+      assertEquals("Ssabc", StringIntrinsics._capitalize_("ßabc"));
+      assertEquals("Fflabc", StringIntrinsics._capitalize_("ﬄabc"));
+      assertEquals("Ffi", StringIntrinsics._capitalize_("ﬃ"));
+      assertEquals("St", StringIntrinsics._capitalize_("ﬅ"));
+      assertEquals("\u02BCNabc", StringIntrinsics._capitalize_("ŉabc")); // ʼNabc (N stays upper)
+      assertEquals("J\u030Cx", StringIntrinsics._capitalize_("ǰx"));
+      assertEquals("\u0399\u0308\u0301x", StringIntrinsics._capitalize_("ΐx"));
+      assertEquals("\u03A5\u0308\u0301x", StringIntrinsics._capitalize_("ΰx"));
+      assertEquals("\u0544\u0576", StringIntrinsics._capitalize_("ﬓ"));  // Մն (rest lowercase)
+      assertEquals("\u054E\u0576", StringIntrinsics._capitalize_("ﬖ"));
+      assertEquals("\u0535\u0582", StringIntrinsics._capitalize_("և"));
+      assertEquals("H\u0331", StringIntrinsics._capitalize_("ẖ"));
+      assertEquals("A\u02BE", StringIntrinsics._capitalize_("ẚ"));
+      assertEquals("\u1FBA\u0345", StringIntrinsics._capitalize_("ᾲ"));
+      assertEquals("\u03A9\u0342", StringIntrinsics._capitalize_("ῶ"));
+      assertEquals("\u03A1\u0313", StringIntrinsics._capitalize_("ῤ"));
+      assertEquals("Ss", StringIntrinsics._capitalize_("ß"));
+    }
+
+    @Test
+    public void simpleTitleMappingStillUsed() {
+      assertEquals("\u01F2abc", StringIntrinsics._capitalize_("\u01F3abc")); // ǳabc -> ǲabc
+      assertEquals("\u01C5", StringIntrinsics._capitalize_("\u01C6"));       // ǆ -> ǅ
+    }
+
+    @Test
+    public void restLowercaseKeepsOriginalSigmaContext() { // FAILS TODAY (rest lowered in isolation)
+      assertEquals("\u03A3\u03C2", StringIntrinsics._capitalize_("\u03A3\u03A3")); // ΣΣ -> Σς
+      assertEquals("A\u03C2", StringIntrinsics._capitalize_("A\u03A3"));           // AΣ -> Aς
+      assertEquals("A'\u03C2", StringIntrinsics._capitalize_("A'\u03A3"));         // A'Σ -> A'ς
+      assertEquals("\u039F\u03B4\u03BF\u03C2",
+          StringIntrinsics._capitalize_("\u039F\u0394\u039F\u03A3"));              // ΟΔΟΣ -> Οδος
+    }
+
+    @Test
+    public void restLowercaseWithoutPrecedingCased() {
+      assertEquals("1\u03C3", StringIntrinsics._capitalize_("1\u03A3")); // 1Σ -> 1σ (regular sigma)
+    }
+
+    @Test
+    public void restLowercaseExpandsDottedCapitalI() {
+      assertEquals("Ai\u0307b", StringIntrinsics._capitalize_("AİB"));
+    }
+
+    @Test
+    public void emptyAndAlreadyCapitalized() {
+      assertEquals("", StringIntrinsics._capitalize_(""));
+      assertEquals("Abc", StringIntrinsics._capitalize_("Abc"));
+    }
+  }
+
+  @Nested
+  public final class Find {
+
+    @Test
+    public void emptySubWithStartBeyondLength() {     // FAILS TODAY (returns 3 / 0 instead of -1)
+      assertEquals(-1L, StringIntrinsics._find_("abc", "", 4L));
+      assertEquals(-1L, StringIntrinsics._find_("abc", "", 10L));
+      assertEquals(-1L, StringIntrinsics._rfind_("abc", "", 4L));
+      assertEquals(-1L, StringIntrinsics._find_("", "", 1L));
+    }
+
+    @Test
+    public void emptySubAtLengthAndStartAfterEnd() {
+      assertEquals(3L, StringIntrinsics._find_("abc", "", 3L));
+      assertEquals(-1L, StringIntrinsics._find_("abc", "", 2L, 1L));
+      assertEquals(2L, StringIntrinsics._rfind_("abc", "", 1L, 2L));
+      assertEquals(3L, StringIntrinsics._rfind_("abc", ""));
+    }
+
+    @Test
+    public void hugeIntegerBoundsAreClampedNotOverflow() { // FAILS TODAY (throws PyOverflowError)
+      var huge = BigInteger.TEN.pow(100);
+      assertEquals(-1L, StringIntrinsics._find_("abc", "a", huge));
+      assertEquals(0L, StringIntrinsics._find_("abc", "a", huge.negate()));
+      assertEquals(0L, StringIntrinsics._rfind_("abc", "a", 0L, huge));
+    }
+
+    @Test
+    public void longExtremeBounds() {                 // FAILS TODAY for the empty-sub cases
+      assertEquals(-1L, StringIntrinsics._find_("abc", "", Long.MAX_VALUE));
+      assertEquals(0L, StringIntrinsics._find_("abc", "", Long.MIN_VALUE));
+      assertEquals(-1L, StringIntrinsics._find_("abc", "a", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void noneBoundsUseDefaults() {             // FAILS TODAY (throws PyTypeError)
+      assertEquals(0L, StringIntrinsics._find_("abc", "a", PyNone.INSTANCE));
+      assertEquals(2L, StringIntrinsics._find_("abc", "c", PyNone.INSTANCE, PyNone.INSTANCE));
+      assertEquals(3L, StringIntrinsics._rfind_("abc", "", PyNone.INSTANCE, PyNone.INSTANCE));
+    }
+
+    @Test
+    public void booleanBounds() {
+      assertEquals(2L, StringIntrinsics._find_("aba", "a", true)); // True == 1
+    }
+
+    @Test
+    public void indexRaisesValueErrorOnHugeBound() {  // FAILS TODAY (throws PyOverflowError)
+      var ex = assertThrows(PyValueError.class,
+          () -> StringIntrinsics._index_("abc", "a", BigInteger.TEN.pow(100)));
+      assertEquals("substring not found", ex.getMessage());
+    }
+
+    @Test
+    public void wrongTypeBoundMessage() {             // FAILS TODAY (different message)
+      var ex = assertThrows(PyTypeError.class,
+          () -> StringIntrinsics._find_("abc", "a", 1.0));
+      assertEquals("slice indices must be integers or None or have an __index__ method",
+          ex.getMessage());
+    }
+
+    @Test
+    public void normalSearchStillWorks() {
+      assertEquals(2L, StringIntrinsics._find_("hello", "l"));
+      assertEquals(3L, StringIntrinsics._rfind_("hello", "l"));
+      assertEquals(2L, StringIntrinsics._find_("a\uD835\uDD52b", "b")); // a𝕒b -> code-point index 2
+      assertEquals(0L, StringIntrinsics._find_("abc", "a", -10L));
+    }
+
+    @Test
+    public void rfindWithStartEnd() {
+      assertEquals(1L, StringIntrinsics._rfind_("abcabc", "b", 0L, 4L));
+      assertEquals(4L, StringIntrinsics._rfind_("abcabc", "b", 2L));
+    }
+
+    @Test
+    public void indexWithStart() {
+      assertEquals(4L, StringIntrinsics._index_("abcabc", "b", 2L));
+      assertEquals(1L, StringIntrinsics._index_("abcabc", "b", 0L, 4L));
+    }
+
+    @Test
+    public void rindexWithStartEnd() {
+      assertEquals(1L, StringIntrinsics._rindex_("abcabc", "b", 0L, 4L));
+    }
+
+    @Test
+    public void indexNotFound() {
+      var ex = assertThrows(PyValueError.class, () -> StringIntrinsics._index_("abc", "z"));
+      assertEquals("substring not found", ex.getMessage());
+    }
+  }
+
+  @Nested
+  public final class Zfill {
+
+    @Test
+    public void zfillStillRejectsHugeWidth() {   // Guard: asIndex must stay strict (OverflowError)
+      var ex = assertThrows(PyOverflowError.class,
+          () -> StringIntrinsics._zfill_("a", BigInteger.TEN.pow(100)));
+      assertEquals("Python int too large to convert to C ssize_t", ex.getMessage());
+    }
+  }
 
 
+  @Nested
+  public final class ThroughMethodCalls {
+    private ModuleContext run(String source) {
+      var context = new ModuleContext();
+      Engine.run(context, source);
+      return context;
+    }
+
+    @Test
+    @Disabled
+    public void commonStringMethodsAreReachableFromPythonSource() {
+      var context = run("""
+          source = "  Hello, World  "
+          clean = source.strip()
+          left = source.lstrip()
+          right = source.rstrip()
+          custom = "--hello--".strip("-")
+          words = "  one   two three  ".split()
+          limited = "one,two,three".split(",", 1)
+          replaced = "banana".replace("a", "o", 2)
+          starts = "banana".startswith("ban")
+          ends = "banana".endswith("ana")
+          count = "banana".count("ana")
+          title = "hello WORLD".title()
+          folded = "Straße".casefold()
+          digits = "²".isdigit()
+          alnum = "abc123".isalnum()
+          spaces = " \t".isspace()
+          """);
+
+      assertEquals("Hello, World", context.getGlobal("clean"));
+      assertEquals("Hello, World  ", context.getGlobal("left"));
+      assertEquals("  Hello, World", context.getGlobal("right"));
+      assertEquals("hello", context.getGlobal("custom"));
+      var words = (PyList<?>) context.getGlobal("words");
+      assertEquals(3, words.size());
+      assertEquals("one", words.get(0));
+      assertEquals("two", words.get(1));
+      assertEquals("three", words.get(2));
+      var limited = (PyList<?>) context.getGlobal("limited");
+      assertEquals(2, limited.size());
+      assertEquals("one", limited.get(0));
+      assertEquals("two,three", limited.get(1));
+      assertEquals("bonona", context.getGlobal("replaced"));
+      assertEquals(true, context.getGlobal("starts"));
+      assertEquals(true, context.getGlobal("ends"));
+      assertEquals(1L, context.getGlobal("count"));
+      assertEquals("Hello World", context.getGlobal("title"));
+      assertEquals("strasse", context.getGlobal("folded"));
+      assertEquals(true, context.getGlobal("digits"));
+      assertEquals(true, context.getGlobal("alnum"));
+      assertEquals(true, context.getGlobal("spaces"));
+    }
   }
 }

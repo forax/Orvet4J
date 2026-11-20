@@ -431,72 +431,84 @@ public final class StringIntrinsics {
     return s.toUpperCase(Locale.ROOT);
   }
 
+  public static Object _swapcase_(String s) {
+    var lowered = s.toLowerCase(Locale.ROOT);
+    var builder = new StringBuilder(s.length());
+    var lowerIndex = 0;
+    for (var i = 0; i < s.length();) {
+      var cp = s.codePointAt(i);
+      var charCount = Character.charCount(cp);
+      var lowerCount = loweredCharCount(cp);
+      if (Character.isUpperCase(cp)) {
+        builder.append(lowered, lowerIndex, lowerIndex + lowerCount);
+      } else if (Character.isLowerCase(cp)) {
+        builder.append(s.substring(i, i + charCount).toUpperCase(Locale.ROOT));
+      } else {
+        builder.appendCodePoint(cp);
+      }
+      i += charCount;
+      lowerIndex += lowerCount;
+    }
+    return builder.toString();
+  }
+
   public static Object _capitalize_(String s) {
     if (s.isEmpty()) {
       return s;
     }
     var first = s.codePointAt(0);
-    var firstString =
-        new String(Character.toChars(Character.toTitleCase(first)));
-    var rest = s.substring(Character.charCount(first))
-        .toLowerCase(Locale.ROOT);
-    return firstString + rest;
-  }
-
-  public static Object _swapcase_(String s) {
-    var builder = new StringBuilder();
-    for (int i = 0; i < s.length();) {
-      var cp = s.codePointAt(i);
-      i += Character.charCount(cp);
-      var character = new String(Character.toChars(cp));
-      if (Character.isUpperCase(cp) || Character.isTitleCase(cp)) {
-        builder.append(character.toLowerCase(Locale.ROOT));
-      } else if (Character.isLowerCase(cp)) {
-        builder.append(character.toUpperCase(Locale.ROOT));
-      } else {
-        builder.appendCodePoint(cp);
-      }
-    }
-    return builder.toString();
+    var lowered = s.toLowerCase(Locale.ROOT);
+    var rest = lowered.substring(loweredCharCount(first));
+    return fullTitle(first) + rest;
   }
 
 
   public static Object _find_(String s, Object sub) {
-    return find(s, requireString(sub, "find", "sub"),
-        0, codePointLength(s), false);
+    return find(s, requireString(sub, "find", "sub"), 0, Long.MAX_VALUE, false, false);
   }
-
-  public static Object _find_(
-      String s, Object sub, Object start) {
-
+  public static Object _find_(String s, Object sub, Object start) {
     return find(s, requireString(sub, "find", "sub"),
-        normalizeBound(asIndex(start), codePointLength(s)),
-        codePointLength(s), false);
+        asSliceIndex(start, 0), Long.MAX_VALUE, false, false);
   }
-
-  public static Object _find_(
-      String s, Object sub, Object start, Object end) {
-
-    var length = codePointLength(s);
-
+  public static Object _find_(String s, Object sub, Object start, Object end) {
     return find(s, requireString(sub, "find", "sub"),
-        normalizeBound(asIndex(start), length),
-        normalizeBound(asIndex(end), length), false);
+        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), false, false);
   }
 
   public static Object _rfind_(String s, Object sub) {
+    return find(s, requireString(sub, "rfind", "sub"), 0, Long.MAX_VALUE, true, false);
+  }
+  public static Object _rfind_(String s, Object sub, Object start) {
     return find(s, requireString(sub, "rfind", "sub"),
-        0, codePointLength(s), true);
+        asSliceIndex(start, 0), Long.MAX_VALUE, true, false);
+  }
+  public static Object _rfind_(String s, Object sub, Object start, Object end) {
+    return find(s, requireString(sub, "rfind", "sub"),
+        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), true, false);
   }
 
   public static Object _index_(String s, Object sub) {
+    return find(s, requireString(sub, "index", "sub"), 0, Long.MAX_VALUE, false, true);
+  }
+  public static Object _index_(String s, Object sub, Object start) {
     return find(s, requireString(sub, "index", "sub"),
-        0, codePointLength(s), false, true);
+        asSliceIndex(start, 0), Long.MAX_VALUE, false, true);
+  }
+  public static Object _index_(String s, Object sub, Object start, Object end) {
+    return find(s, requireString(sub, "index", "sub"),
+        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), false, true);
   }
 
   public static Object _rindex_(String s, Object sub) {
+    return find(s, requireString(sub, "rindex", "sub"), 0, Long.MAX_VALUE, true, true);
+  }
+  public static Object _rindex_(String s, Object sub, Object start) {
     return find(s, requireString(sub, "rindex", "sub"),
-        0, codePointLength(s), true, true);
+        asSliceIndex(start, 0), Long.MAX_VALUE, true, true);
+  }
+  public static Object _rindex_(String s, Object sub, Object start, Object end) {
+    return find(s, requireString(sub, "rindex", "sub"),
+        asSliceIndex(start, 0), asSliceIndex(end, Long.MAX_VALUE), true, true);
   }
 
 
@@ -611,6 +623,77 @@ public final class StringIntrinsics {
 
   // -- helpers
 
+  private static int loweredCharCount(int cp) {
+    return cp == 0x0130 ? 2 : Character.charCount(cp);
+  }
+
+  // Java unicode implementation has no primitive to go from one code point to its full titlecase mapping.
+  private static String fullTitle(int cp) {
+    return switch (cp) {
+      case 0x00DF -> "Ss";                       // ß
+      case 0x0149 -> "\u02BCN";                  // ŉ -> ʼN  (N stays uppercase)
+      case 0x01F0 -> "J\u030C";                  // ǰ -> J̌
+      case 0x0390 -> "\u0399\u0308\u0301";       // ΐ
+      case 0x03B0 -> "\u03A5\u0308\u0301";       // ΰ
+      case 0x0587 -> "\u0535\u0582";             // և
+      case 0x1E96 -> "H\u0331";                  // ẖ
+      case 0x1E97 -> "T\u0308";                  // ẗ
+      case 0x1E98 -> "W\u030A";                  // ẘ
+      case 0x1E99 -> "Y\u030A";                  // ẙ
+      case 0x1E9A -> "A\u02BE";                  // ẚ
+      case 0x1F50 -> "\u03A5\u0313";             // ὐ
+      case 0x1F52 -> "\u03A5\u0313\u0300";       // ὒ
+      case 0x1F54 -> "\u03A5\u0313\u0301";       // ὔ
+      case 0x1F56 -> "\u03A5\u0313\u0342";       // ὖ
+      case 0x1FB2 -> "\u1FBA\u0345";             // ᾲ
+      case 0x1FB4 -> "\u0386\u0345";             // ᾴ
+      case 0x1FB6 -> "\u0391\u0342";             // ᾶ
+      case 0x1FB7 -> "\u0391\u0342\u0345";       // ᾷ
+      case 0x1FC2 -> "\u1FCA\u0345";             // ῂ
+      case 0x1FC4 -> "\u0389\u0345";             // ῄ
+      case 0x1FC6 -> "\u0397\u0342";             // ῆ
+      case 0x1FC7 -> "\u0397\u0342\u0345";       // ῇ
+      case 0x1FD2 -> "\u0399\u0308\u0300";       // ῒ
+      case 0x1FD3 -> "\u0399\u0308\u0301";       // ΐ
+      case 0x1FD6 -> "\u0399\u0342";             // ῖ
+      case 0x1FD7 -> "\u0399\u0308\u0342";       // ῗ
+      case 0x1FE2 -> "\u03A5\u0308\u0300";       // ῢ
+      case 0x1FE3 -> "\u03A5\u0308\u0301";       // ΰ
+      case 0x1FE4 -> "\u03A1\u0313";             // ῤ
+      case 0x1FE6 -> "\u03A5\u0342";             // ῦ
+      case 0x1FE7 -> "\u03A5\u0308\u0342";       // ῧ
+      case 0x1FF2 -> "\u1FFA\u0345";             // ῲ
+      case 0x1FF4 -> "\u038F\u0345";             // ῴ
+      case 0x1FF6 -> "\u03A9\u0342";             // ῶ
+      case 0x1FF7 -> "\u03A9\u0342\u0345";       // ῷ
+      case 0xFB00 -> "Ff";                       // ﬀ
+      case 0xFB01 -> "Fi";                       // ﬁ
+      case 0xFB02 -> "Fl";                       // ﬂ
+      case 0xFB03 -> "Ffi";                      // ﬃ
+      case 0xFB04 -> "Ffl";                      // ﬄ
+      case 0xFB05, 0xFB06 -> "St";               // ﬅ ﬆ
+      case 0xFB13 -> "\u0544\u0576";             // ﬓ -> Մն
+      case 0xFB14 -> "\u0544\u0565";             // ﬔ
+      case 0xFB15 -> "\u0544\u056B";             // ﬕ
+      case 0xFB16 -> "\u054E\u0576";             // ﬖ
+      case 0xFB17 -> "\u0544\u056D";             // ﬗ
+      default -> new String(Character.toChars(Character.toTitleCase(cp)));
+    };
+  }
+
+  private static long asSliceIndex(Object value, long defaultValue) {
+    return switch (value) {
+      case PyNone _ -> defaultValue;
+      case Boolean b -> b ? 1L : 0L;
+      case Long l -> l;
+      case BigInteger b -> b.bitLength() <= 63
+          ? b.longValue()
+          : (b.signum() < 0 ? Long.MIN_VALUE : Long.MAX_VALUE);
+      default -> throw new PyTypeError(
+          "slice indices must be integers or None or have an __index__ method");
+    };
+  }
+
   private static boolean allCodePoints(String s, IntPredicate predicate) {
     if (s.isEmpty()) {
       return false;
@@ -618,52 +701,54 @@ public final class StringIntrinsics {
     return s.codePoints().allMatch(predicate);
   }
 
-  private static long find(String s, String sub, int start, int end, boolean reverse) {
-    return find(s, sub, start, end, reverse, false);
-  }
-
-  private static long find(String s, String sub, int start, int end,
-      boolean reverse, boolean raiseIfMissing) {
+  private static long find(String s, String sub, long start, long end,
+                           boolean reverse, boolean raiseIfMissing) {
     var length = codePointLength(s);
-    start = normalizeBound(start, length);
-    end = normalizeBound(end, length);
+    if (end > length) {
+      end = length;
+    } else if (end < 0) {
+      end = Math.max(0L, end + length);
+    }
+    if (start < 0) {
+      start = Math.max(0L, start + length);
+    }
 
+    var subLength = codePointLength(sub);
     long result = -1;
-    if (start <= end) {
-      var endOffset = offset(s, end);
+    if (end - start >= subLength) {
+      var first = (int) start;
+      var last = (int) end;
       if (sub.isEmpty()) {
-        // The empty string matches at every position.
-        result = reverse ? end : start;
-      } else if (reverse) {
-        // Search from right to left.
-        var candidateOffset = endOffset;
-        for (var i = end; i >= start; i--) {
-          var matchEnd = (long) candidateOffset + sub.length();
-          if (matchEnd <= endOffset &&
-              s.regionMatches(candidateOffset, sub, 0, sub.length()) &&
-              isCodePointBoundary(s, (int) matchEnd)) {
-            result = i;
-            break;
-          }
-          if (i == start) {
-            break;
-          }
-          var previous = s.codePointBefore(candidateOffset);
-          candidateOffset -= Character.charCount(previous);
-        }
+        result = reverse ? last : first;
       } else {
-        // Search from left to right.
-        var candidateOffset = offset(s, start);
-        for (var i = start; i < end; i++) {
-          var matchEnd = (long) candidateOffset + sub.length();
-          if (matchEnd <= endOffset
-              && s.regionMatches(candidateOffset, sub, 0, sub.length())
-              && isCodePointBoundary(s, (int) matchEnd)) {
-            result = i;
-            break;
+        var endOffset = offset(s, last);
+        if (reverse) {
+          var candidateOffset = endOffset;
+          for (var i = last; i >= first; i--) {
+            var matchEnd = (long) candidateOffset + sub.length();
+            if (matchEnd <= endOffset
+                && s.regionMatches(candidateOffset, sub, 0, sub.length())
+                && isCodePointBoundary(s, (int) matchEnd)) {
+              result = i;
+              break;
+            }
+            if (i == first) {
+              break;
+            }
+            candidateOffset -= Character.charCount(s.codePointBefore(candidateOffset));
           }
-          var cp = s.codePointAt(candidateOffset);
-          candidateOffset += Character.charCount(cp);
+        } else {
+          var candidateOffset = offset(s, first);
+          for (var i = first; i < last; i++) {
+            var matchEnd = (long) candidateOffset + sub.length();
+            if (matchEnd <= endOffset
+                && s.regionMatches(candidateOffset, sub, 0, sub.length())
+                && isCodePointBoundary(s, (int) matchEnd)) {
+              result = i;
+              break;
+            }
+            candidateOffset += Character.charCount(s.codePointAt(candidateOffset));
+          }
         }
       }
     }
@@ -704,15 +789,6 @@ public final class StringIntrinsics {
           "'" + IntrinsicSupport.typeName(value)
               + "' object cannot be interpreted as an integer");
     };
-  }
-
-  private static int normalizeBound(long index, int length) {
-    if (index < 0) {
-      index = Math.max(0L, index + length);
-    } else {
-      index = Math.min(index, length);
-    }
-    return (int) index;
   }
 
   private static int offset(String s, int codePointIndex) {
