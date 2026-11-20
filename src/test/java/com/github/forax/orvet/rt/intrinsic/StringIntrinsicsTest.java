@@ -2391,6 +2391,7 @@ public final class StringIntrinsicsTest {
   }
 
 
+  /// Checks that the method table is reachable from Python source, with every overload.
   @Nested
   public final class ThroughMethodCalls {
     private ModuleContext run(String source) {
@@ -2400,49 +2401,69 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
-    public void commonStringMethodsAreReachableFromPythonSource() {
+    public void everyMethodIsReachableFromPythonSource() {
       var context = run("""
-          source = "  Hello, World  "
-          clean = source.strip()
-          left = source.lstrip()
-          right = source.rstrip()
-          custom = "--hello--".strip("-")
-          words = "  one   two three  ".split()
-          limited = "one,two,three".split(",", 1)
-          replaced = "banana".replace("a", "o", 2)
-          starts = "banana".startswith("ban")
-          ends = "banana".endswith("ana")
-          count = "banana".count("ana")
-          title = "hello WORLD".title()
-          folded = "Straße".casefold()
-          digits = "²".isdigit()
-          alnum = "abc123".isalnum()
-          spaces = " \\t".isspace()
+          text = "hello world"
+          upper = text.upper()
+          lower = "HELLO".lower()
+          swapped = "Hello".swapcase()
+          capitalized = "hello WORLD".capitalize()
+          found = text.find("o")
+          found_from = text.find("o", 5)
+          found_range = text.find("o", 5, 8)
+          last = text.rfind("o")
+          last_from = text.rfind("o", 5)
+          last_range = text.rfind("o", 0, 5)
+          idx = text.index("world")
+          idx_from = text.index("o", 5)
+          idx_range = text.index("o", 5, 8)
+          ridx = text.rindex("o")
+          ridx_from = text.rindex("o", 0, 5)
+          ridx_range = text.rindex("l", 0, 5)
+          parts = "a,b,c".partition(",")
+          rparts = "a,b,c".rpartition(",")
+          joined = "-".join(["a", "b", "c"])
+          unprefixed = "unhappy".removeprefix("un")
+          unsuffixed = "happy!!".removesuffix("!!")
+          padded = "42".zfill(5)
+          is_ascii = "abc".isascii()
+          is_alpha = "abc".isalpha()
+          is_decimal = "123".isdecimal()
           """);
 
-      assertEquals("Hello, World", context.getGlobal("clean"));
-      assertEquals("Hello, World  ", context.getGlobal("left"));
-      assertEquals("  Hello, World", context.getGlobal("right"));
-      assertEquals("hello", context.getGlobal("custom"));
-      var words = (PyList<?>) context.getGlobal("words");
-      assertEquals(3, words.size());
-      assertEquals("one", words.get(0));
-      assertEquals("two", words.get(1));
-      assertEquals("three", words.get(2));
-      var limited = (PyList<?>) context.getGlobal("limited");
-      assertEquals(2, limited.size());
-      assertEquals("one", limited.get(0));
-      assertEquals("two,three", limited.get(1));
-      assertEquals("bonona", context.getGlobal("replaced"));
-      assertEquals(true, context.getGlobal("starts"));
-      assertEquals(true, context.getGlobal("ends"));
-      assertEquals(1L, context.getGlobal("count"));
-      assertEquals("Hello World", context.getGlobal("title"));
-      assertEquals("strasse", context.getGlobal("folded"));
-      assertEquals(true, context.getGlobal("digits"));
-      assertEquals(true, context.getGlobal("alnum"));
-      assertEquals(true, context.getGlobal("spaces"));
+      assertEquals("HELLO WORLD", context.getGlobal("upper"));
+      assertEquals("hello", context.getGlobal("lower"));
+      assertEquals("hELLO", context.getGlobal("swapped"));
+      assertEquals("Hello world", context.getGlobal("capitalized"));
+      assertEquals(4L, context.getGlobal("found"));
+      assertEquals(7L, context.getGlobal("found_from"));
+      assertEquals(7L, context.getGlobal("found_range"));
+      assertEquals(7L, context.getGlobal("last"));
+      assertEquals(7L, context.getGlobal("last_from"));
+      assertEquals(4L, context.getGlobal("last_range"));
+      assertEquals(6L, context.getGlobal("idx"));
+      assertEquals(7L, context.getGlobal("idx_from"));
+      assertEquals(7L, context.getGlobal("idx_range"));
+      assertEquals(7L, context.getGlobal("ridx"));
+      assertEquals(4L, context.getGlobal("ridx_from"));
+      assertEquals(3L, context.getGlobal("ridx_range"));
+      assertEquals("('a', ',', 'b,c')", repr(context.getGlobal("parts")));
+      assertEquals("('a,b', ',', 'c')", repr(context.getGlobal("rparts")));
+      assertEquals("a-b-c", context.getGlobal("joined"));
+      assertEquals("happy", context.getGlobal("unprefixed"));
+      assertEquals("happy", context.getGlobal("unsuffixed"));
+      assertEquals("00042", context.getGlobal("padded"));
+      assertEquals(true, context.getGlobal("is_ascii"));
+      assertEquals(true, context.getGlobal("is_alpha"));
+      assertEquals(true, context.getGlobal("is_decimal"));
+    }
+
+    @Test
+    public void errorsPropagateToTheCaller() {
+      assertThrows(PyValueError.class, () -> run("'abc'.index('z')"));
+      assertThrows(PyValueError.class, () -> run("'abc'.rindex('z')"));
+      assertThrows(PyTypeError.class, () -> run("'abc'.find(1)"));
+      assertThrows(PyValueError.class, () -> run("'a,b'.partition('')"));
     }
   }
 }
