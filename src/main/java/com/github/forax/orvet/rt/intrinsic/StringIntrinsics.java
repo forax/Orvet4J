@@ -572,7 +572,7 @@ public final class StringIntrinsics {
 
   public static Object _zfill_(String s, Object width) {
     var requested = asIndex(width);
-    var length = codePointLength(s);
+    var length = s.codePointCount(0, s.length());
     if (requested <= length) {
       return s;
     }
@@ -795,10 +795,6 @@ public final class StringIntrinsics {
           "'" + IntrinsicSupport.typeName(value)
               + "' object cannot be interpreted as an integer");
     };
-  }
-
-  private static int codePointLength(String s) {
-    return s.codePointCount(0, s.length());
   }
 
   private static NotCanonicalException notCanonical(String name, Object value) {
