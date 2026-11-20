@@ -505,13 +505,12 @@ public final class StringIntrinsics {
     }
     var index = indexOfAligned(s, separator, 0, s.length());
     if (index < 0) {
-      return TupleIntrinsics.fromArray(new Object[] { s, "", "" });
+      return new PyTuple.PyTuple3(s, "", "");
     }
-    return TupleIntrinsics.fromArray(new Object[] {
+    return new PyTuple.PyTuple3(
         s.substring(0, index),
         separator,
-        s.substring(index + separator.length())
-    });
+        s.substring(index + separator.length()));
   }
 
   public static Object _rpartition_(String s, Object sep) {
@@ -521,13 +520,12 @@ public final class StringIntrinsics {
     }
     var index = lastIndexOfAligned(s, separator, 0, s.length());
     if (index < 0) {
-      return TupleIntrinsics.fromArray(new Object[] { "", "", s });
+      return new PyTuple.PyTuple3("", "", s );
     }
-    return TupleIntrinsics.fromArray(new Object[] {
+    return new PyTuple.PyTuple3(
         s.substring(0, index),
         separator,
-        s.substring(index + separator.length())
-    });
+        s.substring(index + separator.length()));
   }
 
   public static Object _join_(String separator, Object iterable) {
