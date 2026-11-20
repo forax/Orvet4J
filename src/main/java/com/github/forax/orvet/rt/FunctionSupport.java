@@ -574,7 +574,7 @@ final class FunctionSupport {
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
 
-      var mh = resolve(intrinsic, name, methodType);
+      var mh = resolveAndCache(intrinsic, name, methodType);
       if (mh == null) {
         throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
             "' object has no attribute '" + name + "'");
@@ -592,18 +592,15 @@ final class FunctionSupport {
       return receiverClass == receiver.getClass();
     }
 
-    private static MethodHandle resolve(Class<?> intrinsic, String name, MethodType methodType) {
+    private static MethodHandle resolveAndCache(Class<?> intrinsic, String name, MethodType methodType) {
       var methodMap = METHOD_CACHE.get(intrinsic);
       var key = name + "/" + methodType.parameterCount();
       var mh = methodMap.get(key);
       if (mh != null) {
         return mh;
       }
-      try {
-        mh = LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
-      } catch (IllegalAccessException e) {
-        throw new AssertionError(e);
-      } catch (NoSuchMethodException e) {
+      mh = resolve(intrinsic, name, methodType);
+      if (mh == null) {
         return null;
       }
       if (methodMap.putIfAbsent(key, mh) != null) {
@@ -611,6 +608,27 @@ final class FunctionSupport {
         mh = methodMap.get(key);
       }
       return mh;
+    }
+
+    private static MethodHandle lookup(Class<?> intrinsic, String name, MethodType methodType) {
+      try {
+        return LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
+      } catch (IllegalAccessException e) {
+        throw new AssertionError(e);
+      } catch (NoSuchMethodException e) {
+        return null;
+      }
+    }
+
+    private static MethodHandle resolve(Class<?> intrinsic, String name, MethodType methodType) {
+      // try with a direct signature
+      var mh = lookup(intrinsic, name, methodType);
+      if (mh != null) {
+        return mh;
+      }
+      // try with a varargs signature
+      return lookup(intrinsic, name, MethodType.methodType(methodType.returnType(),
+          methodType.parameterType(0), Object[].class));
     }
 
     static CallSite methodCall(String name, MethodType type, int positionalCount, String... keywordNames) {
