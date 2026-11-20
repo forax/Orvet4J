@@ -1017,8 +1017,6 @@ public final class StringIntrinsicsTest {
       assertEquals("\uDE00", StringIntrinsics.$getItem$("x\uDE00", 1L));
     }
 
-    // Regression: when the string contains a supplementary character, `index == codePointCount`
-    // is still < length(), so a UTF-16 bound check is not enough.
     @Test
     public void indexEqualToTheCodePointCountIsOutOfRange() {
       assertThrowsWithMessage(PyIndexError.class, "string index out of range",
