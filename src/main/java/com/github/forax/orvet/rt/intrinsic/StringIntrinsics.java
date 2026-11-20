@@ -582,15 +582,16 @@ public final class StringIntrinsics {
     if (requested <= length) {
       return s;
     }
-    if (requested - length > Integer.MAX_VALUE) {
+    var padding = requested - length;
+    if (padding > Integer.MAX_VALUE) {
       throw new UnimplementedFeatureError(
           "string padding exceeds the maximum Java string size");
     }
-    var padding = "0".repeat((int) (requested - length));
+    var zeros = "0".repeat((int) padding);
     if (s.startsWith("+") || s.startsWith("-")) {
-      return s.substring(0, 1) + padding + s.substring(1);
+      return s.substring(0, 1) + zeros + s.substring(1);
     }
-    return padding + s;
+    return zeros + s;
   }
 
 
