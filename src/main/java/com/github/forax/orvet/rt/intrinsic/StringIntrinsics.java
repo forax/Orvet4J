@@ -467,43 +467,43 @@ public final class StringIntrinsics {
 
 
   public static Object _find_(String s, Object sub) {
-    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, false);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, false, "find");
   }
   public static Object _find_(String s, Object sub, Object start) {
-    return find(s, sub, start, PyNone.INSTANCE, false, false);
+    return find(s, sub, start, PyNone.INSTANCE, false, false, "find");
   }
   public static Object _find_(String s, Object sub, Object start, Object end) {
-    return find(s, sub, start, end, false, false);
+    return find(s, sub, start, end, false, false, "find");
   }
 
   public static Object _rfind_(String s, Object sub) {
-    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, false);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, false, "rfind");
   }
   public static Object _rfind_(String s, Object sub, Object start) {
-    return find(s, sub, start, PyNone.INSTANCE, true, false);
+    return find(s, sub, start, PyNone.INSTANCE, true, false, "rfind");
   }
   public static Object _rfind_(String s, Object sub, Object start, Object end) {
-    return find(s, sub, start, end, true, false);
+    return find(s, sub, start, end, true, false, "rfind");
   }
 
   public static Object _index_(String s, Object sub) {
-    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, true);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, true, "index");
   }
   public static Object _index_(String s, Object sub, Object start) {
-    return find(s, sub, start, PyNone.INSTANCE, false, true);
+    return find(s, sub, start, PyNone.INSTANCE, false, true, "index");
   }
   public static Object _index_(String s, Object sub, Object start, Object end) {
-    return find(s, sub, start, end, false, true);
+    return find(s, sub, start, end, false, true, "index");
   }
 
   public static Object _rindex_(String s, Object sub) {
-    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, true);
+    return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, true, true, "rindex");
   }
   public static Object _rindex_(String s, Object sub, Object start) {
-    return find(s, sub, start, PyNone.INSTANCE, true, true);
+    return find(s, sub, start, PyNone.INSTANCE, true, true, "rindex");
   }
   public static Object _rindex_(String s, Object sub, Object start, Object end) {
-    return find(s, sub, start, end, true, true);
+    return find(s, sub, start, end, true, true, "rindex");
   }
 
 
@@ -742,10 +742,11 @@ public final class StringIntrinsics {
   }
 
   private static long find(String s, Object subObject, Object startObject, Object endObject,
-                           boolean reverse, boolean raiseIfMissing) {
+                           boolean reverse, boolean raiseIfMissing, String method) {
+    var sub   = requireString(subObject, method, "1");
     var start = asSliceIndex(startObject, 0L);
     var end = asSliceIndex(endObject, Long.MAX_VALUE);
-    var sub = requireOperandString(subObject);
+
     var charLength = s.length();
     var length = s.codePointCount(0, charLength);
 

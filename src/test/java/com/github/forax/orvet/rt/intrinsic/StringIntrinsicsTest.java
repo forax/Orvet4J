@@ -1516,7 +1516,6 @@ public final class StringIntrinsicsTest {
       assertEquals(SLICE_INDEX_MESSAGE, ex.getMessage());
     }
 
-    // NEW
     @Test
     public void wrongTypeBoundMessages() {
       assertThrowsWithMessage(PyTypeError.class, SLICE_INDEX_MESSAGE,
@@ -1532,7 +1531,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
     public void wrongTypeSubMessages() {
       assertThrowsWithMessage(PyTypeError.class, "find() argument 1 must be str, not int",
           () -> StringIntrinsics._find_("abc", 1L));
@@ -1545,7 +1543,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
     public void wrongTypeSubOtherTypes() {
       assertThrowsWithMessage(PyTypeError.class, "find() argument 1 must be str, not NoneType",
           () -> StringIntrinsics._find_("abc", PyNone.INSTANCE));
@@ -1556,7 +1553,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
     public void subIsCheckedBeforeBounds() {
       assertThrowsWithMessage(PyTypeError.class, "find() argument 1 must be str, not int",
           () -> StringIntrinsics._find_("abc", 1L, 1.0));
