@@ -3,12 +3,15 @@ package com.github.forax.orvet.rt.intrinsic;
 import com.github.forax.orvet.engine.Engine;
 import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
+import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
@@ -27,7 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class StringIntrinsicsTest {
 
-  // -- NEW: shared helpers
+  private ModuleContext run(String source) {
+    var context = new ModuleContext();
+    Engine.run(context, source);
+    return context;
+  }
 
   private static String repr(Object value) {
     return (String) StringIntrinsics.$repr$(value);
@@ -77,7 +84,6 @@ public final class StringIntrinsicsTest {
       assertEquals(Long.toString(Long.MIN_VALUE), StringIntrinsics.$str$(Long.MIN_VALUE));
     }
 
-    // NEW
     @Test
     public void strBigInteger() {
       assertEquals("1267650600228229401496703205376", StringIntrinsics.$str$(BigInteger.TWO.pow(100)));
@@ -131,7 +137,6 @@ public final class StringIntrinsicsTest {
           StringIntrinsics.$str$(new PyTuple2("", "")));
     }
 
-    // NEW
     @Test
     public void strListAndDictUseReprForElements() {
       assertEquals("['a', 1]", StringIntrinsics.$str$(new PyList<>("a", 1L)));
@@ -140,14 +145,12 @@ public final class StringIntrinsicsTest {
       assertEquals("{'k': 'v'}", StringIntrinsics.$str$(dict));
     }
 
-    // NEW
     @Test
     public void strOfStringsInsideContainersIsQuoted() {
       assertEquals("(\"it's\",)", StringIntrinsics.$str$(new PyTuple1("it's")));
       assertEquals("['a\\nb']", StringIntrinsics.$str$(new PyList<>("a\nb")));
     }
 
-    // NEW
     @Test
     public void strAndReprAreIdenticalForEverythingButStrings() {
       var values = new Object[] {
@@ -172,6 +175,51 @@ public final class StringIntrinsicsTest {
       var ex = assertThrows(NotCanonicalException.class,
           () -> StringIntrinsics.$str$('a'));
       assertEquals("str of a non canonical value: java.lang.Character", ex.getMessage());
+    }
+
+    @Test
+    public void userDefinedFunction() {
+      var foo = (PyFunction) run("""
+          def foo():
+              pass
+          """).getGlobal("foo");
+
+      var expected = "<function foo at 0x"
+          + Integer.toHexString(System.identityHashCode(foo)) + ">";
+      assertEquals(expected, StringIntrinsics.$str$(foo));
+    }
+
+    @Test
+    public void builtinFunction() {
+      // The type constructors are native (builtin) functions.
+      assertEquals("<built-in function int>", StringIntrinsics.$str$(PyType.INT.function()));
+      assertEquals("<built-in function str>", StringIntrinsics.$str$(PyType.STR.function()));
+    }
+
+    @Test
+    public void sliceWithIntegers() {
+      var slice = PySlice.of(1L, 5L, 2L);
+      assertEquals("slice(1, 5, 2)", StringIntrinsics.$str$(slice));
+    }
+
+    @Test
+    public void sliceWithNone() {
+      assertEquals("slice(None, None, None)",
+          StringIntrinsics.$str$(PySlice.of(PyNone.INSTANCE, PyNone.INSTANCE, PyNone.INSTANCE)));
+    }
+
+    @Test
+    public void typeObjects() {
+      assertEquals("<class 'int'>", StringIntrinsics.$str$(PyType.INT));
+      assertEquals("<class 'str'>", StringIntrinsics.$str$(PyType.STR));
+      assertEquals("<class 'function'>", StringIntrinsics.$str$(PyType.FUNCTION));
+    }
+
+    @Test
+    public void everyTypeUsesItsToString() {
+      for (var type : PyType.ALL) {
+        assertEquals(type.toString(), StringIntrinsics.$str$(type));
+      }
     }
   }
 
@@ -198,7 +246,6 @@ public final class StringIntrinsicsTest {
       assertEquals("-42", StringIntrinsics.$repr$(-42L));
     }
 
-    // NEW
     @Test
     public void reprBigInteger() {
       assertEquals("9223372036854775808",
@@ -229,7 +276,6 @@ public final class StringIntrinsicsTest {
       assertEquals("(-0.0,)", StringIntrinsics.$repr$(new PyTuple1(-0.0)));
     }
 
-    // NEW
     @Test
     public void reprTupleUsesQuoteRulesForStrings() {
       assertEquals("(\"it's\",)", StringIntrinsics.$repr$(new PyTuple1("it's")));
@@ -237,7 +283,6 @@ public final class StringIntrinsicsTest {
           StringIntrinsics.$repr$(new PyTuple2("say \"hi\"", "a\\b")));
     }
 
-    // NEW
     @Test
     public void reprList() {
       assertEquals("[]", StringIntrinsics.$repr$(new PyList<>()));
@@ -250,7 +295,6 @@ public final class StringIntrinsicsTest {
           StringIntrinsics.$repr$(new PyList<>(BigInteger.TEN.pow(20))));
     }
 
-    // NEW
     @Test
     public void reprDict() {
       var empty = new PyDict<>();
@@ -263,7 +307,6 @@ public final class StringIntrinsicsTest {
       assertEquals("{'a': 1, 2: 'b', \"it's\": [2, 3]}", StringIntrinsics.$repr$(dict));
     }
 
-    // NEW
     @Test
     public void reprDictNested() {
       var inner = new PyDict<>();
@@ -279,7 +322,6 @@ public final class StringIntrinsicsTest {
       assertEquals("range(0, 10, 3)", StringIntrinsics.$repr$(PyRange.of(0L, 10L, 3L)));
     }
 
-    // NEW
     @Test
     public void reprRangeVariants() {
       assertEquals("range(5, 5)", StringIntrinsics.$repr$(PyRange.of(5L, 5L, 1L)));
@@ -308,7 +350,6 @@ public final class StringIntrinsicsTest {
               () -> StringIntrinsics.$repr$('c')).getMessage());
     }
 
-    // NEW
     @Test
     public void nonCanonicalInsideContainers() {
       assertThrows(NotCanonicalException.class,
@@ -318,6 +359,123 @@ public final class StringIntrinsicsTest {
       var dict = new PyDict<>();
       dict.put("k", new Object());
       assertThrows(NotCanonicalException.class, () -> StringIntrinsics.$repr$(dict));
+    }
+
+    @Test
+    public void userDefinedFunction() {
+      var foo = (PyFunction) run("""
+          def foo():
+              pass
+          """).getGlobal("foo");
+
+      var expected = "<function foo at 0x"
+          + Integer.toHexString(System.identityHashCode(foo)) + ">";
+      assertEquals(expected, StringIntrinsics.$repr$(foo));
+    }
+
+    @Test
+    public void builtinFunction() {
+      // The type constructors are native (builtin) functions.
+      assertEquals("<built-in function int>", StringIntrinsics.$repr$(PyType.INT.function()));
+      assertEquals("<built-in function str>", StringIntrinsics.$repr$(PyType.STR.function()));
+    }
+
+    @Test
+    public void functionInsideAContainer() {
+      var foo = (PyFunction) run("""
+          def foo():
+              pass
+          """).getGlobal("foo");
+      var expected = "[<function foo at 0x"
+          + Integer.toHexString(System.identityHashCode(foo)) + ">]";
+      assertEquals(expected, repr(new PyList<>(foo)));
+    }
+
+    @Test
+    public void sliceWithIntegers() {
+      var slice = PySlice.of(1L, 5L, 2L);
+      assertEquals("slice(1, 5, 2)", StringIntrinsics.$repr$(slice));
+    }
+
+    @Test
+    public void sliceWithNone() {
+      assertEquals("slice(1, None, 2)",
+          StringIntrinsics.$repr$(PySlice.of(1L, PyNone.INSTANCE, 2L)));
+    }
+
+    @Test
+    public void sliceComponentsUseRepr() {
+      assertEquals("slice('a', 'b', 1)",
+          StringIntrinsics.$repr$(PySlice.of("a", "b", 1L)));
+    }
+
+    @Test
+    public void typeObjects() {
+      assertEquals("<class 'int'>", StringIntrinsics.$repr$(PyType.INT));
+      assertEquals("<class 'NoneType'>", StringIntrinsics.$repr$(PyType.NONE_TYPE));
+    }
+
+    @Test
+    public void everyTypeUsesItsToString() {
+      for (var type : PyType.ALL) {
+        assertEquals(type.toString(), StringIntrinsics.$repr$(type));
+      }
+    }
+
+    @Test
+    public void dictDeletedMiddleEntryIsSkipped() {
+      var dict = new PyDict<>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.put("c", 3L);
+      dict.remove("b");
+
+      assertEquals(3, dict.entryCount());   // the tombstone is still there
+      assertEquals(2, dict.size());
+      assertEquals("{'a': 1, 'c': 3}", repr(dict));
+    }
+
+    @Test
+    public void dictDeletedFirstEntryDoesNotLeaveALeadingComma() {
+      var dict = new PyDict<>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.put("c", 3L);
+      dict.remove("a");
+
+      assertEquals("{'b': 2, 'c': 3}", repr(dict));
+    }
+
+    @Test
+    public void dictDeletedLastEntry() {
+      var dict = new PyDict<>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.remove("b");
+
+      assertEquals("{'a': 1}", repr(dict));
+    }
+
+    @Test
+    public void dictAllEntriesDeleted() {
+      var dict = new PyDict<>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.remove("a");
+      dict.remove("b");
+
+      assertEquals("{}", repr(dict));
+    }
+
+    @Test
+    public void dictReinsertedKeyMovesToTheEnd() {
+      var dict = new PyDict<>();
+      dict.put("a", 1L);
+      dict.put("b", 2L);
+      dict.remove("a");
+      dict.put("a", 9L);
+
+      assertEquals("{'b': 2, 'a': 9}", repr(dict));
     }
   }
 
@@ -349,7 +507,6 @@ public final class StringIntrinsicsTest {
       assertEquals("([(...)],)", StringIntrinsics.$repr$(tuple));
     }
 
-    // NEW
     @Test
     public void cycleAcrossTupleAndListStartingFromTheList() {
       var list = new PyList<>();
@@ -359,7 +516,6 @@ public final class StringIntrinsicsTest {
       assertEquals("[([...],)]", StringIntrinsics.$repr$(list));
     }
 
-    // NEW
     @Test
     public void cycleAcrossDictAndList() {
       var dict = new PyDict<>();
@@ -371,7 +527,6 @@ public final class StringIntrinsicsTest {
       assertEquals("[{'k': [...]}]", StringIntrinsics.$repr$(list));
     }
 
-    // NEW
     @Test
     public void cycleBetweenTwoLists() {
       var a = new PyList<>();
@@ -382,7 +537,6 @@ public final class StringIntrinsicsTest {
       assertEquals("[[[...]]]", StringIntrinsics.$repr$(b));
     }
 
-    // NEW
     @Test
     public void selfReferentialListNextToOtherElements() {
       var list = new PyList<>();
@@ -393,8 +547,7 @@ public final class StringIntrinsicsTest {
       assertEquals("[1, [...], 'x']", StringIntrinsics.$repr$(list));
     }
 
-    // NEW
-    @Test
+      @Test
     public void strOfSelfReferentialContainers() {
       var list = new PyList<>();
       list.append(list);
@@ -412,7 +565,6 @@ public final class StringIntrinsicsTest {
       assertEquals("[[1], [1]]", StringIntrinsics.$repr$(list));
     }
 
-    // NEW
     @Test
     public void repeatedReferenceInDictIsNotACycle() {
       var child = new PyList<>(1L);
@@ -436,7 +588,6 @@ public final class StringIntrinsicsTest {
       assertEquals("[[...], 42]", StringIntrinsics.$repr$(list));
     }
 
-    // NEW
     @Test
     public void reprStateIsCleanedUpAfterAnExceptionInADict() {
       var dict = new PyDict<>();
@@ -450,7 +601,6 @@ public final class StringIntrinsicsTest {
       assertEquals("{'self': {...}, 'bad': 1}", StringIntrinsics.$repr$(dict));
     }
 
-    // NEW
     @Test
     public void reprStateIsCleanedUpAfterAnIntLimitError() {
       var list = new PyList<>();
@@ -469,7 +619,6 @@ public final class StringIntrinsicsTest {
   @Nested
   public final class FloatFormatting {   // CHANGED: was `Float`, which shadowed java.lang.Float
 
-    // NEW
     private void assertFloat(String expected, double value) {
       assertEquals(expected, StringIntrinsics.$str$(value), "str of " + value);
       assertEquals(expected, StringIntrinsics.$repr$(value), "repr of " + value);
@@ -485,7 +634,6 @@ public final class StringIntrinsicsTest {
       assertEquals("-inf", StringIntrinsics.$repr$(Double.NEGATIVE_INFINITY));
     }
 
-    // NEW
     @Test
     public void negativeNaNIsStillNaN() {
       assertFloat("nan", Double.longBitsToDouble(0xFFF8_0000_0000_0000L));
@@ -518,7 +666,6 @@ public final class StringIntrinsicsTest {
       assertEquals("3.14", StringIntrinsics.$str$(3.14));
     }
 
-    // NEW
     @Test
     public void floatClassicRoundingCases() {
       assertFloat("0.30000000000000004", 0.1 + 0.2);
@@ -551,7 +698,6 @@ public final class StringIntrinsicsTest {
       assertEquals("1.5e+16", StringIntrinsics.$str$(1.5e16));
     }
 
-    // NEW
     @Test
     public void floatAroundTheScientificThresholds() {
       assertFloat("0.0001234", 0.0001234);
@@ -572,7 +718,6 @@ public final class StringIntrinsicsTest {
       assertEquals("1e-100", StringIntrinsics.$str$(1e-100));
     }
 
-    // NEW
     @Test
     public void floatExponentHasAtLeastTwoDigits() {
       assertFloat("1e-07", 1e-7);
@@ -596,7 +741,6 @@ public final class StringIntrinsicsTest {
       assertEquals("-5e-324", StringIntrinsics.$str$(-Double.MIN_VALUE));
     }
 
-    // NEW
     @Test
     public void floatSubnormalsAndPowersOfTwo() {
       assertFloat("2.2250738585072014e-308", Double.MIN_NORMAL);
@@ -634,7 +778,6 @@ public final class StringIntrinsicsTest {
       }
     }
 
-    // NEW
     @Test
     public void everyPowerOfTwoRoundTripsAndIsShortest() {
       for (var exponent = Double.MIN_EXPONENT - 52; exponent <= Double.MAX_EXPONENT; exponent++) {
@@ -644,7 +787,6 @@ public final class StringIntrinsicsTest {
       }
     }
 
-    // NEW
     @Test
     public void randomDoublesRoundTripAndAreShortest() {
       var random = new Random(42);
@@ -657,7 +799,6 @@ public final class StringIntrinsicsTest {
       }
     }
 
-    // NEW
     @Test
     public void randomDoublesInTheCommonRangeRoundTripAndAreShortest() {
       var random = new Random(7);
@@ -700,7 +841,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'abc'", StringIntrinsics.$repr$("abc"));
     }
 
-    // NEW
     @Test
     public void spaceIsPrintable() {
       assertEquals("' '", StringIntrinsics.$repr$(" "));
@@ -714,7 +854,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'a\\'b\"c'", StringIntrinsics.$repr$("a'b\"c"));
     }
 
-    // NEW
     @Test
     public void singleQuoteCharacters() {
       assertEquals("\"'\"", StringIntrinsics.$repr$("'"));
@@ -723,7 +862,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'\\'\"'", StringIntrinsics.$repr$("'\""));
     }
 
-    // NEW
     @Test
     public void quoteSelectionWithEscapesInTheSameString() {
       assertEquals("\"'\\n\"", StringIntrinsics.$repr$("'\n"));
@@ -758,7 +896,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'\\x7f'", StringIntrinsics.$repr$("\u007f"));
     }
 
-    // NEW
     @Test
     public void otherAsciiControlCharacters() {
       assertEquals("'\\x0b'", StringIntrinsics.$repr$("\u000b"));  // vertical tab
@@ -784,7 +921,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'\\u2029'", StringIntrinsics.$repr$("\u2029"));
     }
 
-    // NEW
     @Test
     public void moreNonPrintableCategories() {
       assertEquals("'\\xad'", StringIntrinsics.$repr$("\u00ad"));      // Cf: soft hyphen
@@ -804,20 +940,17 @@ public final class StringIntrinsicsTest {
       assertEquals("'\\ud800'", StringIntrinsics.$repr$("\uD800"));
     }
 
-    // NEW
     @Test
     public void loneLowSurrogate() {
       assertEquals("'\\udc00'", StringIntrinsics.$repr$("\uDC00"));
       assertEquals("'\\udfff'", StringIntrinsics.$repr$("\uDFFF"));
     }
 
-    // NEW
     @Test
     public void reversedSurrogatesAreTwoLoneSurrogates() {
       assertEquals("'\\ude00\\ud83d'", StringIntrinsics.$repr$("\uDE00\uD83D"));
     }
 
-    // NEW
     @Test
     public void loneSurrogatesNextToOtherCharacters() {
       assertEquals("'a\\ud83dxb'", StringIntrinsics.$repr$("a\uD83Dxb"));
@@ -830,7 +963,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'\u0300'", StringIntrinsics.$repr$("\u0300"));
     }
 
-    // NEW
     @Test
     public void printableNonAsciiLettersAreNotEscaped() {
       assertEquals("'\u00e9'", StringIntrinsics.$repr$("\u00e9"));
@@ -854,7 +986,6 @@ public final class StringIntrinsicsTest {
           StringIntrinsics.$repr$("\uDBC0\uDC00")); // U+100000
     }
 
-    // NEW
     @Test
     public void supplementaryNonPrintable() {
       assertEquals("'\\U000e0001'", StringIntrinsics.$repr$(cp(0xE0001)));   // Cf: language tag
@@ -862,7 +993,6 @@ public final class StringIntrinsicsTest {
       assertEquals("'\\U0010ffff'", StringIntrinsics.$repr$(cp(0x10FFFF)));  // Cn: noncharacter
     }
 
-    // NEW
     @Test
     public void supplementaryPrintableMixedWithEscapes() {
       assertEquals("'a😀\\x00😀b'", StringIntrinsics.$repr$("a😀\u0000😀b"));
@@ -892,7 +1022,6 @@ public final class StringIntrinsicsTest {
       assertThrows(PyValueError.class, () -> StringIntrinsics.$repr$(beyond));
     }
 
-    // NEW
     @Test
     public void minusSignIsNotCountedAsADigit() {
       // 4300 digits, negative: accepted. 4301 digits, negative: rejected.
@@ -902,14 +1031,12 @@ public final class StringIntrinsicsTest {
           () -> StringIntrinsics.$repr$(BigInteger.TEN.pow(LIMIT).negate()));
     }
 
-    // NEW
     @Test
     public void farBeyondLimitIsRejected() {
       assertThrows(PyValueError.class,
           () -> StringIntrinsics.$str$(BigInteger.TEN.pow(LIMIT * 10)));
     }
 
-    // NEW
     @Test
     public void largestNumberWithLimitDigitsIsAccepted() {
       var atLimit = BigInteger.TEN.pow(LIMIT).subtract(BigInteger.ONE);  // 4300 nines
@@ -927,7 +1054,6 @@ public final class StringIntrinsicsTest {
           () -> StringIntrinsics.$repr$(new PyTuple1(beyond)));
     }
 
-    // NEW
     @Test
     public void limitAppliesInsideListAndDict() {
       var beyond = BigInteger.TEN.pow(LIMIT);
@@ -937,7 +1063,6 @@ public final class StringIntrinsicsTest {
       assertThrows(PyValueError.class, () -> StringIntrinsics.$repr$(dict));
     }
 
-    // NEW
     @Test
     public void limitDoesNotApplyToLong() {
       assertEquals("9223372036854775807", StringIntrinsics.$str$(Long.MAX_VALUE));
@@ -956,7 +1081,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class GetItem {
 
@@ -1032,10 +1156,37 @@ public final class StringIntrinsicsTest {
       assertThrowsWithMessage(PyIndexError.class, "string index out of range",
           () -> StringIntrinsics.$getItem$("a😀", -3L));
     }
+
+    @Test
+    public void positiveIndexInsideTheCharLengthButPastTheLastCodePoint() {
+      // "😀😀": 2 code points but 4 chars. Index 3 passes the `i >= s.length()` guard
+      // (3 < 4) but offsetByCodePoints(0, 3) throws -> the catch branch.
+      assertThrowsWithMessage(PyIndexError.class, "string index out of range",
+          () -> StringIntrinsics.$getItem$("😀😀", 3L));
+      assertThrowsWithMessage(PyIndexError.class, "string index out of range",
+          () -> StringIntrinsics.$getItem$("a😀b😀", 5L));
+    }
+
+    @Test
+    public void negativeIndexPastTheFirstCodePoint() {
+      // -3 is >= -s.length() (-4) but there are only 2 code points before the end.
+      assertThrowsWithMessage(PyIndexError.class, "string index out of range",
+          () -> StringIntrinsics.$getItem$("😀😀", -3L));
+      assertThrowsWithMessage(PyIndexError.class, "string index out of range",
+          () -> StringIntrinsics.$getItem$("a😀b😀", -5L));
+    }
+
+    @Test
+    public void validIndicesAroundThePairsStillWork() {
+      assertEquals("😀", StringIntrinsics.$getItem$("😀😀", 0L));
+      assertEquals("😀", StringIntrinsics.$getItem$("😀😀", 1L));
+      assertEquals("😀", StringIntrinsics.$getItem$("😀😀", -1L));
+      assertEquals("😀", StringIntrinsics.$getItem$("😀😀", -2L));
+      assertEquals("b", StringIntrinsics.$getItem$("a😀b😀", 2L));
+    }
   }
 
 
-  // NEW
   @Nested
   public final class Lower {
 
@@ -1119,7 +1270,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class Upper {
 
@@ -1233,7 +1383,6 @@ public final class StringIntrinsicsTest {
       assertEquals("", StringIntrinsics._swapcase_(""));
     }
 
-    // NEW
     @Test
     public void asciiMixedCase() {
       assertEquals("AbC", StringIntrinsics._swapcase_("aBc"));
@@ -1241,14 +1390,12 @@ public final class StringIntrinsicsTest {
       assertEquals("hELLO wORLD", StringIntrinsics._swapcase_("Hello World"));
     }
 
-    // NEW
     @Test
     public void swapcaseIsAnInvolutionOnPlainAscii() {
       var s = "The Quick Brown Fox 42!";
       assertEquals(s, StringIntrinsics._swapcase_((String) StringIntrinsics._swapcase_(s)));
     }
 
-    // NEW
     @Test
     public void lowercaseWithFullUppercaseMapping() {
       assertEquals("\u02BCN", StringIntrinsics._swapcase_("\u0149"));  // ŉ -> ʼN
@@ -1257,14 +1404,12 @@ public final class StringIntrinsicsTest {
       assertEquals("\u01C4", StringIntrinsics._swapcase_("\u01C6"));   // ǆ -> Ǆ
     }
 
-    // NEW
     @Test
     public void loneSigmaIsNotFinal() {
       assertEquals("\u03C3", StringIntrinsics._swapcase_("\u03A3"));
       assertEquals("1\u03C3", StringIntrinsics._swapcase_("1\u03A3"));
     }
 
-    // NEW
     @Test
     public void expansionDoesNotDesynchronizeTheLoweredIndex() {
       // İ lowers to two UTF-16 chars; the characters after it must still be taken from the right offset.
@@ -1272,14 +1417,12 @@ public final class StringIntrinsicsTest {
       assertEquals("i\u0307i\u0307\u03C2", StringIntrinsics._swapcase_("\u0130\u0130\u03A3".replace("\u03A3", "\u03A3")));
     }
 
-    // NEW
     @Test
     public void supplementaryMixedWithExpansions() {
       assertEquals("\uD801\uDC28SS\uD801\uDC00",
           StringIntrinsics._swapcase_("\uD801\uDC00\u00DF\uD801\uDC28"));
     }
 
-    // NEW
     @Test
     public void loneSurrogatesAreUnchanged() {
       assertEquals("A\uD83Db", StringIntrinsics._swapcase_("a\uD83DB"));
@@ -1310,7 +1453,6 @@ public final class StringIntrinsicsTest {
       assertEquals("Ss", StringIntrinsics._capitalize_("ß"));
     }
 
-    // NEW
     @Test
     public void everyFullTitleMappingExpandsAndTheRestIsLowercased() {
       // Each of these starts with a character whose full titlecase mapping has several code points.
@@ -1362,7 +1504,6 @@ public final class StringIntrinsicsTest {
       assertEquals("Abc", StringIntrinsics._capitalize_("Abc"));
     }
 
-    // NEW
     @Test
     public void ascii() {
       assertEquals("Hello", StringIntrinsics._capitalize_("hELLO"));
@@ -1372,14 +1513,12 @@ public final class StringIntrinsicsTest {
       assertEquals(" abc", StringIntrinsics._capitalize_(" ABC"));
     }
 
-    // NEW
     @Test
     public void dottedCapitalIAsFirstCharacter() {
       assertEquals("\u0130", StringIntrinsics._capitalize_("\u0130"));
       assertEquals("\u0130i\u0307", StringIntrinsics._capitalize_("\u0130\u0130"));
     }
 
-    // NEW
     @Test
     public void supplementaryFirstCharacter() {
       assertEquals("\uD801\uDC00abc", StringIntrinsics._capitalize_("\uD801\uDC28abc"));  // 𐐨abc -> 𐐀abc
@@ -1387,20 +1526,17 @@ public final class StringIntrinsicsTest {
       assertEquals("😀abc", StringIntrinsics._capitalize_("😀ABC"));
     }
 
-    // NEW
     @Test
     public void titlecaseCharacterInTheRestIsLowercased() {
       assertEquals("A\u01C6", StringIntrinsics._capitalize_("a\u01C5"));  // aǅ -> Aǆ
       assertEquals("\u01C5\u01C6", StringIntrinsics._capitalize_("\u01C5\u01C5"));
     }
 
-    // NEW
     @Test
     public void titlecaseCharacterAsFirstCharacterStaysTitlecase() {
       assertEquals("\u01C5abc", StringIntrinsics._capitalize_("\u01C5ABC"));
     }
 
-    // NEW
     @Test
     public void loneSurrogates() {
       assertEquals("\uD83Dabc", StringIntrinsics._capitalize_("\uD83DABC"));
@@ -1427,7 +1563,6 @@ public final class StringIntrinsicsTest {
       assertEquals(3L, StringIntrinsics._rfind_("abc", ""));
     }
 
-    // NEW
     @Test
     public void emptySubEverywhere() {
       assertEquals(0L, StringIntrinsics._find_("abc", ""));
@@ -1439,7 +1574,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("", "a"));
     }
 
-    // NEW
     @Test
     public void emptySubWithNegativeBounds() {
       assertEquals(2L, StringIntrinsics._find_("abc", "", -1L));
@@ -1449,7 +1583,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("abc", "", 1L, -10L));
     }
 
-    // NEW
     @Test
     public void emptySubWithSupplementaryCharacters() {
       assertEquals(1L, StringIntrinsics._find_("😀😀", "", 1L));
@@ -1473,7 +1606,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("abc", "a", Long.MAX_VALUE));
     }
 
-    // NEW
     @Test
     public void longExtremeEndBounds() {
       assertEquals(0L, StringIntrinsics._find_("abc", "a", 0L, Long.MAX_VALUE));
@@ -1493,7 +1625,6 @@ public final class StringIntrinsicsTest {
       assertEquals(2L, StringIntrinsics._find_("aba", "a", true)); // True == 1
     }
 
-    // NEW
     @Test
     public void booleanEndBound() {
       assertEquals(-1L, StringIntrinsics._find_("aba", "b", 0L, false));  // end == 0
@@ -1566,7 +1697,6 @@ public final class StringIntrinsicsTest {
       assertEquals(0L, StringIntrinsics._find_("abc", "a", -10L));
     }
 
-    // NEW
     @Test
     public void notFound() {
       assertEquals(-1L, StringIntrinsics._find_("hello", "z"));
@@ -1576,7 +1706,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("", "a"));
     }
 
-    // NEW
     @Test
     public void wholeStringAndPrefixAndSuffix() {
       assertEquals(0L, StringIntrinsics._find_("abcabc", "abcabc"));
@@ -1586,7 +1715,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("abcabc", "abcabcd"));
     }
 
-    // NEW
     @Test
     public void overlappingMatches() {
       assertEquals(0L, StringIntrinsics._find_("aaa", "aa"));
@@ -1600,14 +1728,12 @@ public final class StringIntrinsicsTest {
       assertEquals(4L, StringIntrinsics._rfind_("abcabc", "b", 2L));
     }
 
-    // NEW
     @Test
     public void rfindMatchMustEndBeforeEnd() {
       assertEquals(1L, StringIntrinsics._rfind_("abcabc", "bc", 0L, 5L));   // bc at 4 ends at 6 > 5
       assertEquals(4L, StringIntrinsics._rfind_("abcabc", "bc", 0L, 6L));
     }
 
-    // NEW
     @Test
     public void startAndEndWindows() {
       assertEquals(4L, StringIntrinsics._find_("abcabc", "b", 2L));
@@ -1619,7 +1745,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("abcabc", "a", 3L, 1L));
     }
 
-    // NEW
     @Test
     public void negativeBounds() {
       assertEquals(4L, StringIntrinsics._find_("abcabc", "b", -4L));
@@ -1631,7 +1756,6 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("abcabc", "b", -100L, -100L));
     }
 
-    // NEW
     @Test
     public void supplementaryCharactersAreCountedAsOne() {
       var s = "a😀b😀c";   // code points: a=0 😀=1 b=2 😀=3 c=4
@@ -1652,7 +1776,6 @@ public final class StringIntrinsicsTest {
       assertEquals(5L, StringIntrinsics._rfind_(s, ""));
     }
 
-    // NEW
     @Test
     public void rfindWithEndInsideSupplementaryString() {
       assertEquals(1L, StringIntrinsics._rfind_("😀a😀", "a", 0L, 2L));
@@ -1660,7 +1783,6 @@ public final class StringIntrinsicsTest {
       assertEquals(0L, StringIntrinsics._rfind_("😀😀", "😀", 0L, 1L));
     }
 
-    // NEW
     @Test
     public void loneSurrogateSubDoesNotMatchInsideAPair() {
       assertEquals(-1L, StringIntrinsics._find_("😀", "\uD83D"));
@@ -1671,7 +1793,7 @@ public final class StringIntrinsicsTest {
       assertEquals(-1L, StringIntrinsics._find_("😀b", "\uDE00b"));
     }
 
-    // NEW
+
     @Test
     public void loneSurrogateSubMatchesALoneSurrogate() {
       assertEquals(0L, StringIntrinsics._find_("\uD83D", "\uD83D"));
@@ -1681,7 +1803,7 @@ public final class StringIntrinsicsTest {
       assertEquals(1L, StringIntrinsics._find_("\uDE00\uD83D", "\uD83D"));   // reversed order: two lone surrogates
     }
 
-    // NEW
+
     @Test
     public void indexAndRindexSuccess() {
       assertEquals(2L, StringIntrinsics._index_("abc", "c"));
@@ -1724,7 +1846,147 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
+  @Nested
+  public final class Rindex {
+
+    @Test
+    public void rindexFindsTheLastOccurrence() {
+      assertEquals(7L, StringIntrinsics._rindex_("hello world", "o"));
+      assertEquals(3L, StringIntrinsics._rindex_("abcabc", "abc"));
+      assertEquals(2L, StringIntrinsics._rindex_("aaaa", "aa"));
+    }
+
+    @Test
+    public void emptySubstring() {
+      assertEquals(3L, StringIntrinsics._rindex_("abc", ""));
+      assertEquals(0L, StringIntrinsics._rindex_("", ""));
+    }
+
+    @Test
+    public void notFoundRaisesValueError() {
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abc", "z"));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("", "a"));
+    }
+
+    @Test
+    public void withStart() {
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", 2L));
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", 4L));
+      assertEquals(3L, StringIntrinsics._rindex_("abcabc", "a", -3L));
+      assertEquals(3L, StringIntrinsics._rindex_("abcabc", "a", -100L));
+      assertEquals(3L, StringIntrinsics._rindex_("abc", "", 2L));
+      assertEquals(3L, StringIntrinsics._rindex_("abc", "", -1L));
+      assertEquals(0L, StringIntrinsics._rindex_("", "", 0L));
+    }
+
+    @Test
+    public void withStartOutOfRange() {
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abcabc", "b", 5L));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abcabc", "c", 100L));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abc", "", 100L));
+    }
+
+    @Test
+    public void withStartAndEnd() {
+      assertEquals(3L, StringIntrinsics._rindex_("abcabc", "abc", 0L, 6L));
+      assertEquals(0L, StringIntrinsics._rindex_("abcabc", "abc", 0L, 5L));
+      assertEquals(1L, StringIntrinsics._rindex_("abcabc", "b", 0L, 4L));
+      assertEquals(2L, StringIntrinsics._rindex_("hello", "l", 0L, 3L));
+      assertEquals(3L, StringIntrinsics._rindex_("hello", "l", 0L, -1L));
+      assertEquals(4L, StringIntrinsics._rindex_("hello", "o", 0L, 100L));
+      assertEquals(2L, StringIntrinsics._rindex_("hello", "", 2L, 2L));
+    }
+
+    @Test
+    public void withStartAndEndNotFound() {
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("hello", "l", 3L, 3L));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("hello", "", 4L, 2L));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("hello", "h", 0L, -100L));
+    }
+
+    @Test
+    public void noneBoundsUseTheDefaults() {
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", PyNone.INSTANCE));
+      assertEquals(0L, StringIntrinsics._rindex_("hello", "hello", PyNone.INSTANCE, PyNone.INSTANCE));
+    }
+
+    @Test
+    public void supplementaryCharacters() {
+      assertEquals(3L, StringIntrinsics._rindex_("a😀b😀c", "😀"));
+      assertEquals(3L, StringIntrinsics._rindex_("a😀b😀c", "😀", 2L));
+      assertEquals(1L, StringIntrinsics._rindex_("a😀b😀c", "😀", 0L, 3L));
+      assertEquals(2L, StringIntrinsics._rindex_("a😀b😀c", "b", 0L, 3L));
+    }
+
+    @Test
+    public void loneSurrogateDoesNotMatchInsideAPair() {
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("😀", "\uDE00"));
+    }
+
+    @Test
+    public void wrongSubstringType() {
+      assertThrowsWithMessage(PyTypeError.class, "rindex() argument 1 must be str, not int",
+          () -> StringIntrinsics._rindex_("abc", 1L));
+      assertThrowsWithMessage(PyTypeError.class, "rindex() argument 1 must be str, not NoneType",
+          () -> StringIntrinsics._rindex_("abc", PyNone.INSTANCE));
+    }
+
+    @Test
+    public void bigIntegerThatFitsInALong() {
+      // bitLength() <= 63 -> b.longValue() (the branch under test).
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", BigInteger.valueOf(2L)));
+      assertEquals(3L, StringIntrinsics._rindex_("abcabc", "abc", BigInteger.valueOf(-4L)));
+      assertEquals(1L, StringIntrinsics._rindex_("abcabc", "b", 0L, BigInteger.valueOf(4L)));
+    }
+
+    @Test
+    public void bigIntegerAtTheLongBoundaries() {
+      // bitLength() == 63 on both sides: still the longValue() branch.
+      assertEquals(5L, StringIntrinsics._rindex_("abcabc", "c", BigInteger.valueOf(Long.MIN_VALUE)));
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", 0L, BigInteger.valueOf(Long.MAX_VALUE)));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abcabc", "c", BigInteger.valueOf(Long.MAX_VALUE)));
+    }
+
+    @Test
+    public void bigIntegerTooLargeIsClamped() {
+      var huge = BigInteger.TWO.pow(64);          // bitLength() == 64
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", huge.negate()));   // -> Long.MIN_VALUE -> 0
+      assertEquals(4L, StringIntrinsics._rindex_("abcabc", "b", 0L, huge));        // -> Long.MAX_VALUE -> length
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abcabc", "b", huge));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("abcabc", "b", 0L, huge.negate()));
+    }
+
+    @Test
+    public void booleanBounds() {
+      assertEquals(0L, StringIntrinsics._rindex_("ab", "a", false));
+      assertThrowsWithMessage(PyValueError.class, "substring not found",
+          () -> StringIntrinsics._rindex_("ab", "a", true));
+    }
+
+    @Test
+    public void wrongBoundType() {
+      assertThrowsWithMessage(PyTypeError.class, SLICE_INDEX_MESSAGE,
+          () -> StringIntrinsics._rindex_("abc", "b", "x"));
+      assertThrowsWithMessage(PyTypeError.class, SLICE_INDEX_MESSAGE,
+          () -> StringIntrinsics._rindex_("abc", "b", 1.5));
+      assertThrowsWithMessage(PyTypeError.class, SLICE_INDEX_MESSAGE,
+          () -> StringIntrinsics._rindex_("abc", "b", 0L, "x"));
+    }
+  }
+
+
   @Nested
   public final class Partition {
 
@@ -1818,7 +2080,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class RemovePrefixSuffix {
 
@@ -1903,7 +2164,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class Join {
 
@@ -2008,7 +2268,6 @@ public final class StringIntrinsicsTest {
       assertEquals("Python int too large to convert to C ssize_t", ex.getMessage());
     }
 
-    // NEW
     @Test
     public void basic() {
       assertEquals("00042", StringIntrinsics._zfill_("42", 5L));
@@ -2018,7 +2277,6 @@ public final class StringIntrinsicsTest {
       assertEquals("", StringIntrinsics._zfill_("", 0L));
     }
 
-    // NEW
     @Test
     public void signsAreKeptInFront() {
       assertEquals("-0042", StringIntrinsics._zfill_("-42", 5L));
@@ -2028,7 +2286,6 @@ public final class StringIntrinsicsTest {
       assertEquals("-42", StringIntrinsics._zfill_("-42", 3L));
     }
 
-    // NEW
     @Test
     public void onlyTheFirstSignIsSpecial() {
       assertEquals("0--42", StringIntrinsics._zfill_("--42", 5L).toString().replaceFirst("^-0", "0-"));
@@ -2036,7 +2293,6 @@ public final class StringIntrinsicsTest {
       assertEquals("0004-2", StringIntrinsics._zfill_("4-2", 6L));
     }
 
-    // NEW
     @Test
     public void zeroAndNegativeWidth() {
       assertEquals("42", StringIntrinsics._zfill_("42", 0L));
@@ -2044,7 +2300,6 @@ public final class StringIntrinsicsTest {
       assertEquals("42", StringIntrinsics._zfill_("42", Long.MIN_VALUE));
     }
 
-    // NEW
     @Test
     public void widthIsCountedInCodePoints() {
       assertEquals("00😀", StringIntrinsics._zfill_("😀", 3L));
@@ -2053,14 +2308,12 @@ public final class StringIntrinsicsTest {
       assertEquals("0😀😀", StringIntrinsics._zfill_("😀😀", 3L));
     }
 
-    // NEW
     @Test
     public void nonDigitStringsArePaddedToo() {
       assertEquals("000abc", StringIntrinsics._zfill_("abc", 6L));
       assertEquals("00 a", StringIntrinsics._zfill_(" a", 4L));
     }
 
-    // NEW
     @Test
     public void booleanAndBigIntegerWidths() {
       assertEquals("a", StringIntrinsics._zfill_("a", true));
@@ -2069,7 +2322,6 @@ public final class StringIntrinsicsTest {
       assertEquals("a", StringIntrinsics._zfill_("a", BigInteger.valueOf(-3L)));
     }
 
-    // NEW
     @Test
     public void wrongWidthType() {
       assertThrowsWithMessage(PyTypeError.class, "'float' object cannot be interpreted as an integer",
@@ -2080,7 +2332,6 @@ public final class StringIntrinsicsTest {
           () -> StringIntrinsics._zfill_("a", "3"));
     }
 
-    // NEW
     @Test
     public void overflowBoundary() {
       // 2**63 does not fit in a C ssize_t, 2**63 - 1 does (but is too big to allocate).
@@ -2101,7 +2352,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class IsAscii {
 
@@ -2124,7 +2374,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class IsAlpha {
 
@@ -2173,7 +2422,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW
   @Nested
   public final class IsDecimal {
 
@@ -2209,9 +2457,6 @@ public final class StringIntrinsicsTest {
   }
 
 
-  // NEW: compares find/rfind/index/rindex/partition/rpartition/removeprefix/removesuffix
-  // with a naive model working on int[] code point arrays, on random strings
-  // containing lone surrogates, pairs and plain characters.
   @Nested
   public final class DifferentialAgainstACodePointModel {
 
@@ -2360,44 +2605,12 @@ public final class StringIntrinsicsTest {
         assertEquals(expectedRpartition, repr(StringIntrinsics._rpartition_(s, sep)), () -> "rpartition " + description);
       }
     }
-
-    /*@Test
-    public void removeprefixAndRemovesuffixMatchTheModel() {
-      var random = new Random(2024);
-      for (var iteration = 0; iteration < 20_000; iteration++) {
-        var s = randomString(random, 8);
-        var p = randomString(random, 3);
-        var cps = s.codePoints().toArray();
-        var pCps = p.codePoints().toArray();
-        var description = "s=" + repr(s) + " p=" + repr(p);
-
-        var hasPrefix = pCps.length <= cps.length
-            && Arrays.equals(pCps, 0, pCps.length, cps, 0, pCps.length);
-        var expectedWithoutPrefix = hasPrefix
-            ? new String(cps, pCps.length, cps.length - pCps.length)
-            : s;
-        assertEquals(expectedWithoutPrefix, StringIntrinsics._removeprefix_(s, p), () -> "removeprefix " + description);
-
-        var hasSuffix = !pCps.length_isZero(pCps) && pCps.length <= cps.length
-            && Arrays.equals(pCps, 0, pCps.length, cps, cps.length - pCps.length, cps.length);
-        var expectedWithoutSuffix = hasSuffix
-            ? new String(cps, 0, cps.length - pCps.length)
-            : s;
-        assertEquals(expectedWithoutSuffix, StringIntrinsics._removesuffix_(s, p), () -> "removesuffix " + description);
-      }
-    }*/
   }
 
 
   /// Checks that the method table is reachable from Python source, with every overload.
   @Nested
   public final class ThroughMethodCalls {
-    private ModuleContext run(String source) {
-      var context = new ModuleContext();
-      Engine.run(context, source);
-      return context;
-    }
-
     @Test
     public void everyMethodIsReachableFromPythonSource() {
       var context = run("""
