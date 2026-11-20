@@ -17,7 +17,6 @@ import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.function.IntPredicate;
@@ -63,6 +62,9 @@ public final class StringIntrinsics {
       try {
         start = s.offsetByCodePoints(0, (int) i);
       } catch (IndexOutOfBoundsException e) {
+        throw badIndex("string index out of range");
+      }
+      if (start == s.length()) {   // <=> start == codePointCount(s)
         throw badIndex("string index out of range");
       }
     }
