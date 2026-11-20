@@ -805,10 +805,6 @@ public final class StringIntrinsics {
     };
   }
 
-  private static int offset(String s, int codePointIndex) {
-    return s.offsetByCodePoints(0, codePointIndex);
-  }
-
   private static int codePointLength(String s) {
     return s.codePointCount(0, s.length());
   }
