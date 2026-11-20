@@ -87,7 +87,7 @@ public final class StringIntrinsics {
       case PyList<?> list -> listRepr(list);
       case PyDict<?,?> dict -> dictRepr(dict);
       case PyFunction f -> functionRepr(f);
-      case PyRange r -> r.toString();
+      case PyRange r -> rangeRepr(r);
       case PySlice s -> s.toString();
       case PyType t -> t.toString();
       default -> throw notCanonical("str", value);
@@ -540,8 +540,13 @@ public final class StringIntrinsics {
   }
 
   public static Object _join_(String separator, Object iterable) {
+    Object iterator;
+    try {
+      iterator = IteratorIntrinsics.$iterator$(iterable);
+    } catch (PyTypeError _) {
+      throw new PyTypeError("can only join an iterable");
+    }
     var builder = new StringBuilder();
-    var iterator = IteratorIntrinsics.$iterator$(iterable);
     var index = 0;
     Object item;
     while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
@@ -583,7 +588,7 @@ public final class StringIntrinsics {
       return s;
     }
     var padding = requested - length;
-    if (padding > Integer.MAX_VALUE) {
+    if (padding > Integer.MAX_VALUE - 8) {
       throw new UnimplementedFeatureError(
           "string padding exceeds the maximum Java string size");
     }
