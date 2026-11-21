@@ -28,6 +28,7 @@ import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.exactInvoker;
 import static java.lang.invoke.MethodHandles.foldArguments;
 import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.throwException;
 import static java.lang.invoke.MethodType.methodType;
 
@@ -371,6 +372,7 @@ final class FunctionSupport {
     // A link list of all guarded call sites
     // code of call site guarded by SAME_CALLEE on a PyFunction, null otherwise
     private record NextCallSite(FunctionCallSite site, PyFunction.Code code) {}
+    private static final NextCallSite NO_NEXT = new NextCallSite(null, null);
 
     private static final int MAX_DEPTH = 4;
 
@@ -397,15 +399,15 @@ final class FunctionSupport {
 
       // 2. check if there is not an existing call site to update (promote)
       var code = function.code;
-      var promote = (FunctionCallSite) null;
-      if (code.captureCount() == 0) {
+      var promoted = (FunctionCallSite) null;
+      if (callee instanceof PyFunction && code.captureCount() == 0) {
         for (var site = root;;) {
           var next = site.next;  // volatile read
           if (next == null) {
             break;
           }
           if (next.code == code) {
-            promote = site;
+            promoted = site;
             break;
           }
           site = next.site;
@@ -413,13 +415,13 @@ final class FunctionSupport {
       }
 
       // 3. Megamorphic: the arguments are validated at each call
-      if (promote == null && depth == MAX_DEPTH) {
+      if (promoted == null && depth == MAX_DEPTH) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
             : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
         var target = entryPoint.asCollector(Object[].class, argCount);
         root.setTarget(target);
-        next = null;  // volatile write, do not keep the linked list
+        root.next = NO_NEXT;  // volatile write, do not keep the linked list
         return target;
       }
 
@@ -434,8 +436,8 @@ final class FunctionSupport {
 
       // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
       MethodHandle target, test;
-      if (promote == null && code.captureCount() == 0) {
-        test = SAME_CALLEE.bindTo(function);
+      if (promoted == null && code.captureCount() == 0) {
+        test = SAME_CALLEE.bindTo(callee);
         target = getNoCaptureMH(function);
       } else {
         test = SAME_CODE.bindTo(code);
@@ -449,18 +451,18 @@ final class FunctionSupport {
           : adaptKeywords(function, target, type(), reorderPlan);
 
       // 7. Change the target of the existing call site
-      if (promote != null) {
-        var fallback = promote.next.site.dynamicInvoker();
-        promote.setTarget(guardWithTest(test, adapted, fallback));
+      if (promoted != null) {
+        var fallback = promoted.next.site.dynamicInvoker();
+        promoted.setTarget(guardWithTest(test, adapted, fallback));
         return adapted;
       }
 
       // 8. Install the inlining cache
-      var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
-      var fallback = nextSite.dynamicInvoker();
-      var next = new NextCallSite(nextSite,
-          code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
       if (NEXT.compareAndSet(this, null, next)) {
+        var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
+        var fallback = nextSite.dynamicInvoker();
+        var next = new NextCallSite(nextSite,
+            code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
         setTarget(guardWithTest(test, adapted, fallback));
       }
       return adapted;
@@ -479,8 +481,10 @@ final class FunctionSupport {
       }
       var compiledEntry = getCompiledEntry(code);
 
-      var captureCount = code.captureCount();  // != 0
-      var spread = compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
+      var captureCount = code.captureCount();
+      var spread = captureCount == 0 ?
+          compiledEntry :
+          compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
       entry = foldArguments(spread, CAPTURED_ARGS);
       code.entry = entry;  // racy write
       return entry;
