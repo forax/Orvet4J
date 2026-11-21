@@ -2607,6 +2607,9 @@ public final class BytecodeGeneratorTest {
 
     @Test
     public void maximumSupportedNumberOfCapturedVariables() {
+      // Sum of 0 through 199.
+      assertEquals(19_701L, eval(closureWithCaptures(199), "result"));
+
       // Sum of 0 through 252.
       assertEquals(31_626L, eval(closureWithCaptures(252), "result"));
     }

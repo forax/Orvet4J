@@ -349,7 +349,7 @@ final class FunctionSupport {
 
     // A linked list of all guarded call sites
     // code of call site guarded by SAME_CALLEE on a PyFunction, null otherwise
-    private record GuardInfo(FunctionCallSite site, PyFunction.Code code) {}
+    private record GuardInfo(PyFunction.Code code, FunctionCallSite next) {}
     private static final GuardInfo NO_GUARD = new GuardInfo(null, null);
 
     private static final int MAX_DEPTH = 4;
@@ -377,7 +377,8 @@ final class FunctionSupport {
 
       // 2. check if there is not an existing call site to update (promote)
       var code = function.code;
-      var promoted = callee instanceof PyFunction && code.captureCount() == 0 ?
+      var notTooManyCaptureArgs = code.captureCount() < 200; // Java MH implementation has a limit at 250
+      var promoted = callee instanceof PyFunction && notTooManyCaptureArgs?
           findPromoted(root, code) :
           null;
 
@@ -403,9 +404,9 @@ final class FunctionSupport {
 
       // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
       MethodHandle target, test;
-      if (promoted == null && code.captureCount() == 0) {
+      if (promoted == null && notTooManyCaptureArgs) {
         test = SAME_CALLEE.bindTo(callee);
-        target = getNoCaptureMH(function);
+        target = getFunctionMH(function);
       } else {
         test = SAME_CODE.bindTo(code);
         target = getEntry(code);
@@ -423,15 +424,16 @@ final class FunctionSupport {
         if (guardInfo == NO_GUARD) {  // the root call site has been updated in between
           return root.getTarget();
         }
-        var fallback = guardInfo.site.dynamicInvoker();
+        var fallback = guardInfo.next.dynamicInvoker();
         promoted.setTarget(guardWithTest(test, adapted, fallback));
         return adapted;
       }
 
       // 8. Install the inlining cache
       var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
-      var info = new GuardInfo(nextSite,
-          code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
+      var info = new GuardInfo(
+          callee instanceof PyFunction && notTooManyCaptureArgs ? code : null,  // can be promoted in the future?
+          nextSite);
       if (INFO.compareAndSet(this, null, info)) {  // volatile write
         var fallback = nextSite.dynamicInvoker();
         setTarget(guardWithTest(test, adapted, fallback));
@@ -448,13 +450,17 @@ final class FunctionSupport {
         if (info.code == code) {
           return site;
         }
-        site = info.site;
+        site = info.next;
       }
     }
 
-    static MethodHandle getNoCaptureMH(PyFunction function) {
+    static MethodHandle getFunctionMH(PyFunction function) {
       var compiledEntry = getCompiledEntry(function.code);
-      var bound = compiledEntry.bindTo(function);
+      var capturedArgs = function.capturedArgs;
+      var mh = capturedArgs.length != 0 ?
+          MethodHandles.insertArguments(compiledEntry, 0, capturedArgs) :
+          compiledEntry;
+      var bound = mh.bindTo(function);
       return dropArguments(bound, 0, Object.class);  // drop the callee
     }
 
