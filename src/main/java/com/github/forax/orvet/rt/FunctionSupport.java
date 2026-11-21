@@ -590,9 +590,11 @@ final class FunctionSupport {
       }
     }
 
-    private static final ClassValue<ConcurrentHashMap<String, MethodHandle>> METHOD_CACHE = new ClassValue<>() {
+    private record MethodKey(String name, MethodType type) {}
+
+    private static final ClassValue<ConcurrentHashMap<MethodKey, MethodHandle>> METHOD_CACHE = new ClassValue<>() {
       @Override
-      protected ConcurrentHashMap<String, MethodHandle> computeValue(Class<?> type) {
+      protected ConcurrentHashMap<MethodKey, MethodHandle> computeValue(Class<?> type) {
         return new ConcurrentHashMap<>();
       }
     };
@@ -634,7 +636,7 @@ final class FunctionSupport {
 
     private static MethodHandle resolveAndCache(Class<?> intrinsic, String name, MethodType methodType) {
       var methodMap = METHOD_CACHE.get(intrinsic);
-      var key = name + "/" + methodType.parameterCount();
+      var key = new MethodKey(name, methodType);
       var mh = methodMap.get(key);
       if (mh != null) {
         return mh;
@@ -643,11 +645,12 @@ final class FunctionSupport {
       if (mh == null) {
         return null;
       }
-      if (methodMap.putIfAbsent(key, mh) != null) {
-        // the methodMap has been updated by another thread
-        mh = methodMap.get(key);
+      var existingMH = methodMap.putIfAbsent(key, mh);
+      if (existingMH == null) {
+        return mh;
       }
-      return mh;
+      // the methodMap has been updated by another thread
+       return existingMH;
     }
 
     private static MethodHandle lookup(Class<?> intrinsic, String name, MethodType methodType) {
