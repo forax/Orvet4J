@@ -458,11 +458,11 @@ final class FunctionSupport {
       }
 
       // 8. Install the inlining cache
+      var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
+      var next = new NextCallSite(nextSite,
+          code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
       if (NEXT.compareAndSet(this, null, next)) {
-        var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
         var fallback = nextSite.dynamicInvoker();
-        var next = new NextCallSite(nextSite,
-            code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
         setTarget(guardWithTest(test, adapted, fallback));
       }
       return adapted;
@@ -482,9 +482,7 @@ final class FunctionSupport {
       var compiledEntry = getCompiledEntry(code);
 
       var captureCount = code.captureCount();
-      var spread = captureCount == 0 ?
-          compiledEntry :
-          compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
+      var spread = compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
       entry = foldArguments(spread, CAPTURED_ARGS);
       code.entry = entry;  // racy write
       return entry;
