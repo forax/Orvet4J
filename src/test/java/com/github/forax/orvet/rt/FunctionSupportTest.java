@@ -26,6 +26,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -485,8 +486,7 @@ public final class FunctionSupportTest {
     }
 
     @Test
-    public void nestedNonCapturingDefShareTheSameFunction() {
-      // This may change in the future
+    public void nestedNonCapturingDefCreatesAFreshFunctionEachTime() {
       var module = run("""
           def make():
               def inner():
@@ -496,7 +496,7 @@ public final class FunctionSupportTest {
           b = make()
           r = a() + b()
           """);
-      assertSame(module.getGlobal("a"), module.getGlobal("b"));
+      assertNotSame(module.getGlobal("a"), module.getGlobal("b"));
       assertGlobal(module, "r", 2L);
     }
 

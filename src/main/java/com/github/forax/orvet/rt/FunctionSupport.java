@@ -112,15 +112,12 @@ final class FunctionSupport {
       var captureCount = type.parameterCount();
       var code = new PyFunction.Code(functionName, parameters, hasRestParameter, captureCount, context, def);
 
-      if (captureCount == 0) {
-        var function = new PyFunction(code, EMPTY_CAPTURED_ARGS);
-        return new ConstantCallSite(MethodHandles.constant(Object.class, function));
-      }
-
+      // CPython, creates a fresh function object each time it is executed
       var factory = PY_FUNCTION.bindTo(code);
-      var target = factory
-          .asCollector(Object[].class, captureCount)
-          .asType(type);
+      var mh = captureCount == 0
+          ? factory.bindTo(EMPTY_CAPTURED_ARGS)
+          : factory.asCollector(Object[].class, captureCount);
+      var target = mh.asType(type);
       return new ConstantCallSite(target);
     }
   }
