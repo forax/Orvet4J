@@ -69,28 +69,6 @@ final class FunctionSupport {
       throw new AssertionError();
     }
 
-    //                    invokedynamic #def : (captures...) -> Object
-    //                                          |
-    //                                          v
-    //          DefCallSite.def(ModuleContext, Dictionary, MethodType, int astIndex)
-    //                        functionDef = dictionary.lookup(astIndex)
-    //                                          |
-    //                +-------------------------+-------------------------+
-    //                |                                                   |
-    //                v (captureCount == 0)                               v (captureCount > 0)
-    //     Stateless / Zero-Capture                            Lexical Closure Factory
-    //                |                                                   |
-    //                v                                                   v
-    //    Pre-allocate PyFunction:                            Bind Constructor into MH:
-    //    new PyFunction(code, EMPTY)                         PY_FUNCTION.bindTo(code)
-    //                |                                                   |
-    //                v                                                   v
-    //    MethodHandles.constant(...)                         asCollector(Object[].class, k)
-    //                |                                                   |
-    //                v                                                   v
-    //        ConstantCallSite                                     ConstantCallSite
-    // (Always returns same instance)                     (Invokes factory on each execution)
-
     private static final MethodHandle PY_FUNCTION;
     static {
       var lookup = MethodHandles.lookup();
