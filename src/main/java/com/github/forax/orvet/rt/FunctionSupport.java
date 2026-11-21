@@ -359,7 +359,7 @@ final class FunctionSupport {
     private final FunctionCallSite root;
     private final int depth;
 
-    private GuardInfo guardInfo;  // always read under root lock
+    private volatile GuardInfo guardInfo;
 
     private FunctionCallSite(MethodType type, int positionalCount, String[] keywordNames, FunctionCallSite root, int depth) {
       this.positionalCount = positionalCount;
@@ -375,74 +375,69 @@ final class FunctionSupport {
       var function = asFunction(callee);
       var argCount = type().parameterCount() - 1;
 
-      synchronized (root) {
-        if (guardInfo != null) {  // another thread has already updated the call site, let's restart
-          return getTarget();
-        }
+      // 2. check if there is not an existing call site to update (promote)
+      var code = function.code;
+      var promoted = callee instanceof PyFunction && code.captureCount() == 0 ?
+          findPromoted(root, code) :
+          null;
 
-        // 2. check if there is not an existing call site to update (promote)
-        var code = function.code;
-        var promoted = callee instanceof PyFunction && code.captureCount() == 0 ?
-            findPromoted(root, code) :
-            null;
+      // 3. Megamorphic: the arguments are validated at each call
+      if (promoted == null && depth == MAX_DEPTH) {
+        var entryPoint = keywordNames.length == 0
+            ? Megamorphic.MEGAMORPHIC
+            : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
+        var target = entryPoint.asCollector(Object[].class, argCount);
+        root.setTarget(target);
+        root.guardInfo = NO_GUARD;
+        return target;
+      }
 
-        // 3. Megamorphic: the arguments are validated at each call
-        if (promoted == null && depth == MAX_DEPTH) {
-          var entryPoint = keywordNames.length == 0
-              ? Megamorphic.MEGAMORPHIC
-              : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
-          var target = entryPoint.asCollector(Object[].class, argCount);
-          root.setTarget(target);
-          root.guardInfo = NO_GUARD;
-          return target;
-        }
+      // 4. Validate the arguments before compiling the code
+      int[] reorderPlan;
+      if (keywordNames.length == 0) {
+        checkArity(code, argCount);
+        reorderPlan = null;
+      } else {
+        reorderPlan = reorderKeywordArguments(code, positionalCount, keywordNames);
+      }
 
-        // 4. Validate the arguments before compiling the code
-        int[] reorderPlan;
-        if (keywordNames.length == 0) {
-          checkArity(code, argCount);
-          reorderPlan = null;
-        } else {
-          reorderPlan = reorderKeywordArguments(code, positionalCount, keywordNames);
-        }
+      // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
+      MethodHandle target, test;
+      if (promoted == null && code.captureCount() == 0) {
+        test = SAME_CALLEE.bindTo(callee);
+        target = getNoCaptureMH(function);
+      } else {
+        test = SAME_CODE.bindTo(code);
+        target = getEntry(code);
+      }
 
-        // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
-        MethodHandle target, test;
-        if (promoted == null && code.captureCount() == 0) {
-          test = SAME_CALLEE.bindTo(callee);
-          target = getNoCaptureMH(function);
-        } else {
-          test = SAME_CODE.bindTo(code);
-          target = getEntry(code);
-        }
+      // 6. Adapt to the call site
+      var arity = code.arity();
+      var adapted = reorderPlan == null
+          ? adapt(code, target, 1 + arity, argCount - arity).asType(type())
+          : adaptKeywords(code, target, type(), reorderPlan);
 
-        // 6. Adapt to the call site
-        var arity = code.arity();
-        var adapted = reorderPlan == null
-            ? adapt(code, target, 1 + arity, argCount - arity).asType(type())
-            : adaptKeywords(code, target, type(), reorderPlan);
-
-        // 7. Change the target of the existing call site
-        if (promoted != null) {
-          var fallback = promoted.guardInfo.site.dynamicInvoker();
-          promoted.setTarget(guardWithTest(test, adapted, fallback));
-          return adapted;
-        }
-
-        // 8. Install the inlining cache
-        var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
-        var info = new GuardInfo(nextSite,
-            code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
-        var fallback = nextSite.dynamicInvoker();
-        setTarget(guardWithTest(test, adapted, fallback));
-        this.guardInfo = info;
+      // 7. Change the target of the existing call site
+      if (promoted != null) {
+        var fallback = promoted.guardInfo.site.dynamicInvoker();
+        promoted.setTarget(guardWithTest(test, adapted, fallback));
         return adapted;
       }
+
+      // 8. Install the inlining cache
+      var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
+      var info = new GuardInfo(nextSite,
+          code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
+      if (INFO.compareAndSet(this, null, info)) {  // volatile write
+        var fallback = nextSite.dynamicInvoker();
+        setTarget(guardWithTest(test, adapted, fallback));
+      }
+      return adapted;
     }
 
     private static FunctionCallSite findPromoted(FunctionCallSite root, PyFunction.Code code) {
       for (var site = root;;) {
-        var info = site.guardInfo;
+        var info = site.guardInfo;  // volatile read
         if (info == null || info == NO_GUARD) {
           return null;
         }
