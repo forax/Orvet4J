@@ -349,7 +349,7 @@ final class FunctionSupport {
     }
 
     static CallSite call(MethodType type, int positionalCount, String[] keywordNames) {
-      return new FunctionSupport.FunctionCallSite(type, positionalCount, keywordNames, null, 0);
+      return new FunctionCallSite(type, positionalCount, keywordNames, null, 0);
     }
 
     // A linked list of all guarded call sites
