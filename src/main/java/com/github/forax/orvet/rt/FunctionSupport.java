@@ -324,7 +324,7 @@ final class FunctionSupport {
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
     private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS;
-    private static final VarHandle NEXT;
+    private static final VarHandle INFO;
     static {
       var lookup = MethodHandles.lookup();
       LOOKUP = lookup;
@@ -337,7 +337,7 @@ final class FunctionSupport {
             methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
             methodType(Object[].class));
-        NEXT = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
+        INFO = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
       } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
       }
@@ -443,7 +443,7 @@ final class FunctionSupport {
     private static FunctionCallSite findPromoted(FunctionCallSite root, PyFunction.Code code) {
       for (var site = root;;) {
         var info = site.guardInfo;
-        if (info == null) {
+        if (info == null || info == NO_GUARD) {
           return null;
         }
         if (info.code == code) {
