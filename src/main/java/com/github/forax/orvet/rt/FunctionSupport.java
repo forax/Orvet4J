@@ -574,7 +574,7 @@ final class FunctionSupport {
 
   static final class MethodCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
-    private static final MethodHandle FALLBACK, TYPE_CHECK;
+    private static final MethodHandle FALLBACK, TYPE_CHECK, INSTANCE_CHECK;
     static {
       var lookup = MethodHandles.lookup();
       LOOKUP = lookup;
@@ -583,6 +583,8 @@ final class FunctionSupport {
             methodType(MethodHandle.class, Object.class));
         TYPE_CHECK = lookup.findStatic(MethodCallSite.class, "typeCheck",
             methodType(boolean.class, Class.class, Object.class));
+        INSTANCE_CHECK = lookup.findStatic(MethodCallSite.class, "instanceCheck",
+            methodType(boolean.class, Object.class, Object.class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
@@ -605,17 +607,17 @@ final class FunctionSupport {
 
     private MethodHandle fallback(Object receiver) {
       var receiverClass = receiver.getClass();
-      var intrinsic = intrinsicForClass(receiver);
+      var intrinsicAndTest = intrinsicForClass(receiver);
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
 
-      var mh = resolveAndCache(intrinsic, name, methodType);
+      var mh = resolveAndCache(intrinsicAndTest.intrinsicClass, name, methodType);
       if (mh == null) {
         throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
             "' object has no attribute '" + name + "'");
       }
 
-      var test = TYPE_CHECK.bindTo(receiverClass);
+      var test = intrinsicAndTest.test;
       var target = mh.asType(type());
       var guard = guardWithTest(test, target, new MethodCallSite(type(), name).dynamicInvoker());
       setTarget(guard);
@@ -623,8 +625,11 @@ final class FunctionSupport {
       return target;
     }
 
-    private static boolean typeCheck(Class<?> receiverClass, Object receiver) {
-      return receiverClass == receiver.getClass();
+    private static boolean typeCheck(Class<?> expectedClass, Object receiver) {
+      return expectedClass == receiver.getClass();
+    }
+    private static boolean instanceCheck(Object expected, Object receiver) {
+      return expected == receiver;
     }
 
     private static MethodHandle resolveAndCache(Class<?> intrinsic, String name, MethodType methodType) {
@@ -674,13 +679,22 @@ final class FunctionSupport {
       return new MethodCallSite(type, name);
     }
 
-    private Class<?> intrinsicForClass(Object receiver) {
+    private record IntrinsicAndTest(Class<?> intrinsicClass, MethodHandle test) {}
+
+    private static IntrinsicAndTest intrinsicClass(Class<?> intrinsicClass, Object receiver) {
+      return new IntrinsicAndTest(intrinsicClass, TYPE_CHECK.bindTo(receiver.getClass()));
+    }
+    private static IntrinsicAndTest intrinsicPyType(Class<?> intrinsicClass, PyType pyType) {
+      return new IntrinsicAndTest(intrinsicClass, INSTANCE_CHECK.bindTo(pyType));
+    }
+
+    private IntrinsicAndTest intrinsicForClass(Object receiver) {
       return switch (receiver) {
-        case String _ -> StringIntrinsics.class;
-        case PyList<?> _ -> ListIntrinsics.class;
-        case PyDict<?, ?> _ -> DictIntrinsics.class;
+        case String _ -> intrinsicClass(StringIntrinsics.class, receiver);
+        case PyList<?> _ -> intrinsicClass(ListIntrinsics.class, receiver);
+        case PyDict<?, ?> _ -> intrinsicClass(DictIntrinsics.class, receiver);
         case PyType type -> switch (type) {
-          case PyType.DICT -> DictIntrinsics.class;
+          case PyType.DICT -> intrinsicPyType(DictIntrinsics.class, type);
           default -> throw new PyAttributeError("'" + type.function().name() + "' has no attribute '" + name + "'");
         };
         default -> throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) + "' object has no attribute '" + name + "'");
