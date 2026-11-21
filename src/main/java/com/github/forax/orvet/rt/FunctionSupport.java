@@ -438,7 +438,7 @@ final class FunctionSupport {
     private static FunctionCallSite findPromoted(FunctionCallSite root, PyFunction.Code code) {
       for (var site = root;;) {
         var info = site.guardInfo;  // volatile read
-        if (info == null) {
+        if (info == null || info == NO_GUARD) {
           return null;
         }
         if (info.code == code) {
