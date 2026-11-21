@@ -28,7 +28,6 @@ import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.exactInvoker;
 import static java.lang.invoke.MethodHandles.foldArguments;
 import static java.lang.invoke.MethodHandles.guardWithTest;
-import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.throwException;
 import static java.lang.invoke.MethodType.methodType;
 
@@ -359,7 +358,7 @@ final class FunctionSupport {
             methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
             methodType(Object[].class));
-        NEXT = lookup.findVarHandle(FunctionCallSite.class, "next", NextCallSite.class);
+        NEXT = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
       } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
       }
@@ -371,8 +370,8 @@ final class FunctionSupport {
 
     // A link list of all guarded call sites
     // code of call site guarded by SAME_CALLEE on a PyFunction, null otherwise
-    private record NextCallSite(FunctionCallSite site, PyFunction.Code code) {}
-    private static final NextCallSite NO_NEXT = new NextCallSite(null, null);
+    private record GuardInfo(FunctionCallSite site, PyFunction.Code code) {}
+    private static final GuardInfo NO_GUARD = new GuardInfo(null, null);
 
     private static final int MAX_DEPTH = 4;
 
@@ -381,7 +380,7 @@ final class FunctionSupport {
     private final FunctionCallSite root;
     private final int depth;
 
-    private volatile NextCallSite next;
+    private volatile GuardInfo guardInfo;
 
     private FunctionCallSite(MethodType type, int positionalCount, String[] keywordNames, FunctionCallSite root, int depth) {
       this.positionalCount = positionalCount;
@@ -402,15 +401,15 @@ final class FunctionSupport {
       var promoted = (FunctionCallSite) null;
       if (callee instanceof PyFunction && code.captureCount() == 0) {
         for (var site = root;;) {
-          var next = site.next;  // volatile read
-          if (next == null) {
+          var info = site.guardInfo;  // volatile read
+          if (info == null) {
             break;
           }
-          if (next.code == code) {
+          if (info.code == code) {
             promoted = site;
             break;
           }
-          site = next.site;
+          site = info.site;
         }
       }
 
@@ -421,7 +420,7 @@ final class FunctionSupport {
             : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
         var target = entryPoint.asCollector(Object[].class, argCount);
         root.setTarget(target);
-        root.next = NO_NEXT;  // volatile write, do not keep the linked list
+        root.guardInfo = NO_GUARD;  // volatile write, do not keep the linked list
         return target;
       }
 
@@ -452,16 +451,16 @@ final class FunctionSupport {
 
       // 7. Change the target of the existing call site
       if (promoted != null) {
-        var fallback = promoted.next.site.dynamicInvoker();
+        var fallback = promoted.guardInfo.site.dynamicInvoker();
         promoted.setTarget(guardWithTest(test, adapted, fallback));
         return adapted;
       }
 
       // 8. Install the inlining cache
       var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
-      var next = new NextCallSite(nextSite,
+      var info = new GuardInfo(nextSite,
           code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
-      if (NEXT.compareAndSet(this, null, next)) {
+      if (NEXT.compareAndSet(this, null, info)) {
         var fallback = nextSite.dynamicInvoker();
         setTarget(guardWithTest(test, adapted, fallback));
       }
