@@ -658,7 +658,7 @@ final class FunctionSupport {
         return LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
       } catch (IllegalAccessException e) {
         throw new AssertionError(e);
-      } catch (NoSuchMethodException e) {
+      } catch (NoSuchMethodException _) {
         return null;
       }
     }
