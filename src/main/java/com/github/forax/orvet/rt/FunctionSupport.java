@@ -24,10 +24,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.lang.invoke.MethodHandles.arrayElementGetter;
+import static java.lang.invoke.MethodHandles.collectArguments;
 import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.exactInvoker;
+import static java.lang.invoke.MethodHandles.filterArguments;
 import static java.lang.invoke.MethodHandles.foldArguments;
 import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodHandles.insertArguments;
+import static java.lang.invoke.MethodHandles.permuteArguments;
 import static java.lang.invoke.MethodHandles.throwException;
 import static java.lang.invoke.MethodType.methodType;
 
@@ -158,7 +163,7 @@ final class FunctionSupport {
     private static final MethodHandle ARRAY_ELEMENT, REST_TUPLE, BUILTIN_REST;
     static {
       var lookup = MethodHandles.lookup();
-      ARRAY_ELEMENT = MethodHandles.arrayElementGetter(Object[].class);
+      ARRAY_ELEMENT = arrayElementGetter(Object[].class);
       try {
         MEGAMORPHIC = lookup.findStatic(Megamorphic.class, "megamorphic",
             methodType(Object.class, Object.class, Object[].class));
@@ -240,10 +245,10 @@ final class FunctionSupport {
       var packer = code.isBuiltin() ? BUILTIN_REST : REST_TUPLE;
       var filters = new MethodHandle[arity + 1];
       for (var i = 0; i < arity; i++) {
-        filters[i] = MethodHandles.insertArguments(ARRAY_ELEMENT, 1, i);
+        filters[i] = insertArguments(ARRAY_ELEMENT, 1, i);
       }
-      filters[arity] = MethodHandles.insertArguments(packer, 1, arity);
-      var filtered = MethodHandles.filterArguments(handle, 2, filters);
+      filters[arity] = insertArguments(packer, 1, arity);
+      var filtered = filterArguments(handle, 2, filters);
 
       // 4. Every filtered parameter reads the same args array.
       var type = methodType(Object.class, Object[].class, PyFunction.class, Object[].class);
@@ -251,7 +256,7 @@ final class FunctionSupport {
       reorder[0] = 0;  // captured
       reorder[1] = 1;  // self
       Arrays.fill(reorder, 2, reorder.length, 2);  // args
-      return MethodHandles.permuteArguments(filtered, type, reorder);
+      return permuteArguments(filtered, type, reorder);
     }
 
     private static PyTuple restTuple(Object[] args, int start) {
@@ -310,12 +315,12 @@ final class FunctionSupport {
     /// @return the adapted method handle
     static MethodHandle adapt(MethodHandle entry, int position, int restCount) {
       return switch (restCount) {
-        case 0 -> MethodHandles.insertArguments(entry, position, TUPLE_EMPTY);
-        case 1 -> MethodHandles.collectArguments(entry, position, TUPLE1);
-        case 2 -> MethodHandles.collectArguments(entry, position, TUPLE2);
-        case 3 -> MethodHandles.collectArguments(entry, position, TUPLE3);
-        case 4 -> MethodHandles.collectArguments(entry, position, TUPLE4);
-        default -> MethodHandles.collectArguments(entry, position,
+        case 0 -> insertArguments(entry, position, TUPLE_EMPTY);
+        case 1 -> collectArguments(entry, position, TUPLE1);
+        case 2 -> collectArguments(entry, position, TUPLE2);
+        case 3 -> collectArguments(entry, position, TUPLE3);
+        case 4 -> collectArguments(entry, position, TUPLE4);
+        default -> collectArguments(entry, position,
             TUPLE_N.asCollector(Object[].class, restCount));
       };
     }
@@ -386,7 +391,7 @@ final class FunctionSupport {
       if (promoted == null && depth == MAX_DEPTH) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
-            : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
+            : insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
         var target = entryPoint.asCollector(Object[].class, argCount);
         root.setTarget(target);
         root.guardInfo = NO_GUARD;
@@ -458,7 +463,7 @@ final class FunctionSupport {
       var compiledEntry = getCompiledEntry(function.code);
       var capturedArgs = function.capturedArgs;
       var mh = capturedArgs.length != 0 ?
-          MethodHandles.insertArguments(compiledEntry, 0, capturedArgs) :
+          insertArguments(compiledEntry, 0, capturedArgs) :
           compiledEntry;
       var bound = mh.bindTo(function);
       return dropArguments(bound, 0, Object.class);  // drop the callee
@@ -558,7 +563,7 @@ final class FunctionSupport {
       }
 
       var adapted = adapt(code, entry, 1 + arity, restCount).asType(type);
-      return MethodHandles.permuteArguments(adapted, type, reorder);
+      return permuteArguments(adapted, type, reorder);
     }
   }
 
