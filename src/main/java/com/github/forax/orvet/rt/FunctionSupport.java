@@ -419,7 +419,11 @@ final class FunctionSupport {
 
       // 7. Change the target of the existing call site
       if (promoted != null) {
-        var fallback = promoted.guardInfo.site.dynamicInvoker();
+        var guardInfo = promoted.guardInfo;  // volatile read
+        if (guardInfo == NO_GUARD) {  // the root call site has been updated in between
+          return root.getTarget();
+        }
+        var fallback = guardInfo.site.dynamicInvoker();
         promoted.setTarget(guardWithTest(test, adapted, fallback));
         return adapted;
       }
