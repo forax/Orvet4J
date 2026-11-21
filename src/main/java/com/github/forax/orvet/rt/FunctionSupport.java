@@ -203,8 +203,9 @@ final class FunctionSupport {
     /// @throws Throwable if invocation or argument validation fails
     static Object megamorphic(Object callee, Object[] args) throws Throwable {
       var function = asFunction(callee);
-      checkArity(function, args.length);
-      var thunkEntry = getThunkEntry(function);
+      var code = function.code;
+      checkArity(code, args.length);
+      var thunkEntry = getThunkEntry(code);
       return thunkEntry.invokeExact(function.capturedArgs, function, args);
     }
 
@@ -219,17 +220,17 @@ final class FunctionSupport {
     static Object megamorphicWithKeywords(Object callee, Object[] args,
                                           int positionalCount, String[] keywordNames) throws Throwable {
       var function = asFunction(callee);
-      var plan = reorderKeywordArguments(function, positionalCount, keywordNames);
+      var code = function.code;
+      var plan = reorderKeywordArguments(code, positionalCount, keywordNames);
       var ordered = new Object[Math.max(positionalCount, function.arity())];
       for (var i = 0; i < plan.length; i++) {
         ordered[plan[i]] = args[i];
       }
-      var thunkEntry = getThunkEntry(function);
+      var thunkEntry = getThunkEntry(code);
       return thunkEntry.invokeExact(function.capturedArgs, function, ordered);
     }
 
-    private static MethodHandle getThunkEntry(PyFunction function) {
-      var code = function.code;
+    private static MethodHandle getThunkEntry(PyFunction.Code code) {
       var thunkEntry = code.thunkEntry;  // racy read
       if (thunkEntry != null) {
         return thunkEntry;
@@ -398,20 +399,9 @@ final class FunctionSupport {
 
       // 2. check if there is not an existing call site to update (promote)
       var code = function.code;
-      var promoted = (FunctionCallSite) null;
-      if (callee instanceof PyFunction && code.captureCount() == 0) {
-        for (var site = root;;) {
-          var info = site.guardInfo;  // volatile read
-          if (info == null) {
-            break;
-          }
-          if (info.code == code) {
-            promoted = site;
-            break;
-          }
-          site = info.site;
-        }
-      }
+      var promoted = callee instanceof PyFunction && code.captureCount() == 0 ?
+          findPromoted(root, code) :
+          null;
 
       // 3. Megamorphic: the arguments are validated at each call
       if (promoted == null && depth == MAX_DEPTH) {
@@ -424,13 +414,13 @@ final class FunctionSupport {
         return target;
       }
 
-      // 4. Validate the arguments before compiling the callee
+      // 4. Validate the arguments before compiling the code
       int[] reorderPlan;
       if (keywordNames.length == 0) {
-        checkArity(function, argCount);
+        checkArity(code, argCount);
         reorderPlan = null;
       } else {
-        reorderPlan = reorderKeywordArguments(function, positionalCount, keywordNames);
+        reorderPlan = reorderKeywordArguments(code, positionalCount, keywordNames);
       }
 
       // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
@@ -444,10 +434,10 @@ final class FunctionSupport {
       }
 
       // 6. Adapt to the call site
-      var arity = function.arity();
+      var arity = code.arity();
       var adapted = reorderPlan == null
-          ? adapt(function, target, 1 + arity, argCount - arity).asType(type())
-          : adaptKeywords(function, target, type(), reorderPlan);
+          ? adapt(code, target, 1 + arity, argCount - arity).asType(type())
+          : adaptKeywords(code, target, type(), reorderPlan);
 
       // 7. Change the target of the existing call site
       if (promoted != null) {
@@ -465,6 +455,19 @@ final class FunctionSupport {
         setTarget(guardWithTest(test, adapted, fallback));
       }
       return adapted;
+    }
+
+    private static FunctionCallSite findPromoted(FunctionCallSite root, PyFunction.Code code) {
+      for (var site = root;;) {
+        var info = site.guardInfo;  // volatile read
+        if (info == null) {
+          return null;
+        }
+        if (info.code == code) {
+          return site;
+        }
+        site = info.site;
+      }
     }
 
     static MethodHandle getNoCaptureMH(PyFunction function) {
@@ -544,8 +547,7 @@ final class FunctionSupport {
     /// Adapts the entry to `(X, Object x (arity + restCount)) -> Object`: the rest parameter, at `position`,
     /// is replaced by `restCount` parameters (packed into a PyTuple for a Python function, into an Object[]
     /// for a builtin one).
-    static MethodHandle adapt(PyFunction function, MethodHandle entry, int position, int restCount) {
-      var code = function.code;
+    static MethodHandle adapt(PyFunction.Code code, MethodHandle entry, int position, int restCount) {
       if (!code.isVariadic()) {
         return entry;  // exact arity: no adaptation at all
       }
@@ -556,8 +558,8 @@ final class FunctionSupport {
     }
 
     /// Adapts the entry to the call site, permuting the arguments according to the plan.
-    private MethodHandle adaptKeywords(PyFunction function, MethodHandle entry, MethodType type, int[] plan) {
-      var arity = function.arity();
+    private MethodHandle adaptKeywords(PyFunction.Code code, MethodHandle entry, MethodType type, int[] plan) {
+      var arity = code.arity();
       var restCount = Math.max(0, positionalCount - arity);
 
       // reorder[j] = position in the call site of the j-th parameter of the adapted entry (the callee stays first)
@@ -567,7 +569,7 @@ final class FunctionSupport {
         reorder[1 + plan[i]] = 1 + i;
       }
 
-      var adapted = adapt(function, entry, 1 + arity, restCount).asType(type);
+      var adapted = adapt(code, entry, 1 + arity, restCount).asType(type);
       return MethodHandles.permuteArguments(adapted, type, reorder);
     }
   }
@@ -707,28 +709,28 @@ final class FunctionSupport {
     throw new PyTypeError("'" + IntrinsicSupport.typeName(callee) + "' object is not callable");
   }
 
-  static void checkArity(PyFunction function, int argCount) {
-    var arity = function.arity();
-    if (function.code.isVariadic()) {
+  static void checkArity(PyFunction.Code code, int argCount) {
+    var arity = code.arity();
+    if (code.isVariadic()) {
       if (argCount < arity) {
-        throw arityError(function, argCount);
+        throw arityError(code, argCount);
       }
     } else if (argCount != arity) {
-      throw arityError(function, argCount);
+      throw arityError(code, argCount);
     }
   }
 
   /// Computes the argument reordering plan mapping call-site arguments to canonical slots.
-  /// @param function the target function
+  /// @param code the target code
   /// @param positionalCount count of positional arguments
   /// @param keywordNames names of keyword arguments
   /// @return array where index `i` maps call-site argument `i` to its canonical slot
   /// @throws PyTypeError if keywords are unknown, duplicate, or missing required parameters
-  static int[] reorderKeywordArguments(PyFunction function, int positionalCount, String[] keywordNames) {
-    if (function.code.isBuiltin()) {
-      throw builtinKeywords(function);
+  static int[] reorderKeywordArguments(PyFunction.Code code, int positionalCount, String[] keywordNames) {
+    if (code.isBuiltin()) {
+      throw builtinKeywords(code);
     }
-    var parameters = function.parameters();
+    var parameters = code.parameters();
     var arity = parameters.size();
 
     var plan = new int[positionalCount + keywordNames.length];
@@ -743,10 +745,10 @@ final class FunctionSupport {
       var name = keywordNames[i];
       var index = parameters.indexOf(name);
       if (index < 0) {
-        throw unexpectedKeyword(function, name);
+        throw unexpectedKeyword(code, name);
       }
       if (assigned[index]) {
-        throw multipleValues(function, name);
+        throw multipleValues(code, name);
       }
       assigned[index] = true;
       plan[positionalCount + i] = index;
@@ -762,46 +764,46 @@ final class FunctionSupport {
       }
     }
     if (missing != null) {
-      throw missingArguments(function, missing);
+      throw missingArguments(code, missing);
     }
     return plan;
   }
 
   // -- errors
 
-  private static PyTypeError arityError(PyFunction function, int given) {
-    var arity = function.arity();
+  private static PyTypeError arityError(PyFunction.Code code, int given) {
+    var arity = code.arity();
     if (given < arity) {
-      return missingArguments(function, function.parameters().subList(given, arity));
+      return missingArguments(code, code.parameters().subList(given, arity));
     }
-    return tooManyPositional(function, given);
+    return tooManyPositional(code, given);
   }
 
   /// Fixed-arity builtins are positional-only (as in CPython). Variadic builtins accept keywords in CPython
   /// (print(sep=...), int(x, base=...)) but we do not have keyword ABI for builtins yet.
-  private static RuntimeException builtinKeywords(PyFunction function) {
-    if (function.code.isVariadic()) {
-      return new UnimplementedFeatureError("keyword arguments of the built-in function " + function.name() + "()");
+  private static RuntimeException builtinKeywords(PyFunction.Code code) {
+    if (code.isVariadic()) {
+      return new UnimplementedFeatureError("keyword arguments of the built-in function " + code.name() + "()");
     }
-    return new PyTypeError(function.name() + "() takes no keyword arguments");
+    return new PyTypeError(code.name() + "() takes no keyword arguments");
   }
 
-  private static PyTypeError unexpectedKeyword(PyFunction function, String name) {
-    return new PyTypeError(function.name() + "() got an unexpected keyword argument '" + name + "'");
+  private static PyTypeError unexpectedKeyword(PyFunction.Code code, String name) {
+    return new PyTypeError(code.name() + "() got an unexpected keyword argument '" + name + "'");
   }
 
-  private static PyTypeError multipleValues(PyFunction function, String name) {
-    return new PyTypeError(function.name() + "() got multiple values for argument '" + name + "'");
+  private static PyTypeError multipleValues(PyFunction.Code code, String name) {
+    return new PyTypeError(code.name() + "() got multiple values for argument '" + name + "'");
   }
 
-  private static PyTypeError missingArguments(PyFunction function, List<String> missing) {
-    return new PyTypeError(function.name() + "() missing " + missing.size() + " required positional argument"
+  private static PyTypeError missingArguments(PyFunction.Code code, List<String> missing) {
+    return new PyTypeError(code.name() + "() missing " + missing.size() + " required positional argument"
         + (missing.size() == 1 ? "" : "s") + ": " + joinNames(missing));
   }
 
-  private static PyTypeError tooManyPositional(PyFunction function, int given) {
-    var arity = function.arity();
-    return new PyTypeError(function.name() + "() takes " + arity + " positional argument"
+  private static PyTypeError tooManyPositional(PyFunction.Code code, int given) {
+    var arity = code.arity();
+    return new PyTypeError(code.name() + "() takes " + arity + " positional argument"
         + (arity == 1 ? "" : "s") + " but " + given + (given == 1 ? " was" : " were") + " given");
   }
 

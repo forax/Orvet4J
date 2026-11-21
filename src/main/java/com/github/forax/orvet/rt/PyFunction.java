@@ -50,6 +50,7 @@ public final class PyFunction {
 
     String name() { return name; }
     List<String> parameters() { return parameters; }
+    int arity() { return parameters.size(); }
     int captureCount() { return captureCount; }
 
     ModuleContext context() { return (ModuleContext) context; }
@@ -127,20 +128,23 @@ public final class PyFunction {
 
     // 1. Wrong arity?
     var argCount = type.parameterCount();
-    FunctionSupport.checkArity(this, argCount);
+    var code = this.code;
+    FunctionSupport.checkArity(code, argCount);
 
     // 2. Get the compiled entry
     var compiledEntry = FunctionSupport.FunctionCallSite.getCompiledEntry(code);
 
     // 3. Bind the captured arguments and this
+    var capturedArgs = this.capturedArgs;
+    var capturedArgsLength = capturedArgs.length;
     var boundValues = new Object[capturedArgs.length + 1];
-    System.arraycopy(capturedArgs, 0, boundValues, 0, capturedArgs.length);
-    boundValues[capturedArgs.length] = this;
+    System.arraycopy(capturedArgs, 0, boundValues, 0, capturedArgsLength);
+    boundValues[capturedArgsLength] = this;
     var bound = MethodHandles.insertArguments(compiledEntry, 0, boundValues);
 
     // 4. Adapt to the requested type
-    var arity = arity();
-    return FunctionSupport.FunctionCallSite.adapt(this, bound, arity, argCount - arity)
+    var arity = code.arity();
+    return FunctionSupport.FunctionCallSite.adapt(code, bound, arity, argCount - arity)
         .asType(type);
   }
 }
