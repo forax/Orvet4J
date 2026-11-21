@@ -8,7 +8,9 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /// A Python function (or a native/builtin one, see [Code#isBuiltin()]).
@@ -22,6 +24,8 @@ public final class PyFunction {
     private final List<String> parameters;
     private final boolean varargs;
     private final int captureCount;
+
+    private Map<String, Integer> parameterIndexMap;  // initialized lazily
 
     private final CodeContext context;            // null | ModuleContext | SpecializationContext
     private final Stmt.FunctionDef functionDef;   // null if native
@@ -57,6 +61,18 @@ public final class PyFunction {
     SpecializationContext specializationContext() { return (SpecializationContext) context; }
     Stmt.FunctionDef functionDef() { return functionDef; }
 
+    int parameterIndex(String parameter) {
+      var parameterIndexMap = this.parameterIndexMap;  // racy read
+      if (parameterIndexMap == null) {
+        var map = new HashMap<String, Integer>();
+        for(var i = 0; i < parameters.size(); i++) {
+          map.put(parameters.get(i), i);
+        }
+        this.parameterIndexMap = parameterIndexMap = Map.copyOf(map);  // racy write
+      }
+      return parameterIndexMap.getOrDefault(parameter, -1);
+    }
+
     /// A builtin function has no AST. Its rest parameter, if any, is an Object[]
     boolean isBuiltin() { return functionDef == null; }
 
@@ -75,9 +91,7 @@ public final class PyFunction {
 
   public String name() { return code.name; }
   public List<String> parameters() { return code.parameters; }
-  public int arity() { return code.parameters.size(); }
 
-  public boolean isVariadic() { return code.isVariadic(); }
   public boolean isBuiltin() { return code.isBuiltin(); }
   Object[] capturedArgs() { return capturedArgs; }
 

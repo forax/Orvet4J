@@ -199,7 +199,7 @@ final class Builtins {
 
   private static MethodType builtinMethodType(Code code) {
     var types = new ArrayList<Class<?>>();
-    for (var _ : code.parameters()) {
+    for (var i = 0; i < code.arity(); i++) {
       types.add(Object.class);
     }
     if (code.isVariadic()) {

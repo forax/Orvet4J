@@ -444,8 +444,8 @@ public final class FunctionSupportTest {
       var f = assertInstanceOf(PyFunction.class, module.getGlobal("f"));
       assertEquals("f", f.name());
       assertEquals(List.of("a", "b"), f.parameters());
-      assertEquals(2, f.arity());
-      assertFalse(f.isVariadic());
+      assertEquals(2, f.code.arity());
+      assertFalse(f.code.isVariadic());
       assertEquals("<function f>", f.toString());
     }
 
@@ -457,8 +457,8 @@ public final class FunctionSupportTest {
           """);
       var f = assertInstanceOf(PyFunction.class, module.getGlobal("f"));
       assertEquals(List.of("a"), f.parameters());
-      assertEquals(1, f.arity());
-      assertTrue(f.isVariadic());
+      assertEquals(1, f.code.arity());
+      assertTrue(f.code.isVariadic());
     }
 
     @Test
@@ -468,9 +468,9 @@ public final class FunctionSupportTest {
               return r
           """);
       var f = assertInstanceOf(PyFunction.class, module.getGlobal("f"));
-      assertEquals(0, f.arity());
+      assertEquals(0, f.code.arity());
       assertTrue(f.parameters().isEmpty());
-      assertTrue(f.isVariadic());
+      assertTrue(f.code.isVariadic());
     }
 
     @Test

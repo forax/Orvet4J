@@ -205,7 +205,7 @@ final class FunctionSupport {
       var function = asFunction(callee);
       var code = function.code;
       var plan = reorderKeywordArguments(code, positionalCount, keywordNames);
-      var ordered = new Object[Math.max(positionalCount, function.arity())];
+      var ordered = new Object[Math.max(positionalCount, code.arity())];
       for (var i = 0; i < plan.length; i++) {
         ordered[plan[i]] = args[i];
       }
@@ -233,7 +233,7 @@ final class FunctionSupport {
           : compiledEntry.asSpreader(0, Object[].class, captureCount);
 
       // 2. No rest parameter: spread the declared parameters (or ignore the array if there is none).
-      var arity = code.parameters().size();
+      var arity = code.arity();
       if (!code.isVariadic()) {
         return arity == 0
             ? dropArguments(handle, 2, Object[].class)
@@ -757,7 +757,7 @@ final class FunctionSupport {
     }
     for (var i = 0; i < keywordNames.length; i++) {
       var name = keywordNames[i];
-      var index = parameters.indexOf(name);
+      var index = code.parameterIndex(name);
       if (index < 0) {
         throw unexpectedKeyword(code, name);
       }
