@@ -18,6 +18,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
+import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -344,6 +345,7 @@ final class FunctionSupport {
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
     private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS;
+    private static final VarHandle NEXT;
     static {
       var lookup = MethodHandles.lookup();
       LOOKUP = lookup;
@@ -356,7 +358,8 @@ final class FunctionSupport {
             methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
             methodType(Object[].class));
-      } catch (NoSuchMethodException | IllegalAccessException e) {
+        NEXT = lookup.findVarHandle(FunctionCallSite.class, "next", NextCallSite.class);
+      } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
       }
     }
@@ -365,12 +368,18 @@ final class FunctionSupport {
       return new FunctionSupport.FunctionCallSite(type, positionalCount, keywordNames, null, 0);
     }
 
+    // A link list of all guarded call sites
+    // code of call site guarded by SAME_CALLEE on a PyFunction, null otherwise
+    private record NextCallSite(FunctionCallSite site, PyFunction.Code code) {}
+
     private static final int MAX_DEPTH = 4;
 
     private final int positionalCount;
     private final String[] keywordNames;
     private final FunctionCallSite root;
     private final int depth;
+
+    private volatile NextCallSite next;
 
     private FunctionCallSite(MethodType type, int positionalCount, String[] keywordNames, FunctionCallSite root, int depth) {
       this.positionalCount = positionalCount;
@@ -382,20 +391,39 @@ final class FunctionSupport {
     }
 
     private MethodHandle fallback(Object callee) {
+      // 1. Check the callee is callable
       var function = asFunction(callee);
       var argCount = type().parameterCount() - 1;
 
-      // 1. Megamorphic: the arguments are validated at each call
-      if (depth == MAX_DEPTH) {
+      // 2. check if there is not an existing call site to update (promote)
+      var code = function.code;
+      var promote = (FunctionCallSite) null;
+      if (code.captureCount() == 0) {
+        for (var site = root;;) {
+          var next = site.next;  // volatile read
+          if (next == null) {
+            break;
+          }
+          if (next.code == code) {
+            promote = site;
+            break;
+          }
+          site = next.site;
+        }
+      }
+
+      // 3. Megamorphic: the arguments are validated at each call
+      if (promote == null && depth == MAX_DEPTH) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
             : MethodHandles.insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
         var target = entryPoint.asCollector(Object[].class, argCount);
         root.setTarget(target);
+        next = null;  // volatile write, do not keep the linked list
         return target;
       }
 
-      // 2. Validate the arguments before compiling the callee
+      // 4. Validate the arguments before compiling the callee
       int[] reorderPlan;
       if (keywordNames.length == 0) {
         checkArity(function, argCount);
@@ -404,10 +432,9 @@ final class FunctionSupport {
         reorderPlan = reorderKeywordArguments(function, positionalCount, keywordNames);
       }
 
-      // 3. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
-      var code = function.code;
+      // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
       MethodHandle target, test;
-      if (code.captureCount() == 0) {
+      if (promote == null && code.captureCount() == 0) {
         test = SAME_CALLEE.bindTo(function);
         target = getNoCaptureMH(function);
       } else {
@@ -415,16 +442,27 @@ final class FunctionSupport {
         target = getEntry(code);
       }
 
-      // 4. Adapt to the call site
+      // 6. Adapt to the call site
       var arity = function.arity();
       var adapted = reorderPlan == null
           ? adapt(function, target, 1 + arity, argCount - arity).asType(type())
           : adaptKeywords(function, target, type(), reorderPlan);
 
-      // 5. Install the inlining cache
-      var fallback = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1).dynamicInvoker();
-      setTarget(guardWithTest(test, adapted, fallback));
+      // 7. Change the target of the existing call site
+      if (promote != null) {
+        var fallback = promote.next.site.dynamicInvoker();
+        promote.setTarget(guardWithTest(test, adapted, fallback));
+        return adapted;
+      }
 
+      // 8. Install the inlining cache
+      var nextSite = new FunctionCallSite(type(), positionalCount, keywordNames, root, depth + 1);
+      var fallback = nextSite.dynamicInvoker();
+      var next = new NextCallSite(nextSite,
+          code.captureCount() == 0 && callee instanceof PyFunction ? code : null);
+      if (NEXT.compareAndSet(this, null, next)) {
+        setTarget(guardWithTest(test, adapted, fallback));
+      }
       return adapted;
     }
 
