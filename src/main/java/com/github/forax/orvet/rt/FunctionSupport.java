@@ -477,8 +477,12 @@ final class FunctionSupport {
       var compiledEntry = getCompiledEntry(code);
 
       var captureCount = code.captureCount();
-      var spread = compiledEntry.asSpreader(0, Object[].class, captureCount);     // (Object[], PyFunction, ...)
-      entry = foldArguments(spread, CAPTURED_ARGS);
+      entry = captureCount == 0
+          ? compiledEntry
+          : foldArguments(
+              compiledEntry.asSpreader(0, Object[].class, captureCount),
+          CAPTURED_ARGS);
+
       code.entry = entry;  // racy write
       return entry;
     }
