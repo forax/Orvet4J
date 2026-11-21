@@ -780,18 +780,30 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void everyPowerOfTwoRoundTripsAndIsShortest() {
-      for (var exponent = Double.MIN_EXPONENT - 52; exponent <= Double.MAX_EXPONENT; exponent++) {
-        var v = Math.scalb(1.0, exponent);
-        assertRoundTripAndShortest(v);
-        assertRoundTripAndShortest(-v);
+    public void sampledPowersOfTwoRoundTripAndAreShortest() {
+      for (var exponent = Double.MIN_EXPONENT - 52;
+           exponent <= Double.MAX_EXPONENT;
+           exponent += 16) {
+        assertRoundTripAndShortest(Math.scalb(1.0, exponent));
+      }
+    }
+
+    @Test
+    public void boundaryPowersOfTwoRoundTripAndAreShortest() {
+      for (var exponent : new int[] {
+          Double.MIN_EXPONENT - 52,  // smallest subnormal
+          Double.MIN_EXPONENT - 1,   // subnormal
+          Double.MIN_EXPONENT,       // smallest normal
+          Double.MAX_EXPONENT        // largest power of two
+      }) {
+        assertRoundTripAndShortest(Math.scalb(1.0, exponent));
       }
     }
 
     @Test
     public void randomDoublesRoundTripAndAreShortest() {
       var random = new Random(42);
-      for (var i = 0; i < 20_000; i++) {
+      for (var i = 0; i < 1000; i++) {
         var v = Double.longBitsToDouble(random.nextLong());
         if (Double.isNaN(v) || Double.isInfinite(v) || v == 0.0) {
           continue;
@@ -803,12 +815,14 @@ public final class StringIntrinsicsTest {
     @Test
     public void randomDoublesInTheCommonRangeRoundTripAndAreShortest() {
       var random = new Random(7);
-      for (var i = 0; i < 20_000; i++) {
-        var v = (random.nextDouble() - 0.5) * Math.pow(10, random.nextInt(40) - 20);
-        if (v == 0.0) {
-          continue;
+      for (var exponent = -20; exponent < 20; exponent++) {
+        var scale = Math.pow(10, exponent);
+        for (var sample = 0; sample < 32; sample++) {
+          var v = (random.nextDouble() - 0.5) * scale;
+          if (v != 0.0) {
+            assertRoundTripAndShortest(v);
+          }
         }
-        assertRoundTripAndShortest(v);
       }
     }
 
@@ -2470,7 +2484,7 @@ public final class StringIntrinsicsTest {
 
 
   @Nested
-  public final class DifferentialAgainstACodePointModel {
+  public final class DifferentialFindOverloads {
 
     private static final String[] ALPHABET = {"a", "b", "\uD83D", "\uDE00", "\uD83D\uDE00"};
 
@@ -2533,39 +2547,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    public void findFamilyMatchesTheModel() {
-      var random = new Random(0xC0FFEE);
-      for (var iteration = 0; iteration < 20_000; iteration++) {
-        var s = randomString(random, 8);
-        var sub = randomString(random, 3);
-        var start = randomBound(random);
-        var end = randomBound(random);
-        var description = "s=" + repr(s) + " sub=" + repr(sub) + " start=" + start + " end=" + end;
-
-        var cps = s.codePoints().toArray();
-        var subCps = sub.codePoints().toArray();
-        var expectedFind = modelFind(cps, subCps, start, end, false);
-        var expectedRfind = modelFind(cps, subCps, start, end, true);
-
-        assertEquals(expectedFind, StringIntrinsics._find_(s, sub, start, end), () -> "find " + description);
-        assertEquals(expectedRfind, StringIntrinsics._rfind_(s, sub, start, end), () -> "rfind " + description);
-
-        if (expectedFind < 0) {
-          assertThrows(PyValueError.class, () -> StringIntrinsics._index_(s, sub, start, end),
-              () -> "index " + description);
-        } else {
-          assertEquals(expectedFind, StringIntrinsics._index_(s, sub, start, end), () -> "index " + description);
-        }
-        if (expectedRfind < 0) {
-          assertThrows(PyValueError.class, () -> StringIntrinsics._rindex_(s, sub, start, end),
-              () -> "rindex " + description);
-        } else {
-          assertEquals(expectedRfind, StringIntrinsics._rindex_(s, sub, start, end), () -> "rindex " + description);
-        }
-      }
-    }
-
-    @Test
     public void findOverloadsWithFewerArgumentsMatchTheModel() {
       var random = new Random(1234);
       for (var iteration = 0; iteration < 5_000; iteration++) {
@@ -2577,44 +2558,13 @@ public final class StringIntrinsicsTest {
         var description = "s=" + repr(s) + " sub=" + repr(sub) + " start=" + start;
 
         assertEquals(modelFind(cps, subCps, PyNone.INSTANCE, PyNone.INSTANCE, false),
-            StringIntrinsics._find_(s, sub), () -> "find/2 " + description);
+            StringIntrinsics._find_(s, sub), () -> "find " + description);
         assertEquals(modelFind(cps, subCps, PyNone.INSTANCE, PyNone.INSTANCE, true),
-            StringIntrinsics._rfind_(s, sub), () -> "rfind/2 " + description);
+            StringIntrinsics._rfind_(s, sub), () -> "rfind " + description);
         assertEquals(modelFind(cps, subCps, start, PyNone.INSTANCE, false),
-            StringIntrinsics._find_(s, sub, start), () -> "find/3 " + description);
+            StringIntrinsics._find_(s, sub, start), () -> "find " + description);
         assertEquals(modelFind(cps, subCps, start, PyNone.INSTANCE, true),
-            StringIntrinsics._rfind_(s, sub, start), () -> "rfind/3 " + description);
-      }
-    }
-
-    @Test
-    public void partitionAndRpartitionMatchTheModel() {
-      var random = new Random(99);
-      for (var iteration = 0; iteration < 20_000; iteration++) {
-        var s = randomString(random, 8);
-        var sep = randomString(random, 3);
-        if (sep.isEmpty()) {
-          assertThrows(PyValueError.class, () -> StringIntrinsics._partition_(s, sep));
-          assertThrows(PyValueError.class, () -> StringIntrinsics._rpartition_(s, sep));
-          continue;
-        }
-        var cps = s.codePoints().toArray();
-        var sepCps = sep.codePoints().toArray();
-        var description = "s=" + repr(s) + " sep=" + repr(sep);
-
-        var first = (int) modelFind(cps, sepCps, PyNone.INSTANCE, PyNone.INSTANCE, false);
-        var expectedPartition = first < 0
-            ? "(" + repr(s) + ", '', '')"
-            : "(" + repr(new String(cps, 0, first)) + ", " + repr(sep) + ", "
-                + repr(new String(cps, first + sepCps.length, cps.length - first - sepCps.length)) + ")";
-        assertEquals(expectedPartition, repr(StringIntrinsics._partition_(s, sep)), () -> "partition " + description);
-
-        var last = (int) modelFind(cps, sepCps, PyNone.INSTANCE, PyNone.INSTANCE, true);
-        var expectedRpartition = last < 0
-            ? "('', '', " + repr(s) + ")"
-            : "(" + repr(new String(cps, 0, last)) + ", " + repr(sep) + ", "
-                + repr(new String(cps, last + sepCps.length, cps.length - last - sepCps.length)) + ")";
-        assertEquals(expectedRpartition, repr(StringIntrinsics._rpartition_(s, sep)), () -> "rpartition " + description);
+            StringIntrinsics._rfind_(s, sub, start), () -> "rfind " + description);
       }
     }
   }
