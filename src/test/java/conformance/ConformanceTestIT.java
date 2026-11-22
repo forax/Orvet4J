@@ -31,10 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class ConformanceTestIT {
 
   private static final Path CONFORMANCE_DIR = Path.of("target/test-classes/");
-  private static final List<String> CONFORMANCE_FOLDERS = List.of("micropython/basics", "beginner");
+  private static final List<String> CONFORMANCE_FOLDERS =
+      List.of("micropython/basics", "micropython/float", "beginner");
   private static final Set<String> WELL_KNOWN_FAILURES = Set.of(
       "fun_str.py", "dict_del.py", "int_big_cmp.py", "string_upperlow.py", "dict_fromkeys.py",
-      "dict_iterator.py", "dict_specialmeth.py", "string_istest.py", "string_repr.py", "tuple_count.py"
+      "dict_iterator.py", "dict_specialmeth.py", "string_istest.py", "string_repr.py", "tuple_count.py",
+      "float_format_ints.py", "float_format_ints_power10.py"
   );
 
   private static Path toGolden(Path pyFile) {

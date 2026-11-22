@@ -255,8 +255,7 @@
                                             ROOT="${project.basedir}"
                                             BUILD="${project.build.directory}"
                                             MP="$BUILD/micropython"
-                                            SOURCE="$MP/tests/basics"
-                                            CORPUS="$ROOT/src/test/resources/micropython/basics"
+                                            CORPUS_ROOT="$ROOT/src/test/resources/micropython"
                                             PYTHON="$BUILD/python/bin/python3"
                                             ARCHIVE="$BUILD/python-${python.version}.tar.gz"
 
@@ -269,7 +268,7 @@
                                             https://github.com/micropython/micropython.git \
                                             "$MP"
 
-                                            git -C "$MP" sparse-checkout set tests/basics
+                                            git -C "$MP" sparse-checkout set tests/basics tests/float
 
                                             echo "Extracting Python ${python.version}..."
 
@@ -281,7 +280,11 @@
                                             exit 1
                                             fi
 
-                                            echo "Replacing MicroPython basics corpus..."
+                                            for FOLDER in basics float; do
+                                            SOURCE="$MP/tests/$FOLDER"
+                                            CORPUS="$CORPUS_ROOT/$FOLDER"
+
+                                            echo "Replacing MicroPython $FOLDER corpus..."
 
                                             mkdir -p "$(dirname "$CORPUS")"
                                             rm -rf "$CORPUS"
@@ -289,11 +292,12 @@
 
                                             cp -R "$SOURCE/." "$CORPUS/"
 
-                                            echo "Generating golden files..."
+                                            echo "Generating golden files for $FOLDER..."
 
                                             "$PYTHON" \
                                             "$ROOT/src/test/scripts/generate_golden.py" \
                                             "$CORPUS"
+                                            done
 
                                             echo "Corpus update completed successfully."
                                         </argument>
