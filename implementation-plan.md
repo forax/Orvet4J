@@ -673,7 +673,6 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 |---|---|---|
 | D1 | [PARTIAL] | `id()` exists but synthesizes a value from Java identity hash codes. It does not guarantee CPython `id()` semantics or uniqueness. |
 | D2 | [PARTIAL] | The builtin registry contains placeholders whose implementations do not exist, including `hash`, `isinstance`, `issubclass`, `bytearray`, `bytes`, and many iterator/introspection/IO builtins. They resolve to `UnimplementedFeatureError`; they are not supported builtins. |
-| D3 | [KNOWN DIVERGENCE] | `IntrinsicSupport.typeName` reports `function` for builtin `PyFunction` values; CPython distinguishes `builtin_function_or_method`. Its Java fallback is `java_type(<class>)`. |
 | D4 | [KNOWN DIVERGENCE] | Equality dispatch is left-operand-driven for non-canonical values: for example, `None == unknown` can return false while `unknown == None` raises `NotCanonicalException`. Review cross-type equality asymmetry. |
 | D5 | [KNOWN DIVERGENCE] | Very large tuple concatenation/repetition can fail through JVM array/resource errors such as `OutOfMemoryError`, rather than a Python `MemoryError` mapping. |
 | D6 | [PARTIAL] | Diagnostics in function bodies are delayed because function compilation and some semantic checks happen on first call. |
