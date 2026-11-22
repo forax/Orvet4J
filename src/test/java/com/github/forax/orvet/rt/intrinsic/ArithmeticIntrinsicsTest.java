@@ -1122,8 +1122,7 @@ public final class ArithmeticIntrinsicsTest {
       assertEquals(BigInteger.ONE.shiftLeft(63),
           ArithmeticIntrinsics.$iadd$(Long.MAX_VALUE, 1L));
       assertEquals("aaaa", ArithmeticIntrinsics.$imul$("a", 4L));
-      assertEquals(-1L, ArithmeticIntrinsics.$imul$("ab", -1L) == null ? null
-          : (("".equals(ArithmeticIntrinsics.$imul$("ab", -1L)) ? -1L : -1L)));
+      assertEquals("", ArithmeticIntrinsics.$imul$("ab", -1L));
       assertEquals(0.25, ArithmeticIntrinsics.$ipow$(2L, -2L));
       assertEquals(BigInteger.ONE.shiftLeft(63),
           ArithmeticIntrinsics.$ifloorDiv$(Long.MIN_VALUE, -1L));
