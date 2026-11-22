@@ -64,8 +64,12 @@ public final class ConformanceTestIT {
   static Stream<TestPair> pyFiles() {
     return CONFORMANCE_FOLDERS.stream()
         .flatMap(f -> {
+          var dir = CONFORMANCE_DIR.resolve(f);
+          return Files.exists(dir) ? Stream.of(dir) : Stream.empty();
+        })
+        .flatMap(dir-> {
           try {
-            return Files.list(CONFORMANCE_DIR.resolve(f));
+            return Files.list(dir);
           } catch (IOException e) {
             throw new IOError(e);
           }

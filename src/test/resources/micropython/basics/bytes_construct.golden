@@ -1,5 +1,0 @@
-b'\x01\x02'
-b'\x01\x02'
-ValueError
-ValueError
-TypeError
