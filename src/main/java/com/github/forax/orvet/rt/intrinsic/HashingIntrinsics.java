@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
 import java.math.BigInteger;
@@ -43,10 +44,9 @@ public final class HashingIntrinsics {
       case PyTuple tuple -> { return hashTuple(tuple); }
       case PyList<?> _ -> throw unhashable("list");
       case PyDict<?,?> _ -> throw unhashable("dict");
-      case PyNone _ -> { return hashIdentity(PyNone.INSTANCE); }
-      case PyFunction function -> { return hashIdentity(function); }
       case PyRange range -> { return hashTuple(RangeIntrinsics.canonicalTuple(range)); }
       case PySlice slice -> { return hashTuple(slice.asTuple()); }
+      case PyNone _, PyType _, PyFunction _ -> { return hashIdentity(value); }
       default -> throw notCanonical(value);
     }
   }

@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.PyType;
 
 import java.math.BigInteger;
 
@@ -26,9 +27,8 @@ public final class TruthinessIntrinsics {
       case PyTuple tuple -> { return TupleIntrinsics.$size$(tuple) != 0L; }
       case PyList<?> list -> { return !list.isEmpty(); }
       case PyDict<?,?> dict -> { return !dict.isEmpty(); }
-      case PyFunction _ -> { return true; }
       case PyRange range -> { return !RangeIntrinsics.$isEmpty$(range); }
-      case PySlice _ -> { return true; }
+      case PySlice _, PyFunction _, PyType _  -> { return true; }
       default -> throw notCanonical(value);
     }
   }

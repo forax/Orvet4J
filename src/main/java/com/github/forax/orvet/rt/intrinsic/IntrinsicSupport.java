@@ -70,7 +70,7 @@ public final class IntrinsicSupport {
     return v instanceof Long || v instanceof BigInteger || v instanceof Boolean || v instanceof Double
         || v instanceof String || v instanceof PyNone || v instanceof PyTuple || v instanceof PyList<?>
         || v instanceof PyDict<?, ?> || v instanceof PyFunction
-        || v instanceof PyRange || v instanceof PySlice;
+        || v instanceof PyRange || v instanceof PySlice || v instanceof PyType;
   }
 
   /// For "answer is false" paths that never look at a value's class.

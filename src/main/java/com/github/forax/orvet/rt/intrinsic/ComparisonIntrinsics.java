@@ -7,6 +7,7 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
+import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyTypeError;
 
 import java.math.BigDecimal;
@@ -83,7 +84,6 @@ public final class ComparisonIntrinsics {
           default -> { return false; }
         }
       }
-      case PyFunction l -> { return right == l; }  // Python functions compare by identity in this runtime.
       case PyRange l -> {
         switch (right) {
           case PyRange r -> { return RangeIntrinsics.sameSequence(l, r); }
@@ -96,6 +96,8 @@ public final class ComparisonIntrinsics {
           default -> { return false; }
         }
       }
+      case PyFunction l -> { return right == l; }
+      case PyType t -> { return right == t; }
       default -> throw notCanonical("==", left);
     }
   }
