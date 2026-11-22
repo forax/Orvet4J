@@ -225,8 +225,6 @@ final class Builtins {
     return PyNone.INSTANCE;
   }
 
-  /// A range is currently materialized as a list because the runtime does not yet
-  /// have a dedicated immutable range type or a range iterator.
   @SuppressWarnings("unused")
   public static Object _range_(Object... args) {
     requireCount("range", args.length, 1, 3);
