@@ -9,8 +9,6 @@ Use these labels consistently:
 - **[NOT IMPLEMENTED]** — the feature is currently unavailable.
 - **[KNOWN DIVERGENCE]** — observable behavior differs from the reference implementation.
 - **[DEFECT]** — the implementation or its tests appear internally inconsistent or incorrect.
-- **[ACCEPTED OPTIMIZATION]** — an intentional implementation choice whose observable
-  consequences are documented and accepted for now.
 
 CPython 3.14 is the semantic reference for the supported subset. Parsing a construct does
 not imply that it can be compiled or executed. Unit tests cover selected runtime and compiler
@@ -226,7 +224,7 @@ and deletion are also implemented. Slice-bound normalization handles omitted bou
 bounds, positive/negative steps, and zero-step `PyValueError`. Very large range slicing retains
 the limitation in §4.4.
 
-### 4.6 Hashing [IMPLEMENTED for canonical values, with documented divergence]
+### 4.6 Hashing [IMPLEMENTED for canonical values]
 
 - Lists and dictionaries raise `PyTypeError` as unhashable types.
 - Equal numeric values across bool/int/float representations have compatible hashes.
@@ -235,7 +233,6 @@ the limitation in §4.4.
   `(start, stop, step)` tuple representation.
 - String, tuple, `None`, and function hash values are implementation details; tests should not
   assert exact values unless specifically testing the algorithm.
-- NaN hashes to constant zero [ACCEPTED OPTIMIZATION / KNOWN DIVERGENCE].
 - Hashing a non-canonical Java object raises `NotCanonicalException`, not a Python exception
   or `UnimplementedFeatureError`.
 
