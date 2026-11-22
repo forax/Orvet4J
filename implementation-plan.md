@@ -671,19 +671,18 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 
 | ID | Status | Current state |
 |---|---|---|
-| D1 | [PARTIAL] | `id()` exists but synthesizes a value from Java identity hash codes. It does not guarantee CPython `id()` semantics or uniqueness. |
+| D1 | [KNOWN DIVERGENCE] | `id()` exists but synthesizes a value from Java identity hash codes. It does not guarantee CPython `id()` semantics or uniqueness. |
 | D2 | [PARTIAL] | The builtin registry contains placeholders whose implementations do not exist, including `hash`, `isinstance`, `issubclass`, `bytearray`, `bytes`, and many iterator/introspection/IO builtins. They resolve to `UnimplementedFeatureError`; they are not supported builtins. |
-| D4 | [KNOWN DIVERGENCE] | Equality dispatch is left-operand-driven for non-canonical values: for example, `None == unknown` can return false while `unknown == None` raises `NotCanonicalException`. Review cross-type equality asymmetry. |
-| D5 | [KNOWN DIVERGENCE] | Very large tuple concatenation/repetition can fail through JVM array/resource errors such as `OutOfMemoryError`, rather than a Python `MemoryError` mapping. |
-| D6 | [PARTIAL] | Diagnostics in function bodies are delayed because function compilation and some semantic checks happen on first call. |
-| D7 | [NOT IMPLEMENTED] | Java-to-Python normalization is absent; entry points null-check but do not normalize non-canonical Java values. |
-| D8 | [PARTIAL] | Function call sites have no global-call fast path or global-value `SwitchPoint` integration. Global variable reads themselves use switch points. |
-| D9 | [KNOWN DIVERGENCE] | `float ** float` uses `StrictMath.pow` after CPython-like special cases; last-bit results can differ from the platform libm used by CPython. |
-| D10 | [KNOWN DIVERGENCE] | String `repr` printability follows the JDK's Unicode tables, not a separately pinned CPython Unicode database. |
-| D11 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
-| D12 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
-| D13 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
-| D14 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
+| D3 | [KNOWN DIVERGENCE] | Equality dispatch is left-operand-driven for non-canonical values: for example, `None == unknown` can return false while `unknown == None` raises `NotCanonicalException`. Review cross-type equality asymmetry. |
+| D4 | [KNOWN DIVERGENCE] | Very large tuple concatenation/repetition can fail through JVM array/resource errors such as `OutOfMemoryError`, rather than a Python `MemoryError` mapping. |
+| D5 | [KNOWN DIVERGENCE] | Diagnostics in function bodies are delayed because function compilation and some semantic checks happen on first call. |
+| D6 | [NOT IMPLEMENTED] | Java-to-Python normalization is absent; entry points null-check but do not normalize non-canonical Java values. |
+| D7 | [KNOWN DIVERGENCE] | `float ** float` uses `StrictMath.pow` after CPython-like special cases; last-bit results can differ from the platform libm used by CPython. |
+| D8 | [KNOWN DIVERGENCE] | String `repr` printability follows the JDK's Unicode tables, not a separately pinned CPython Unicode database. |
+| D9 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
+| D10 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
+| D11 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
+| D12 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
 
 ## 15. Work remaining / decisions
 
