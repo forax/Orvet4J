@@ -20,4 +20,4 @@ jobs:
       - name: build
         run: |
           mvn -Pupdate-corpus generate-test-resources
-          mvn -B package
+          mvn -B verify
