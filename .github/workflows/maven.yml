@@ -19,4 +19,5 @@ jobs:
           release: '28'
       - name: build
         run: |
+          mvn -Pupdate-corpus generate-test-resources
           mvn -B package
