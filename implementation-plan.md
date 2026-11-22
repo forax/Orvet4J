@@ -681,11 +681,10 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 | D8 | [PARTIAL] | Function call sites have no global-call fast path or global-value `SwitchPoint` integration. Global variable reads themselves use switch points. |
 | D9 | [KNOWN DIVERGENCE] | `float ** float` uses `StrictMath.pow` after CPython-like special cases; last-bit results can differ from the platform libm used by CPython. |
 | D10 | [KNOWN DIVERGENCE] | String `repr` printability follows the JDK's Unicode tables, not a separately pinned CPython Unicode database. |
-| D11 | [ACCEPTED OPTIMIZATION] | Zero-capture `def` sites return a shared constant `PyFunction`; this is an accepted exception to CPython function-allocation identity. |
-| D12 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
-| D13 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
-| D14 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
-| D15 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
+| D11 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
+| D12 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
+| D13 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
+| D14 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
 
 ## 15. Work remaining / decisions
 
