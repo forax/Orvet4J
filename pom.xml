@@ -15,8 +15,8 @@
         <python.base.url>https://github.com/astral-sh/python-build-standalone/releases/download</python.base.url>
 
         <micropython.version>v1.24.1</micropython.version>
-
         <python.platform>aarch64-apple-darwin</python.platform>
+
         <python.archive>cpython-${python.version}%2B${python.release}-${python.platform}-install_only.tar.gz</python.archive>
     </properties>
 
