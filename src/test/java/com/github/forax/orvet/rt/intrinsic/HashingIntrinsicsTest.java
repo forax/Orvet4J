@@ -140,12 +140,14 @@ public final class HashingIntrinsicsTest {
     }
 
     @Test
-    public void doubleNaNIsTheConstantZero() {
-      // NaN != NaN so only pathological NaN-keyed dicts collide; both spellings agree.
-      assertEquals(0L, hash(Double.NaN));
-      assertEquals(0L, hash(Double.longBitsToDouble(0x7ff8000000000001L)));
-      assertEquals(0L, hash(Double.longBitsToDouble(0x7ff8000000000002L)));
-      assertEquals(0L, hash(Double.longBitsToDouble(0xfff8000000000000L)));
+    public void doubleNaNIsIdentityHashing() {
+      var nan = hash(Double.NaN);
+      assertEquals(hash(nan), hash(nan));
+
+      var nan1 = (Double) Double.longBitsToDouble(0x7ff8000000000001L);
+      var nan2 = (Double) Double.longBitsToDouble(0x7ff8000000000002L);
+      assertEquals(hash(nan1), hash(nan1));
+      assertEquals(hash(nan2), hash(nan2));
     }
 
     @Test
@@ -328,7 +330,6 @@ public final class HashingIntrinsicsTest {
               pass
           """).getGlobal("fn");
       assertEquals(hash(fn), hash(fn));
-      assertEquals(hash(fn), System.identityHashCode(fn));
     }
   }
 

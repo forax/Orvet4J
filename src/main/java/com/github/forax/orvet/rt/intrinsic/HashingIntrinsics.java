@@ -27,12 +27,6 @@ public final class HashingIntrinsics {
   private static final int HASH_SHIFT = 28;
   private static final long HASH_INF = 314159L;
 
-  // CPython (>= 3.10) hashes NaN by identity. A boxed Double has no identity we control, so NaN
-  // gets a constant hash. Equality still fails (NaN != NaN), only a pathological dict full of
-  // NaN keys degrades to collisions.
-  private static final long HASH_NAN = 0L;
-  private static final long HASH_NONE = 0xFCA86420L;
-
   // xxHash64 primes, as used by CPython's tuple hash since 3.8.
   private static final long XXPRIME_1 = 0x9E3779B185EBCA87L;
   private static final long XXPRIME_2 = 0xC2B2AE3D27D4EB4FL;
@@ -49,8 +43,8 @@ public final class HashingIntrinsics {
       case PyTuple tuple -> { return hashTuple(tuple); }
       case PyList<?> _ -> throw unhashable("list");
       case PyDict<?,?> _ -> throw unhashable("dict");
-      case PyNone _ -> { return HASH_NONE; }
-      case PyFunction function -> { return System.identityHashCode(function); }
+      case PyNone _ -> { return hashIdentity(PyNone.INSTANCE); }
+      case PyFunction function -> { return hashIdentity(function); }
       case PyRange range -> { return hashTuple(RangeIntrinsics.canonicalTuple(range)); }
       case PySlice slice -> { return hashTuple(slice.asTuple()); }
       default -> throw notCanonical(value);
@@ -78,7 +72,7 @@ public final class HashingIntrinsics {
   /// CPython's _Py_HashDouble. Integral floats have the same hash as equal integers.
   private static long hashDouble(double value) {
     if (Double.isNaN(value)) {
-      return HASH_NAN;
+      return Double.doubleToRawLongBits(value);
     }
     if (Double.isInfinite(value)) {
       return value > 0 ? HASH_INF : -HASH_INF;
@@ -146,6 +140,11 @@ public final class HashingIntrinsics {
     }
     accumulator += size ^ (XXPRIME_5 ^ 3527539L);
     return accumulator == -1L ? 1546275796L : accumulator;
+  }
+
+  private static long hashIdentity(Object value) {
+    return ((long) System.identityHashCode(value.getClass())) << 32L |
+        (long) System.identityHashCode(value);
   }
 
   private static PyTypeError unhashable(String typeName) {
