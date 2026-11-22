@@ -685,8 +685,7 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 | D12 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
 | D13 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
 | D14 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
-| D15 | [DOC DEFECT] | `Builtins._range_` still has a comment claiming ranges are materialized as lists and that no range type/iterator exists. `PyList` Javadoc says the class implements `java.util.List`, while the class instead exposes an adapter view. |
-| D16 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
+| D15 | [DOC DEFECT] | `README.md` still says there is no standalone command-line launcher and omits `float`, `id`, and the newly supported string/list/dict methods. Align the README with `Main` and §5.4. |
 
 ## 15. Work remaining / decisions
 
