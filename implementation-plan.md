@@ -573,7 +573,7 @@ pattern-switch lowering; `IntrinsicShapeTest` checks selected bytecode shapes.
 
 ## 12. Build and toolchain [IMPLEMENTED; conformance corpus generation is inactive]
 
-- Maven project/artifact: `com.github.forax.ula4j:orvet:0.1`.
+- Maven project/artifact: `com.github.forax.orvet4j:orvet4j:0.1`.
 - Maven compiler plugin 3.16.0, `<release>25</release>`.
 - ANTLR 4.13.2; ASM and ASM-util 9.11.1; JUnit Jupiter 5.14.3.
 - JMH core and annotation processor 1.37 are dependencies.

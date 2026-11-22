@@ -2,7 +2,7 @@ package com.github.forax.orvet.rt.error;
 
 import java.io.Serial;
 
-/// Raised when CPython supports a feature that ula4j does not implement yet.
+/// Raised when CPython supports a feature that we do not implement yet.
 public class UnimplementedFeatureError extends RuntimeException {
   @Serial
   private static final long serialVersionUID = 1L;

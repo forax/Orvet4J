@@ -102,7 +102,7 @@ public final class ConformanceTestIT {
 
       var script = ASTBuilder.createScript(source);
 
-      // Execute the source with ula4j
+      // Execute the source
       try {
         var context = new ModuleContext();
         Engine.run(context, script);
