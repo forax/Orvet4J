@@ -78,8 +78,9 @@ Some implementation details are worth noting:
 
 The current implementation includes the following builtins:
 
-`abs`, `all`, `any`, `ascii`, `bin`, `bool`, `callable`, `chr`, `dict`, `divmod`, `hex`, `int`, `len`,
-`list`, `max`, `min`, `oct`, `ord`, `pow`, `print`, `range`, `repr`, `round`, `slice`, `str`, `sum`, `tuple` and `type`.
+`abs`, `all`, `any`, `ascii`, `bin`, `bool`, `callable`, `chr`, `dict`, `divmod`, `float`, `hex`,
+`id`, `int`, `len`, `list`, `max`, `min`, `oct`, `ord`, `pow`, `print`, `range`, `repr`, `round`,
+`slice`, `str`, `sum`, `tuple` and `type`.
 
 This does not mean that every CPython constructor or builtin behavior is fully implemented.
 
@@ -88,8 +89,7 @@ This does not mean that every CPython constructor or builtin behavior is fully i
 The following Python features are currently outside the supported subset:
 
 - Classes and user-defined object types.
-- Attribute access and assignment, including normal method calls such as `my_list.append(1)`.
-- Python methods on strings, lists and dictionaries.
+- String, list and dictionary methods not included in the supported method-call list below.
 - Set operations and set literals.
 - List, dictionary and set comprehensions.
 - Imports and Python module loading.
@@ -99,15 +99,42 @@ The following Python features are currently outside the supported subset:
 - Default arguments, keyword-only arguments and `**kwargs`.
 - `is` and `is not` comparisons.
 
+### Supported method calls
+
+Method calls use a limited dispatch path.
+The following methods are supported:
+
+- `str`: `capitalize`, `find`, `index`, `isalpha`, `isascii`, `isdecimal`, `join`, `lower`,
+  `partition`, `removeprefix`, `removesuffix`, `rfind`, `rindex`, `rpartition`, `swapcase`,
+  `upper` and `zfill`.
+- `list`: `clear`, `copy`, `count`, `extend`, `index`, `pop`, `remove` and `sort`.
+- `dict`: `clear`, `copy`, `fromkeys`, get`, `pop`, `popitem` and `update`.
+
+Methods not listed above and ordinary attribute reads or writes
+remain unsupported. Method calls with keyword arguments are also unsupported.
+
 See [implementation-plan.md](implementation-plan.md) for more detailed implementation status,
 limitations and known semantic differences.
 
 
-## Using Orvet from Java
+## Using Orvet
 
-Orvet currently exposes a Java API rather than a standalone Python command-line launcher.
+Orvet exposes both a command-line launcher and a Java API.
 
-A Python script can be executed using `Engine` and `ModuleContext`:
+After building the project, run a Python script with:
+
+```bash
+java -jar target/orvet-0.1.jar hello.py
+```
+
+Use `--help` (or `-h`) to display the launcher usage.
+The launcher also accepts `--jmh` followed by JMH options to run benchmarks, for example:
+
+```bash
+java -jar target/orvet-0.1.jar --jmh SumLoopBenchmark
+```
+
+A Python script can also be executed using `Engine` and `ModuleContext`:
 
 ```java
 import com.github.forax.orvet.engine.Engine;
@@ -118,15 +145,15 @@ public class Example {
     var context = new ModuleContext();
 
     Engine.run(context, """
-        def sum_to(limit):
+        def loop():
             i = 0
             total = 0
-            while i < limit:
+            while i < 10_000:
                 total = total + i
                 i = i + 1
             return total
 
-        result = sum_to(10000)
+        result = loop()
         """);
 
     IO.println(context.getGlobal("result"));
@@ -140,27 +167,15 @@ Output:
 49995000
 ```
 
-`ModuleContext` exposes module-level variables through `getGlobal` and `setGlobal`, allowing Java code
-to exchange values with executed Python scripts.
+`ModuleContext` exposes module-level variables through `getGlobal` and `setGlobal`,
+allowing Java code to exchange values with executed Python scripts.
 
 
 ## Performance: the while-loop benchmark
 
 Orvet includes a JMH benchmark that compares a simple summation loop implemented in several ways.
 
-The Python function calculates the sum of integers from 0 to 9,999:
-
-```python
-def loop():
-    i = 0
-    total = 0
-    while i < 10_000:
-        total = total + i
-        i = i + 1
-    return total
-```
-
-The expected result is `49_995_000`.
+The Python function calculates the sum of integers from 0 to 9,999 (see above).
 
 ### Recorded results
 
