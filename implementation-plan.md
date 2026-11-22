@@ -675,10 +675,9 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 | D5 | [KNOWN DIVERGENCE] | Diagnostics in function bodies are delayed because function compilation and some semantic checks happen on first call. |
 | D6 | [NOT IMPLEMENTED] | Java-to-Python normalization is absent; entry points null-check but do not normalize non-canonical Java values. |
 | D7 | [KNOWN DIVERGENCE] | `float ** float` uses `StrictMath.pow` after CPython-like special cases; last-bit results can differ from the platform libm used by CPython. |
-| D8 | [KNOWN DIVERGENCE] | String `repr` printability follows the JDK's Unicode tables, not a separately pinned CPython Unicode database. |
-| D9 | [ACCEPTED DIVERGENCE] | NaN hashes to zero rather than using identity-derived CPython hashing. |
-| D10 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
-| D11 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
+| D8 | [KNOWN DIVERGENCE] | String `repr` printability follows the JDK's Unicode tables, not a separately pinned CPython Unicode database. ||
+| D9 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
+| D10 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
 
 ## 15. Work remaining / decisions
 
