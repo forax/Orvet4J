@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class ConformanceTestIT {
 
   private static final Path CONFORMANCE_DIR = Path.of("target/test-classes/");
-  private static final List<String> CONFORMANCE_FOLDERS = List.of("basics", "beginner");
+  private static final List<String> CONFORMANCE_FOLDERS = List.of("micropython/basics", "beginner");
 
   private static Path toGolden(Path pyFile) {
     var goldenFileName = pyFile.getFileName().toString().replace(".py", ".golden");
