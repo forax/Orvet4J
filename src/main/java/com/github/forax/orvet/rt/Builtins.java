@@ -51,7 +51,9 @@ final class Builtins {
           variadic("range"),
           variadic("slice"),
           fixed("NoneType"),
-          fixed("function")
+          fixed("function"),
+          fixed("builtin_function_or_method"),
+          specialized("type", TypeIntrinsics.class, "object")
       };
       var constructorFunctions = new HashMap<String, PyFunction>();
       for (var code : constructorCodes) {
@@ -84,7 +86,6 @@ final class Builtins {
           variadic("range"),
           variadic("round"),
           variadic("sum"),
-          specialized("type", TypeIntrinsics.class, "object"),
 
           // -- Not yet implemented --
 
@@ -164,7 +165,7 @@ final class Builtins {
     var types = PyType.ALL;  // force initialization
     for(var type : types) {
       switch (type) {
-        case NONE_TYPE, FUNCTION -> { continue; }  // those are not builtins
+        case NONE_TYPE, FUNCTION, BUILTIN_FUNCTION_OR_METHOD -> { continue; }  // those are not builtins
       }
       builtins.put(type.function().name(), type);
     }

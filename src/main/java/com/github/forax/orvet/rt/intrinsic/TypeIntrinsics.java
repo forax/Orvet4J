@@ -36,7 +36,8 @@ public final class TypeIntrinsics {
       case PyDict<?, ?> _ -> { return PyType.DICT; }
       case PyRange _ -> { return PyType.RANGE; }
       case PySlice _ -> { return PyType.SLICE; }
-      case PyFunction f -> { return PyType.FUNCTION; }
+      case PyType _ -> { return PyType.TYPE; }
+      case PyFunction f -> { return f.isBuiltin() ? PyType.BUILTIN_FUNCTION_OR_METHOD : PyType.FUNCTION; }
       default -> throw new NotCanonicalException("not canonical", value);
     }
   }

@@ -662,12 +662,9 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
    archive verification is present.
 9. JMH benchmarks exist, but there is no isolated baseline whose sole measurement is a plain
    `invokedynamic` call to a generic intrinsic, useful for attributing specialization gains.
-10. `ArithmeticIntrinsicsTest.augmentedImmutableTypes` contains a tautological assertion for
-    `$imul$("ab", -1L)`; replace it with
-    `assertEquals("", ArithmeticIntrinsics.$imul$("ab", -1L))`.
-11. Some tests use Java record/storage equality for tuple assertions. That is acceptable in
+10. Some tests use Java record/storage equality for tuple assertions. That is acceptable in
     tests, but runtime code must continue to use `ComparisonIntrinsics` / `HashingIntrinsics`.
-12. Add targeted tests for `id()` semantics or document its approximation as an explicit
+11. Add targeted tests for `id()` semantics or document its approximation as an explicit
     divergence; its current implementation is not a CPython-compatible object identity value.
 
 ## 14. Known deviations, defects and documentation issues

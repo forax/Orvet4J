@@ -15,7 +15,9 @@ public enum PyType {
   DICT("dict"),
   RANGE("range"),
   SLICE("slice"),
-  FUNCTION("function")
+  FUNCTION("function"),
+  BUILTIN_FUNCTION_OR_METHOD("builtin_function_or_method"),
+  TYPE("type")
   ;
 
   public static final List<PyType> ALL = List.of(values());

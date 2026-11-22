@@ -50,7 +50,11 @@ public final class TypeIntrinsicsTest {
       var context = new ModuleContext();
       Engine.run(context, "def f(): pass");
       var function = context.getGlobal("f");
+      var builtinFunctionOrMethod = context.getGlobal("hash");
+      var type = context.getGlobal("int");
       assertSame(PyType.FUNCTION, $type$(function));
+      assertSame(PyType.BUILTIN_FUNCTION_OR_METHOD, $type$(builtinFunctionOrMethod));
+      assertSame(PyType.TYPE, $type$(type));
     }
 
     @Test
