@@ -18,7 +18,7 @@ public final class ItemIntrinsics {
   }
 
   @Intrinsic
-  public static Object $len$(Object value) {
+  public static long $len$(Object value) {
     return switch (value) {
       case String string -> (long) string.codePointCount(0, string.length());
       case PyTuple tuple -> TupleIntrinsics.$size$(tuple);

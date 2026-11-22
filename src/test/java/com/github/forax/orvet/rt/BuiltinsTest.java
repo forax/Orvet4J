@@ -397,6 +397,17 @@ public final class BuiltinsTest {
 
 
   @Nested
+  public final class Hash {
+    @Test
+    public void isStableForTheSameObject() throws IOException {
+      assertEquals("True\n", runCaptureOutput("""
+        value = "hello"
+        print(hash(value) == hash(value))
+        """));
+    }
+  }
+
+  @Nested
   public final class Id {
     @Test
     public void isStableForTheSameObject() throws IOException {

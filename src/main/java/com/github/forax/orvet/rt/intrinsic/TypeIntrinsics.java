@@ -24,7 +24,7 @@ public final class TypeIntrinsics {
   private TypeIntrinsics() { throw new AssertionError(); }
 
   @Intrinsic
-  public static Object $type$(Object value) {
+  public static PyType $type$(Object value) {
     switch (value) {
       case Long _, BigInteger _ -> { return PyType.INT; }
       case Boolean _ -> { return PyType.BOOL; }

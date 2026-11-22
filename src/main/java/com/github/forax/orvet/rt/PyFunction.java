@@ -17,7 +17,7 @@ import java.util.Objects;
 public final class PyFunction {
   /// Common context interface between specializable builtin and Python function
   sealed interface CodeContext permits ModuleContext, SpecializationContext { }
-  record SpecializationContext(Class<?> intrinsicClass) implements CodeContext { }
+  record SpecializationContext(Class<?> intrinsicClass, Class<?> returnType) implements CodeContext { }
 
   static final class Code {
     private final String name;  //FIXME use real Python qualified name

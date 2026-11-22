@@ -78,7 +78,7 @@ public final class StringIntrinsics {
   }
 
   @Intrinsic
-  public static Object $str$(Object value) {
+  public static String $str$(Object value) {
     return switch (value) {
       case String s -> s;
       case Boolean b -> b ? "True" : "False";
@@ -98,7 +98,7 @@ public final class StringIntrinsics {
   }
 
   @Intrinsic
-  public static Object $repr$(Object value) {
+  public static String $repr$(Object value) {
     return switch (value) {
       case String s -> quoteString(s);
       case PyTuple t -> tupleRepr(t);

@@ -8,6 +8,7 @@ import com.github.forax.orvet.rt.error.PyZeroDivisionError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.ComparisonIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.HashingIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IteratorIntrinsics;
@@ -44,7 +45,7 @@ final class Builtins {
           specializedVariadic("bool", TypeIntrinsics.class),
           specializedVariadic("int", TypeIntrinsics.class),
           specializedVariadic("float", TypeIntrinsics.class),
-          specialized("str", StringIntrinsics.class, "object"),
+          specialized("str", StringIntrinsics.class, String.class,"object"),
           variadic("tuple"),
           variadic("list"),
           variadic("dict"),
@@ -53,7 +54,7 @@ final class Builtins {
           fixed("NoneType"),
           fixed("function"),
           fixed("builtin_function_or_method"),
-          specialized("type", TypeIntrinsics.class, "object")
+          specialized("type", TypeIntrinsics.class, PyType.class, "object")
       };
       var constructorFunctions = new HashMap<String, PyFunction>();
       for (var code : constructorCodes) {
@@ -70,19 +71,19 @@ final class Builtins {
           fixed("callable", "object"),
           fixed("chr", "i"),
           fixed("divmod", "a", "b"),
-          fixed("hash", "object"),
+          specialized("hash", HashingIntrinsics.class, long.class, "object"),
           fixed("hex", "x"),
           fixed("id", "object"),
           fixed("isinstance", "obj", "classinfo"),
           fixed("issubclass", "cls", "classinfo"),
-          specialized("len", ItemIntrinsics.class, "object"),
+          specialized("len", ItemIntrinsics.class, long.class, "object"),
           variadic("max"),
           variadic("min"),
           fixed("oct", "x"),
           fixed("ord", "c"),
           variadic("pow"),
           variadic("print"),
-          specialized("repr", StringIntrinsics.class, "object"),
+          specialized("repr", StringIntrinsics.class, String.class, "object"),
           variadic("range"),
           variadic("round"),
           variadic("sum"),
@@ -149,12 +150,14 @@ final class Builtins {
       return new Code(name, List.of(), true, 0, null, null);
     }
 
-    private static Code specialized(String name, Class<?> intrinsicClass, String... parameters) {
-      return new Code(name, List.of(parameters), false, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+    private static Code specialized(String name, Class<?> intrinsicClass, Class<?> returnType, String... parameters) {
+      var context = new PyFunction.SpecializationContext(intrinsicClass,  returnType);
+      return new Code(name, List.of(parameters), false, 0, context, null);
     }
 
     private static Code specializedVariadic(String name, Class<?> intrinsicClass) {
-      return new Code(name, List.of(), true, 0, new PyFunction.SpecializationContext(intrinsicClass), null);
+      var context = new PyFunction.SpecializationContext(intrinsicClass, Object.class);
+      return new Code(name, List.of(), true, 0, context, null);
     }
   }
 
@@ -183,11 +186,12 @@ final class Builtins {
   static MethodHandle resolve(Code code) {
     var name = code.name();
     var mh = switch (code.specializationContext()) {
-      case PyFunction.SpecializationContext(var intrinsicClass) ->
-          SpecializationSupport.specialize("$" + name + "$", builtinMethodType(code), intrinsicClass);
+      case PyFunction.SpecializationContext(var intrinsicClass, var returnType) ->
+          SpecializationSupport.specialize("$" + name + "$", builtinMethodType(code, returnType), intrinsicClass);
       case null -> {
+        var methodType = builtinMethodType(code, Object.class);
         try {
-          yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", builtinMethodType(code)).asFixedArity();
+          yield LOOKUP.findStatic(Builtins.class, "_" +name + "_", methodType).asFixedArity();
         } catch (NoSuchMethodException e) {
           throw new UnimplementedFeatureError("builtin '" + name + "' not yet implemented", e);
         } catch (IllegalAccessException e) {
@@ -195,10 +199,11 @@ final class Builtins {
         }
       }
     };
-    return MethodHandles.dropArguments(mh, 0, PyFunction.class);
+    var target = mh.asType(mh.type().changeReturnType(Object.class));
+    return MethodHandles.dropArguments(target, 0, PyFunction.class);
   }
 
-  private static MethodType builtinMethodType(Code code) {
+  private static MethodType builtinMethodType(Code code, Class<?> returnType) {
     var types = new ArrayList<Class<?>>();
     for (var i = 0; i < code.arity(); i++) {
       types.add(Object.class);
@@ -206,7 +211,7 @@ final class Builtins {
     if (code.isVariadic()) {
       types.add(Object[].class);
     }
-    return MethodType.methodType(Object.class, types);
+    return MethodType.methodType(returnType, types);
   }
 
 
