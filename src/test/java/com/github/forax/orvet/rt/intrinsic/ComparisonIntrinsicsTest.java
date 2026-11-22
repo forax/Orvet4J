@@ -7,7 +7,6 @@ import com.github.forax.orvet.rt.PyTuple.PyTuple1;
 import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.RT;
 import com.github.forax.orvet.rt.error.PyTypeError;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

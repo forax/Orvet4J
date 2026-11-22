@@ -615,7 +615,7 @@ public final class DictIntrinsicsTest {
     public void unhashableKeyRaisesTypeError() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> _get_(dict, new PyList<Object>()));
+      assertThrows(PyTypeError.class, () -> _get_(dict, new PyList<>()));
       assertThrows(PyTypeError.class, () -> _get_(dict, dictOf(), 1L));
     }
 
@@ -746,8 +746,8 @@ public final class DictIntrinsicsTest {
     public void unhashableKeyRaisesTypeError() {
       var dict = dictOf("a", 1L);
 
-      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<Object>()));
-      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<Object>(), 1L));
+      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<>()));
+      assertThrows(PyTypeError.class, () -> _pop_(dict, new PyList<>(), 1L));
     }
 
     @Test
@@ -991,7 +991,7 @@ public final class DictIntrinsicsTest {
     @SuppressWarnings("unchecked")
     public void defaultIsStoredAndReturnedByReference() {
       var dict = dictOf();
-      var list = new PyList<Object>();
+      var list = new PyList<>();
 
       var result = _setdefault_(dict, "a", list);
 
@@ -1113,7 +1113,7 @@ public final class DictIntrinsicsTest {
       var dict = dictOf("a", 1L);
 
       _update_(dict, dictOf());
-      _update_(dict, new PyList<Object>());
+      _update_(dict, new PyList<>());
       _update_(dict, TupleIntrinsics.empty());
 
       assertEquals(dictOf("a", 1L), dict);
@@ -1249,7 +1249,7 @@ public final class DictIntrinsicsTest {
     @Test
     public void elementThatIsNotASequenceRaisesTypeError() {
       var dict = dictOf();
-      var pairs = new PyList<Object>(TupleIntrinsics.fromArray("a", 1L), 42L);
+      var pairs = new PyList<>(TupleIntrinsics.fromArray("a", 1L), 42L);
 
       var error = assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
 
@@ -1260,7 +1260,7 @@ public final class DictIntrinsicsTest {
     public void pairsBeforeTheFailureAreKept() {
       // Same as CPython: update() is not atomic.
       var dict = dictOf();
-      var pairs = new PyList<Object>(TupleIntrinsics.fromArray("a", 1L), 42L);
+      var pairs = new PyList<>(TupleIntrinsics.fromArray("a", 1L), 42L);
 
       assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
 
@@ -1295,7 +1295,7 @@ public final class DictIntrinsicsTest {
     @Test
     public void unhashableKeyInAPairRaisesTypeError() {
       var dict = dictOf();
-      var pairs = new PyList<Object>(TupleIntrinsics.fromArray(new PyList<Object>(), 1L));
+      var pairs = new PyList<>(TupleIntrinsics.fromArray(new PyList<>(), 1L));
 
       assertThrows(PyTypeError.class, () -> _update_(dict, pairs));
       assertTrue(dict.isEmpty());

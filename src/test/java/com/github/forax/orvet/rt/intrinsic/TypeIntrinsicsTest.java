@@ -12,7 +12,6 @@ import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -414,8 +413,8 @@ public final class TypeIntrinsicsTest {
       var nan1 = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
       var nan2 = (Double) TypeIntrinsics.NaNGenerator.nextNaN();
 
-      assertTrue(Double.isNaN((Double) nan1));
-      assertTrue(Double.isNaN((Double) nan2));
+      assertTrue(Double.isNaN(nan1));
+      assertTrue(Double.isNaN(nan2));
       assertFalse(ComparisonIntrinsics.$eq$(nan1, nan2));
     }
 

@@ -1,6 +1,5 @@
 package com.github.forax.orvet.rt.intrinsic;
 
-import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyOverflowError;
@@ -23,12 +22,6 @@ public final class ArithmeticIntrinsicsTest {
   private static PyTuple pyTuple(Object... elements) {
     return TupleIntrinsics.fromArray(elements);
   }
-
-  @SafeVarargs
-  private static <E> PyList<E> pyList(E... elements) {
-    return new PyList<>(elements);
-  }
-
 
   @Nested
   public final class Add {
@@ -148,7 +141,7 @@ public final class ArithmeticIntrinsicsTest {
 
     @Test
     public void addEmptyTuples() {
-      var empty = pyTuple(new Object[0]);
+      var empty = pyTuple();
       var t1 = pyTuple(1L);
       assertEquals(0L, TupleIntrinsics.$size$((PyTuple) ArithmeticIntrinsics.$add$(empty, empty)));
       assertEquals(1L, TupleIntrinsics.$size$((PyTuple) ArithmeticIntrinsics.$add$(empty, t1)));
@@ -287,7 +280,7 @@ public final class ArithmeticIntrinsicsTest {
       assertEquals(0L, TupleIntrinsics.$size$((PyTuple) ArithmeticIntrinsics.$mul$(tuple, 0L)));
       assertEquals(0L, TupleIntrinsics.$size$((PyTuple) ArithmeticIntrinsics.$mul$(tuple, -1L)));
       // Empty tuple * n stays empty.
-      var empty = pyTuple(new Object[0]);
+      var empty = pyTuple();
       assertEquals(0L, TupleIntrinsics.$size$((PyTuple) ArithmeticIntrinsics.$mul$(empty, 5L)));
     }
 
@@ -357,8 +350,8 @@ public final class ArithmeticIntrinsicsTest {
       var obj = new Object();
       var tuple = pyTuple(obj);
       var result = (PyTuple) ArithmeticIntrinsics.$mul$(tuple, 3L);
-      for (int i = 0; i < 3; i++) {
-        assertSame(obj, TupleIntrinsics.$get$(result, (long) i));
+      for (var i = 0; i < 3; i++) {
+        assertSame(obj, TupleIntrinsics.$get$(result, i));
       }
     }
   }

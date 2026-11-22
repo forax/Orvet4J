@@ -339,7 +339,7 @@ public final class HashingIntrinsicsTest {
     @Test
     public void boxedIntegerIsRejected() {
       // The runtime uses Long, not Integer; anything else falls through to the default case.
-      var ex = assertThrows(NotCanonicalException.class, () -> hash(Integer.valueOf(1)));
+      var ex = assertThrows(NotCanonicalException.class, () -> hash(1));
       assertTrue(ex.getMessage().contains("java.lang.Integer"), "was: " + ex.getMessage());
       assertTrue(ex.getMessage().contains("a non canonical value:"),
           "was: " + ex.getMessage());

@@ -6,7 +6,6 @@ import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyType;
-import com.github.forax.orvet.rt.RT;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -24,7 +23,7 @@ public final class TruthinessIntrinsicsTest {
   public void falsyValues() {
     for (var value : new Object[]{
         false, 0L, BigInteger.ZERO, 0.0, -0.0, "", PyNone.INSTANCE,
-        new PyList<Object>(), TupleIntrinsics.empty(), new PyDict<Object, Object>()}) {
+        new PyList<>(), TupleIntrinsics.empty(), new PyDict<>()}) {
       assertFalse(truthy(value), String.valueOf(value));
       assertTrue(TruthinessIntrinsics.$not$(value), String.valueOf(value));
     }
@@ -32,7 +31,7 @@ public final class TruthinessIntrinsicsTest {
 
   @Test
   public void truthyValues() {
-    var dict = new PyDict<Object, Object>();
+    var dict = new PyDict<>();
     dict.put("k", PyNone.INSTANCE);
     for (var value : new Object[]{
         true, 1L, -1L, Long.MIN_VALUE, BigInteger.ONE.shiftLeft(100), BigInteger.TEN.negate(),

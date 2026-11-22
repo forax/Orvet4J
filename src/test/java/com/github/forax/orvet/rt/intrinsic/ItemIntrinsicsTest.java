@@ -75,7 +75,7 @@ public final class ItemIntrinsicsTest {
 
         @Test
         public void dictUpdate() {
-            var dict = new PyDict<Object, Object>();
+            var dict = new PyDict<>();
             $setItem$(dict, "a", 1L);
 
             assertEquals(1L, $getItem$(dict, "a"));
@@ -106,7 +106,7 @@ public final class ItemIntrinsicsTest {
 
         @Test
         public void dictDelete() {
-            var dict = new PyDict<Object, Object>();
+            var dict = new PyDict<>();
             dict.put("a", 1L);
 
             $deleteItem$(dict, "a");

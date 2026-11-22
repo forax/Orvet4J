@@ -28,6 +28,7 @@ import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class StringIntrinsicsTest {
 
@@ -38,7 +39,7 @@ public final class StringIntrinsicsTest {
   }
 
   private static String repr(Object value) {
-    return (String) StringIntrinsics.$repr$(value);
+    return StringIntrinsics.$repr$(value);
   }
 
   /// The string made of the single code point `codePoint`.
@@ -772,7 +773,7 @@ public final class StringIntrinsicsTest {
           -1.0 / 7.0, 1e-300, 1e300
       };
       for (var v : values) {
-        var s = (String) StringIntrinsics.$str$(v);
+        var s = StringIntrinsics.$str$(v);
         // CHANGED: compare the doubles directly
         assertEquals(v, Double.parseDouble(s),
             "round-trip failed for " + v + " (\"str\" gave \"" + s + "\")");
@@ -830,7 +831,7 @@ public final class StringIntrinsicsTest {
     /// same decimal as the JDK's Double.toString (shortest repr since JDK 19, but with a minimum of
     /// 2 digits, which is why 1-digit results are not compared).
     private void assertRoundTripAndShortest(double v) {
-      var s = (String) StringIntrinsics.$str$(v);
+      var s = StringIntrinsics.$str$(v);
       assertEquals(v, Double.parseDouble(s), () -> "round-trip failed for " + v + ": " + s);
       var ours = new BigDecimal(s).stripTrailingZeros();
       if (ours.precision() >= 2) {
@@ -1041,7 +1042,7 @@ public final class StringIntrinsicsTest {
     public void minusSignIsNotCountedAsADigit() {
       // 4300 digits, negative: accepted. 4301 digits, negative: rejected.
       var atLimit = BigInteger.TEN.pow(LIMIT - 1).negate();
-      assertEquals(LIMIT + 1, ((String) StringIntrinsics.$repr$(atLimit)).length());
+      assertEquals(LIMIT + 1, (StringIntrinsics.$repr$(atLimit)).length());
       assertThrows(PyValueError.class,
           () -> StringIntrinsics.$repr$(BigInteger.TEN.pow(LIMIT).negate()));
     }
@@ -1055,7 +1056,7 @@ public final class StringIntrinsicsTest {
     @Test
     public void largestNumberWithLimitDigitsIsAccepted() {
       var atLimit = BigInteger.TEN.pow(LIMIT).subtract(BigInteger.ONE);  // 4300 nines
-      assertEquals(LIMIT, ((String) StringIntrinsics.$str$(atLimit)).length());
+      assertEquals(LIMIT, (StringIntrinsics.$str$(atLimit)).length());
     }
 
     @Test
@@ -1486,7 +1487,7 @@ public final class StringIntrinsicsTest {
         var result = (String) StringIntrinsics._capitalize_(s);
         assertEquals("abc", result.substring(result.length() - 3),
             "the rest must be lowercased for U+" + Integer.toHexString(first));
-        assertEquals(true, result.length() > 4 || first == 0x1FB4 && result.length() >= 4,
+        assertTrue(result.length() > 4 || first == 0x1FB4 && result.length() >= 4,
             "the first character must expand for U+" + Integer.toHexString(first));
       }
     }
@@ -2502,7 +2503,7 @@ public final class StringIntrinsicsTest {
       if (random.nextInt(6) == 0) {
         return PyNone.INSTANCE;
       }
-      return Long.valueOf(random.nextInt(21) - 10);
+      return (long) random.nextInt(21) - 10;
     }
 
     private static boolean matchesAt(int[] s, int[] sub, long at) {
