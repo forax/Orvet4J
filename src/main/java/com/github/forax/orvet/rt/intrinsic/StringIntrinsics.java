@@ -431,7 +431,7 @@ public final class StringIntrinsics {
       MethodHandle mh;
       try {
         mh = MethodHandles.lookup()
-            .findStatic(IsLatin1Benchmark.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
+            .findStatic(StringIntrinsics.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
