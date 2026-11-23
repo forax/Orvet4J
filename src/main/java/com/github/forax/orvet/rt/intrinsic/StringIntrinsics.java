@@ -1,5 +1,6 @@
 package com.github.forax.orvet.rt.intrinsic;
 
+import com.github.forax.orvet.perf.IsLatin1Benchmark;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
@@ -14,6 +15,9 @@ import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -415,6 +419,44 @@ public final class StringIntrinsics {
 
 
   // -- method table
+
+  private static final MethodHandle IS_LATIN1;
+  static {
+    var spliteratorLatinClass = "A"
+        .chars().spliterator().getClass();
+    var spliteratorNonLatinClass = "\uD83D\uDE42"
+        .chars().spliterator().getClass();
+    MethodHandle target;
+    if (spliteratorLatinClass != spliteratorNonLatinClass) {
+      MethodHandle mh;
+      try {
+        mh = MethodHandles.lookup()
+            .findStatic(IsLatin1Benchmark.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+      target = mh.bindTo(spliteratorLatinClass);
+    } else {
+      target = MethodHandles.dropArguments(
+          MethodHandles.constant(boolean.class, false),
+          0, String.class);
+    }
+    IS_LATIN1 = target;
+  }
+
+  private static boolean isSameClass(Class<?> spliteratorClass, String s) {
+    return s.chars().spliterator().getClass() == spliteratorClass;
+  }
+
+  private static boolean isLatin1(String s) {
+    try {
+      return (boolean) IS_LATIN1.invokeExact(s);
+    } catch(RuntimeException | Error e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new AssertionError(e);
+    }
+  }
 
   public static Object _lower_(String s) {
     return s.toLowerCase(Locale.ROOT);
