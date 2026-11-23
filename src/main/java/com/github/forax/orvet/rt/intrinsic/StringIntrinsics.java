@@ -36,6 +36,45 @@ public final class StringIntrinsics {
     throw new AssertionError();
   }
 
+  private static final MethodHandle IS_LATIN1;
+  static {
+    var spliteratorLatinClass = "A"
+        .chars().spliterator().getClass();
+    var spliteratorNonLatinClass = "\uD83D\uDE42"
+        .chars().spliterator().getClass();
+    MethodHandle target;
+    if (spliteratorLatinClass != spliteratorNonLatinClass) {
+      MethodHandle mh;
+      try {
+        mh = MethodHandles.lookup()
+            .findStatic(StringIntrinsics.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+      target = mh.bindTo(spliteratorLatinClass);
+    } else {
+      target = MethodHandles.dropArguments(
+          MethodHandles.constant(boolean.class, false),
+          0, String.class);
+    }
+    IS_LATIN1 = target;
+  }
+
+  private static boolean isSameClass(Class<?> spliteratorClass, String s) {
+    return s.chars().spliterator().getClass() == spliteratorClass;
+  }
+
+  private static boolean isLatin1(String s) {
+    try {
+      return (boolean) IS_LATIN1.invokeExact(s);
+    } catch(RuntimeException | Error e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new AssertionError(e);
+    }
+  }
+
+
   // CPython 3.14 default. sys.set_int_max_str_digits() is not implemented.
   private static final int MAX_INT_STR_DIGITS = 4_300;
 
@@ -48,6 +87,21 @@ public final class StringIntrinsics {
   @Intrinsic
   public static Object $getItem$(String s, Object index) {
     var i = ItemIntrinsics.$toIndex$(index, "string");
+    if (!isLatin1(s)) {
+      return getItemCodePoint(s, i);
+    }
+    var length = s.length();
+    if (i < 0) {
+      i += length;
+    }
+    if (i < 0 || i >= length) {
+      throw badIndex("string index out of range");
+    }
+    var offset = (int) i;
+    return "" + s.charAt(offset);
+  }
+
+  public static Object getItemCodePoint(String s, long i) {
     int start;
     if (i < 0) {
       // Negative index: count backwards from the end.
@@ -76,6 +130,9 @@ public final class StringIntrinsics {
     var end = start + Character.charCount(s.codePointAt(start));
     return s.substring(start, end);
   }
+
+
+  // Keep the existing generic implementation below.
 
   private static PyIndexError badIndex(String message) {
     return new PyIndexError(message);
@@ -420,44 +477,6 @@ public final class StringIntrinsics {
 
   // -- method table
 
-  private static final MethodHandle IS_LATIN1;
-  static {
-    var spliteratorLatinClass = "A"
-        .chars().spliterator().getClass();
-    var spliteratorNonLatinClass = "\uD83D\uDE42"
-        .chars().spliterator().getClass();
-    MethodHandle target;
-    if (spliteratorLatinClass != spliteratorNonLatinClass) {
-      MethodHandle mh;
-      try {
-        mh = MethodHandles.lookup()
-            .findStatic(StringIntrinsics.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
-      } catch (NoSuchMethodException | IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-      target = mh.bindTo(spliteratorLatinClass);
-    } else {
-      target = MethodHandles.dropArguments(
-          MethodHandles.constant(boolean.class, false),
-          0, String.class);
-    }
-    IS_LATIN1 = target;
-  }
-
-  private static boolean isSameClass(Class<?> spliteratorClass, String s) {
-    return s.chars().spliterator().getClass() == spliteratorClass;
-  }
-
-  private static boolean isLatin1(String s) {
-    try {
-      return (boolean) IS_LATIN1.invokeExact(s);
-    } catch(RuntimeException | Error e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new AssertionError(e);
-    }
-  }
-
   public static Object _lower_(String s) {
     return s.toLowerCase(Locale.ROOT);
   }
@@ -491,12 +510,19 @@ public final class StringIntrinsics {
     if (s.isEmpty()) {
       return s;
     }
+    if (isLatin1(s)) {
+      var first = s.charAt(0);
+      return fullTitle(first) + s.substring(1).toLowerCase(Locale.ROOT);
+    }
+    return capitalizeCodePoint(s);
+  }
+
+  private static Object capitalizeCodePoint(String s) {
     var first = s.codePointAt(0);
     var lowered = s.toLowerCase(Locale.ROOT);
     var rest = lowered.substring(loweredCharCount(first));
     return fullTitle(first) + rest;
   }
-
 
   public static Object _find_(String s, Object sub) {
     return find(s, sub, PyNone.INSTANCE, PyNone.INSTANCE, false, false, "find");
@@ -537,8 +563,6 @@ public final class StringIntrinsics {
   public static Object _rindex_(String s, Object sub, Object start, Object end) {
     return find(s, sub, start, end, true, true, "rindex");
   }
-
-
 
 
   public static Object _partition_(String s, Object sep) {
@@ -641,10 +665,38 @@ public final class StringIntrinsics {
 
 
   public static Object _isascii_(String s) {
-    return s.codePoints().allMatch(cp -> cp < 128);
+    if (!isLatin1(s)) {
+      return isasciiCodePoint(s);
+    }
+    for(var i = 0; i < s.length(); i++) {
+      if (s.charAt(i) >= 128) {
+        return false;
+      }
+    }
+    return true;
   }
 
+  private static boolean isasciiCodePoint(String s) {
+    return allCodePoints(s, cp -> cp < 128);
+  }
+
+
   public static Object _isalpha_(String s) {
+    if (s.isEmpty()) {
+      return false;
+    }
+    if (!isLatin1(s)) {
+      return isalphaCodePoint(s);
+    }
+    for (var i = 0; i < s.length(); i++) {
+      if (!Character.isLetter(s.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static Object isalphaCodePoint(String s) {
     return allCodePoints(s, cp -> {
       var type = Character.getType(cp);
       return type == Character.UPPERCASE_LETTER
@@ -656,6 +708,21 @@ public final class StringIntrinsics {
   }
 
   public static Object _isdecimal_(String s) {
+    if (s.isEmpty()) {
+      return false;
+    }
+    if (!isLatin1(s)) {
+      return isdecimalCodePoint(s);
+    }
+    for (var i = 0; i < s.length(); i++) {
+      if (!Character.isDigit(s.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static Object isdecimalCodePoint(String s) {
     return allCodePoints(s, cp ->
         Character.getType(cp) == Character.DECIMAL_DIGIT_NUMBER);
   }
@@ -773,9 +840,6 @@ public final class StringIntrinsics {
   }
 
   private static boolean allCodePoints(String s, IntPredicate predicate) {
-    if (s.isEmpty()) {
-      return false;
-    }
     return s.codePoints().allMatch(predicate);
   }
 
