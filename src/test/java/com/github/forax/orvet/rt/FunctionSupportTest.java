@@ -703,7 +703,7 @@ public final class FunctionSupportTest {
           """).getGlobal("f");
       assertEquals(11L, f.call(1L));
       assertEquals(3L, f.call(1L, 2L));
-      assertEquals(List.of(10L), f.defaults());
+      assertEquals(List.of(10L), List.of(f.defaults()));
 
       var one = f.createDirectMethodHandle(MethodType.methodType(Object.class, Object.class));
       assertEquals(11L, (Object) one.invokeExact((Object) 1L));
