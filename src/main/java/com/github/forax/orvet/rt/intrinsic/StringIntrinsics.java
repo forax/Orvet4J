@@ -671,7 +671,7 @@ public final class StringIntrinsics {
 
   public static Object _isascii_(String s) {
     if (!isLatin1(s)) {
-      return isasciiCodePoint(s);
+      return false;
     }
     for(var i = 0; i < s.length(); i++) {
       if (s.charAt(i) >= 128) {
@@ -679,10 +679,6 @@ public final class StringIntrinsics {
       }
     }
     return true;
-  }
-
-  private static boolean isasciiCodePoint(String s) {
-    return allCodePoints(s, cp -> cp < 128);
   }
 
 
