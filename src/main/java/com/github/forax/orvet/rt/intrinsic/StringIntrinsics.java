@@ -439,10 +439,10 @@ public final class StringIntrinsics {
   private static String rangeRepr(PyRange range) {
     var step = normalize(bigStep(range));
     var builder = new StringBuilder("range(")
-        .append(StringIntrinsics.$repr$(normalize(bigStart(range)))).append(", ")
-        .append(StringIntrinsics.$repr$(normalize(bigStop(range))));
+        .append($repr$(normalize(bigStart(range)))).append(", ")
+        .append($repr$(normalize(bigStop(range))));
     if (!step.equals(1L)) {
-      builder.append(", ").append(StringIntrinsics.$repr$(step));
+      builder.append(", ").append($repr$(step));
     }
     return builder.append(')').toString();
   }
@@ -985,17 +985,41 @@ public final class StringIntrinsics {
     return stripString(s, stripCharacters(chars, "rstrip"), false, true);
   }
 
-  private static String stripCharacters(Object chars, String method) {
-    if (chars == PyNone.INSTANCE) {
-      return null;
+  private static String stripString(String s, String chars, boolean left, boolean right) {
+    if (isLatin1(s)) {
+      return stripLatin1(s, chars, left, right);
     }
-    if (chars instanceof String s) {
-      return s;
-    }
-    throw new PyTypeError(method + " arg must be None or str");
+    return stripCodePoint(s, chars, left, right);
   }
 
-  private static String stripString(String s, String chars, boolean left, boolean right) {
+  private static String stripLatin1(String s, String chars, boolean left, boolean right) {
+    var start = 0;
+    var end = s.length();
+    if (left) {
+      while (start < end &&
+          isStripCharacterLatin1(s.charAt(start), chars)) {
+        start++;
+      }
+    }
+    if (right) {
+      while (end > start &&
+          isStripCharacterLatin1(s.charAt(end - 1), chars)) {
+        end--;
+      }
+    }
+    if (start == 0 && end == s.length()) {
+      return s;
+    }
+    return s.substring(start, end);
+  }
+
+  private static boolean isStripCharacterLatin1(char c, String chars) {
+    return chars == null
+        ? isPythonWhitespace(c)
+        : chars.indexOf(c) >= 0;
+  }
+
+  private static String stripCodePoint(String s, String chars, boolean left, boolean right) {
     var cps = s.codePoints().toArray();
     var start = 0;
     var end = cps.length;
@@ -1032,6 +1056,52 @@ public final class StringIntrinsics {
   }
 
   private static String replaceString(String s, Object oldObject, Object newObject, long maxcount) {
+    var oldValue = requireMethodString(oldObject, "replace", 1);
+    var newValue = requireMethodString(newObject, "replace", 2);
+    if (maxcount == 0) {
+      return s;
+    }
+    if (isLatin1(s)) {
+      return replaceLatin1(s, oldValue, newValue, maxcount);
+    }
+    return replaceCodePoint(s, oldValue, newValue, maxcount);
+  }
+
+  private static String replaceLatin1(String s, String oldValue, String newValue, long maxcount) {
+    var builder = new StringBuilder();
+
+    // Empty search string: insert at every character boundary.
+    if (oldValue.isEmpty()) {
+      var replacements = 0L;
+      for (var i = 0; i <= s.length(); i++) {
+        if (maxcount < 0 || replacements < maxcount) {
+          builder.append(newValue);
+          replacements++;
+        }
+        if (i < s.length()) {
+          builder.append(s.charAt(i));
+        }
+      }
+      return builder.toString();
+    }
+
+    var index = 0;
+    var replacements = 0L;
+    while (maxcount < 0 || replacements < maxcount) {
+      var match = s.indexOf(oldValue, index);
+      if (match < 0) {
+        break;
+      }
+      builder.append(s, index, match);
+      builder.append(newValue);
+      index = match + oldValue.length();
+      replacements++;
+    }
+    builder.append(s, index, s.length());
+    return builder.toString();
+  }
+
+  private static String replaceCodePoint(String s, Object oldObject, Object newObject, long maxcount) {
     var oldValue = requireMethodString(oldObject, "replace", 1);
     var newValue = requireMethodString(newObject, "replace", 2);
     if (maxcount == 0) {
@@ -1095,7 +1165,44 @@ public final class StringIntrinsics {
     return startsOrEndsWith(s, suffix, start, end, true);
   }
 
-  private static boolean startsOrEndsWith(String s, Object prefixObject, Object startObject, Object endObject, boolean reverse) {
+  private static boolean startsOrEndsWith(String s, Object prefixObject,
+                                          Object startObject, Object endObject, boolean reverse) {
+    if (isLatin1(s)) {
+      return startsOrEndsWithLatin1(s, prefixObject, startObject, endObject, reverse);
+    }
+    return startsOrEndsWithCodePoint(s, prefixObject, startObject, endObject, reverse);
+  }
+
+  private static boolean startsOrEndsWithLatin1(String s, Object prefixObject,
+                                                Object startObject, Object endObject, boolean reverse) {
+
+    var start = normalizeStartBound(startObject, s.length());
+    var end = normalizeStringBound(endObject, s.length(), s.length());
+    if (prefixObject instanceof String prefix) {
+      return matchesPrefixOrSuffixLatin1(s, prefix, start, end, reverse);
+    }
+    if (prefixObject instanceof PyTuple tuple) {
+      var size = TupleIntrinsics.$size$(tuple);
+      for (var i = 0L; i < size; i++) {
+        var item = TupleIntrinsics.$get$(tuple, i);
+        if (!(item instanceof String prefix)) {
+          var method = reverse ? "endswith" : "startswith";
+          throw new PyTypeError(
+              "tuple for " + method + " must only contain str, not "
+                  + IntrinsicSupport.typeName(item));
+        }
+        if (matchesPrefixOrSuffixLatin1(s, prefix, start, end, reverse)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    var method = reverse ? "endswith" : "startswith";
+    throw new PyTypeError(method + " first arg must be str or a tuple of str, not "
+            + IntrinsicSupport.typeName(prefixObject));
+  }
+
+  private static boolean startsOrEndsWithCodePoint(String s, Object prefixObject, Object startObject, Object endObject, boolean reverse) {
     var source = s.codePoints().toArray();
     var start = normalizeStartBound(startObject, source.length);
     var end = normalizeStringBound(endObject, source.length, source.length);
@@ -1149,6 +1256,37 @@ public final class StringIntrinsics {
   }
 
   private static Object countString(String s, Object subObject, Object startObject, Object endObject) {
+    var sub = requireMethodString(subObject, "count", 1);
+    if (isLatin1(s)) {
+      return countLatin1(s, sub, startObject, endObject);
+    }
+    return countCodePoint(s, sub, startObject, endObject);
+  }
+
+  private static Object countLatin1(String s, String sub, Object startObject, Object endObject) {
+    var start = normalizeStartBound(startObject, s.length());
+    var end = normalizeStringBound(endObject, s.length(), s.length());
+    if (start > end) {
+      return 0L;
+    }
+    if (sub.isEmpty()) {
+      return end - start + 1;
+    }
+    var count = 0L;
+    var index = (int) start;
+    var limit = end - sub.length();
+    while (index <= limit) {
+      var match = s.indexOf(sub, index);
+      if (match < 0 || match > limit) {
+        break;
+      }
+      count++;
+      index = match + sub.length();
+    }
+    return count;
+  }
+
+  private static Object countCodePoint(String s, Object subObject, Object startObject, Object endObject) {
     var sub = requireMethodString(subObject, "count", 1);
     var source = s.codePoints().toArray();
     var needle = sub.codePoints().toArray();
@@ -1403,6 +1541,27 @@ public final class StringIntrinsics {
 
 
   // Shared helpers for the methods above.
+
+  private static boolean matchesPrefixOrSuffixLatin1(String source, String value,
+                                                     long start, int end, boolean reverse) {
+    if (start > end || value.length() > end - start) {
+      return false;
+    }
+    var position = reverse
+        ? end - value.length()
+        : (int) start;
+    return source.startsWith(value, position);
+  }
+
+  private static String stripCharacters(Object chars, String method) {
+    if (chars == PyNone.INSTANCE) {
+      return null;
+    }
+    if (chars instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError(method + " arg must be None or str");
+  }
 
   private static void appendLowerCase(StringBuilder builder, int[] cps, int index) {
     var cp = cps[index];
