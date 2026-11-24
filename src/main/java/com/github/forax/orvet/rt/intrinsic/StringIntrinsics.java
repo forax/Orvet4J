@@ -1502,34 +1502,34 @@ public final class StringIntrinsics {
     return splitLines(s, TruthinessIntrinsics.$truthy$(keepends));
   }
 
-  private static Object splitLines(String s, boolean keepends) {
-    var cps = s.codePoints().toArray();
+  private static PyList<String> splitLines(String s, boolean keepends) {
     var result = new PyList<String>();
-    var start = 0;
-    var index = 0;
-    while (index < cps.length) {
-      var cp = cps[index];
+    var length = s.length();
+    var charStart = 0;
+    for (var i = 0; i < length; ) {
+      var cp = s.codePointAt(i);
       if (!isLineBreak(cp)) {
-        index++;
+        i += Character.charCount(cp);
         continue;
       }
-      var end = index + 1;
-
-      // CRLF is one line boundary.
-      if (cp == '\r' && end < cps.length && cps[end] == '\n') {
+      var end = i + Character.charCount(cp);
+      if (cp == '\r' && end < length && s.charAt(end) == '\n') {
         end++;
       }
-      result.append(substringByCodePoints(s, start, keepends ? end : index));
-      start = end;
-      index = end;
+      result.append(s.substring(charStart, keepends ? end : i));
+      charStart = end;
+      i = end;
     }
-
-    // A trailing line boundary does not produce an additional empty item.
-    if (start < cps.length) {
-      result.append(substringByCodePoints(s, start, cps.length));
+    if (charStart < length) {
+      result.append(s.substring(charStart, length));
     }
     return result;
   }
+
+
+
+
+  // Shared helpers for the methods above.
 
   private static boolean isLineBreak(int cp) {
     return switch (cp) {
@@ -1538,9 +1538,6 @@ public final class StringIntrinsics {
       default -> false;
     };
   }
-
-
-  // Shared helpers for the methods above.
 
   private static boolean matchesPrefixOrSuffixLatin1(String source, String value,
                                                      long start, int end, boolean reverse) {
