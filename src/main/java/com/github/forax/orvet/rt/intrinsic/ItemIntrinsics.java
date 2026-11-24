@@ -66,7 +66,7 @@ public final class ItemIntrinsics {
       case PyTuple _ -> throw new PyTypeError("'tuple' object does not support item assignment");
       case PyRange _ -> throw new PyTypeError("'range' object does not support item assignment");
       case String _ -> throw new PyTypeError("'str' object does not support item assignment");
-      default -> throw new PyTypeError("'" + typeName(container) + "' object is not subscriptable");
+      default -> throw new PyTypeError("'" + typeName(container) + "' does not support item assignment");
     }
   }
 
@@ -85,7 +85,7 @@ public final class ItemIntrinsics {
       case PyTuple _ -> throw new PyTypeError("'tuple' object doesn't support item deletion");
       case PyRange _ -> throw new PyTypeError("'range' object doesn't support item deletion");
       case String _ -> throw new PyTypeError("'str' object doesn't support item deletion");
-      default -> throw new PyTypeError("'" + typeName(container) + "' object is not subscriptable");
+      default -> throw new PyTypeError("'" + typeName(container) + "' object doesn't support item deletion");
     }
   }
 
