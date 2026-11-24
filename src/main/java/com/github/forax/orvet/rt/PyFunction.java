@@ -23,6 +23,7 @@ public final class PyFunction {
     private final String name;  //FIXME use real Python qualified name
     private final List<String> parameters;
     private final boolean varargs;
+    private final int defaultCount;
     private final int captureCount;
 
     private Map<String, Integer> parameterIndexMap;  // initialized lazily
@@ -41,11 +42,12 @@ public final class PyFunction {
     // call sites (idempotent). Method handles are immutable data so benign race is fine
     MethodHandle thunkEntry;
 
-    Code(String name, List<String> parameters, boolean varargs, int captureCount,
+    Code(String name, List<String> parameters, boolean varargs, int defaultCount, int captureCount,
          CodeContext context, Stmt.FunctionDef functionDef) {
       this.name = name;
       this.parameters = parameters;
       this.varargs = varargs;
+      this.defaultCount = defaultCount;
       this.captureCount = captureCount;
       this.context = context;
       this.functionDef = functionDef;
@@ -55,6 +57,8 @@ public final class PyFunction {
     String name() { return name; }
     List<String> parameters() { return parameters; }
     int arity() { return parameters.size(); }
+    int defaultCount() { return defaultCount; }
+    int firstDefault() { return parameters.size() - defaultCount; }
     int captureCount() { return captureCount; }
 
     ModuleContext context() { return (ModuleContext) context; }
@@ -81,10 +85,12 @@ public final class PyFunction {
   }
 
   final Code code;
+  final Object[] defaults;
   final Object[] capturedArgs;
 
-  PyFunction(Code code, Object[] capturedArgs) {
+  PyFunction(Code code, Object[] defaults, Object[] capturedArgs) {
     this.code = code;
+    this.defaults = defaults;
     this.capturedArgs = capturedArgs;
     super();
   }
@@ -93,6 +99,7 @@ public final class PyFunction {
   public List<String> parameters() { return code.parameters; }
 
   public boolean isBuiltin() { return code.isBuiltin(); }
+  Object[] defaults() { return defaults; }
   Object[] capturedArgs() { return capturedArgs; }
 
   @Override
@@ -157,8 +164,7 @@ public final class PyFunction {
     var bound = MethodHandles.insertArguments(compiledEntry, 0, boundValues);
 
     // 4. Adapt to the requested type
-    var arity = code.arity();
-    return FunctionSupport.FunctionCallSite.adapt(code, bound, arity, argCount - arity)
+    return FunctionSupport.FunctionCallSite.adaptArguments(code, bound, 0, defaults, argCount)
         .asType(type);
   }
 }

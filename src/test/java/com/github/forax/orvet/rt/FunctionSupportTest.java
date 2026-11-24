@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.invoke.MethodType;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -574,6 +575,149 @@ public final class FunctionSupportTest {
       broken(1, 2)
       """;
       assertEquals("broken() takes 1 positional argument but 2 were given", assertTypeErrorMessage(source));
+    }
+  }
+
+  @Nested
+  public final class DefaultValues {
+
+    @Test
+    public void omittedTrailingArgumentsUseTheDefaults() {
+      var module = run("""
+          def f(a, b=10, c=100):
+              return a + b + c
+          r1 = f(1)
+          r2 = f(1, 2)
+          r3 = f(1, 2, 3)
+          """);
+      assertGlobal(module, "r1", 111L);
+      assertGlobal(module, "r2", 103L);
+      assertGlobal(module, "r3", 6L);
+    }
+
+    @Test
+    public void defaultsAreEvaluatedOnceWhenDefIsExecuted() {
+      var module = run("""
+          x = 1
+          def f(a=x, acc=[]):
+              acc.append(a)
+              return len(acc)
+          x = 2
+          r1 = f()
+          r2 = f()
+          """);
+      assertGlobal(module, "r1", 1L);
+      assertGlobal(module, "r2", 2L);   // the same list: the default is shared between calls
+    }
+
+    @Test
+    public void keywordsAndDefaults() {
+      var module = run("""
+          def f(a, b=2, c=3):
+              return a * 100 + b * 10 + c
+          r1 = f(1, c=9)
+          r2 = f(c=9, a=1)
+          r3 = f(1, b=5)
+          r4 = f(a=7)
+          """);
+      assertGlobal(module, "r1", 129L);
+      assertGlobal(module, "r2", 129L);
+      assertGlobal(module, "r3", 153L);
+      assertGlobal(module, "r4", 723L);
+    }
+
+    @Test
+    public void defaultsWithRestParameter() {
+      var module = run("""
+          def f(a, b=2, *r):
+              return r
+          t1 = f(1)
+          t2 = f(1, 5)
+          t3 = f(1, 5, 6, 7)
+          """);
+      assertGlobal(module, "t1", tuple());
+      assertGlobal(module, "t2", tuple());
+      assertGlobal(module, "t3", tuple(6L, 7L));
+    }
+
+    @Test
+    public void defaultReadsAVariableOfTheEnclosingFunction() {
+      var module = run("""
+          def outer(x):
+              def mid():
+                  def inner(a=x):
+                      return a
+                  return inner()
+              return mid()
+          r = outer(42)
+          """);
+      assertGlobal(module, "r", 42L);
+    }
+
+    @Test
+    public void closuresOfOneDefHaveTheirOwnDefaultsAtOneSite() {
+      var module = run("""
+          def make(k):
+              def f(a, b=k):
+                  return a + b
+              return f
+          def apply(fn):
+              return fn(1)
+          c0 = make(10)
+          c1 = make(20)
+          r0 = apply(c0)
+          r1 = apply(c1)
+          r2 = apply(c0)
+          """);
+      assertGlobal(module, "r0", 11L);
+      assertGlobal(module, "r1", 21L);
+      assertGlobal(module, "r2", 11L);
+    }
+
+    @Test
+    public void manyClosuresMakeTheSiteMegamorphicButKeepTheirDefaults() {
+      var module = run("""
+          def make(k):
+              def f(a, b=k, c=0):
+                  return a + b + c
+              return f
+          def apply(fn):
+              return fn(1)
+          def apply_kw(fn):
+              return fn(1, c=100)
+          total = 0
+          total_kw = 0
+          for i in range(8):
+              total += apply(make(i))
+              total_kw += apply_kw(make(i))
+          """);
+      assertGlobal(module, "total", 36L);       // sum(1 + i)
+      assertGlobal(module, "total_kw", 836L);   // sum(1 + i + 100)
+    }
+
+    @Test
+    public void pyFunctionCallAndDirectMethodHandleUseTheDefaults() throws Throwable {
+      var f = (PyFunction) run("""
+          def f(a, b=10):
+              return a + b
+          """).getGlobal("f");
+      assertEquals(11L, f.call(1L));
+      assertEquals(3L, f.call(1L, 2L));
+      assertEquals(List.of(10L), f.defaults());
+
+      var one = f.createDirectMethodHandle(MethodType.methodType(Object.class, Object.class));
+      assertEquals(11L, (Object) one.invokeExact((Object) 1L));
+    }
+
+    @Test
+    public void errors() {
+      var prefix = "def f(a, b=1):\n    return a\n";
+      assertEquals("f() missing 1 required positional argument: 'a'",
+          assertTypeErrorMessage(prefix + "f()\n"));
+      assertEquals("f() missing 1 required positional argument: 'a'",
+          assertTypeErrorMessage(prefix + "f(b=2)\n"));
+      assertEquals("f() takes from 1 to 2 positional arguments but 3 were given",
+          assertTypeErrorMessage(prefix + "f(1, 2, 3)\n"));
     }
   }
 

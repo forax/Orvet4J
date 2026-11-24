@@ -274,7 +274,15 @@ public final class ScopeAnalyzer {
         resolveStatements(body.stmts(), scope);
         resolveStatements(orElse.stmts(), scope);
       }
-      case Stmt.FunctionDef def -> resolveStatements(def.body().stmts(), scope.inner(def));
+      case Stmt.FunctionDef def -> {
+        for (var parameter : def.parameters()) {
+          var defaultExpr = parameter.defaultExpr();
+          if (defaultExpr.isPresent()) {
+            resolveExpr(defaultExpr.get(), scope);  // enclosing scope
+          }
+        }
+        resolveStatements(def.body().stmts(), scope.inner(def));
+      }
     }
   }
 
@@ -535,6 +543,12 @@ public final class ScopeAnalyzer {
         return loopExit(elseResult, bodyLoop);
       }
       case Stmt.FunctionDef s -> {
+        for (var parameter : s.parameters()) {
+          var defaultExpr = parameter.defaultExpr();
+          if (defaultExpr.isPresent()) {
+            checkExpr(defaultExpr.get(), scope, assigned);
+          }
+        }
         var child = scope.inner(s);
         for (var name : child.frees) {
           // Self-recursion: the def *is* the assignment that makes the name available.

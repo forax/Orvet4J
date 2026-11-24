@@ -543,6 +543,10 @@ public final class BytecodeGenerator {
         }
       }
       var argumentCount = captures.size() + defaultCount;
+      /*if (argumentCount > MAX_PARAMETERS) {  //FIXME should be checked during analysis
+        throw semanticError("function '" + def.name() + "' has too many captured variables and default values ("
+            + argumentCount + ", at most " + MAX_PARAMETERS + " are supported)", def.line(), def.column());
+      }*/
       mv.visitInvokeDynamicInsn(def.name(), "(" + O.repeat(argumentCount) + ")" + O,
           BSM_DEF, dictionary.register(def));
       storeName(def.name());

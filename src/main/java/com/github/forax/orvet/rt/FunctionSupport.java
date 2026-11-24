@@ -26,6 +26,7 @@ import static java.lang.invoke.MethodHandles.exactInvoker;
 import static java.lang.invoke.MethodHandles.filterArguments;
 import static java.lang.invoke.MethodHandles.foldArguments;
 import static java.lang.invoke.MethodHandles.guardWithTest;
+import static java.lang.invoke.MethodHandles.identity;
 import static java.lang.invoke.MethodHandles.insertArguments;
 import static java.lang.invoke.MethodHandles.permuteArguments;
 import static java.lang.invoke.MethodType.methodType;
@@ -73,30 +74,39 @@ final class FunctionSupport {
       var lookup = MethodHandles.lookup();
       try {
         PY_FUNCTION = lookup.findConstructor(PyFunction.class,
-            methodType(void.class, PyFunction.Code.class, Object[].class));
+            methodType(void.class, PyFunction.Code.class, Object[].class, Object[].class));
       } catch (NoSuchMethodException | IllegalAccessException e) {
         throw new AssertionError(e);
       }
     }
 
-    private static final Object[] EMPTY_CAPTURED_ARGS = new Object[0];
+    private static final Object[] EMPTY = new Object[0];
 
     static CallSite def(ModuleContext context, Dictionary dictionary, MethodType type, int astIndex) {
       var def = dictionary.lookup(astIndex);
 
       var functionName = def.name();
       var parameters = def.parameters().stream().map(Stmt.FunctionDef.Param::name).toList();
-      var hasRestParameter = def.rest().isPresent();
-      var captureCount = type.parameterCount();
-      var code = new PyFunction.Code(functionName, parameters, hasRestParameter, captureCount, context, def);
+      var varargs = def.rest().isPresent();
+      var defaultCount = countDefaults(def);
+      var captureCount = type.parameterCount() - defaultCount;
+      var code = new PyFunction.Code(functionName, parameters, varargs,
+          defaultCount, captureCount, context, def);
 
       // CPython, creates a fresh function object each time it is executed
       var factory = PY_FUNCTION.bindTo(code);
-      var mh = captureCount == 0
-          ? factory.bindTo(EMPTY_CAPTURED_ARGS)
-          : factory.asCollector(Object[].class, captureCount);
+      var mh = defaultCount == 0
+          ? insertArguments(factory, 1, (Object) EMPTY)
+          : collectArguments(factory, 1, arrayCollector(defaultCount));
+      mh = captureCount == 0
+          ? insertArguments(mh, 0, (Object) EMPTY)
+          : collectArguments(mh, 0, arrayCollector(captureCount));
       var target = mh.asType(type);
       return new ConstantCallSite(target);
+    }
+
+    private static MethodHandle arrayCollector(int count) {
+      return identity(Object[].class).asCollector(Object[].class, count);
     }
   }
 
@@ -183,7 +193,7 @@ final class FunctionSupport {
       var code = function.code;
       checkArity(code, args.length);
       var thunkEntry = getThunkEntry(code);
-      return thunkEntry.invokeExact(function.capturedArgs, function, args);
+      return thunkEntry.invokeExact(function.capturedArgs, function, withDefaults(function, args));
     }
 
     /// Entry point for megamorphic calls with keyword arguments.
@@ -203,8 +213,35 @@ final class FunctionSupport {
       for (var i = 0; i < plan.length; i++) {
         ordered[plan[i]] = args[i];
       }
+      fillMissing(function, ordered);
       var thunkEntry = getThunkEntry(code);
       return thunkEntry.invokeExact(function.capturedArgs, function, ordered);
+    }
+
+    /// The thunk spreads exactly `arity` declared parameters: complete a short array with the defaults.
+    private static Object[] withDefaults(PyFunction function, Object[] args) {
+      var code = function.code;
+      var arity = code.arity();
+      if (args.length >= arity) {
+        return args;
+      }
+      var filled = Arrays.copyOf(args, arity);   // checkArity guarantees args.length >= firstDefault()
+      var first = code.firstDefault();
+      for (var i = args.length; i < arity; i++) {
+        filled[i] = function.defaults[i - first];
+      }
+      return filled;
+    }
+
+    /// reorderKeywordArguments guarantees that only parameters with a default can be unassigned (null).
+    private static void fillMissing(PyFunction function, Object[] ordered) {
+      var code = function.code;
+      var first = code.firstDefault();
+      for (var i = first; i < code.arity(); i++) {
+        if (ordered[i] == null) {
+          ordered[i] = function.defaults[i - first];
+        }
+      }
     }
 
     private static MethodHandle getThunkEntry(PyFunction.Code code) {
@@ -374,15 +411,16 @@ final class FunctionSupport {
       var function = asFunction(callee);
       var argCount = type().parameterCount() - 1;
 
-      // 2. check if there is not an existing call site to update (promote)
+      // 2. Check if there is an existing call site to update (promote).
       var code = function.code;
       var notTooManyCaptureArgs = code.captureCount() < 200; // Java MH implementation has a limit at 250
-      var promoted = callee instanceof PyFunction && notTooManyCaptureArgs?
+      var usesDefaults = code.defaultCount() != 0 && argCount < code.arity();
+      var promoted = callee instanceof PyFunction && notTooManyCaptureArgs && !usesDefaults ?
           findPromoted(root, code) :
           null;
 
-      // 3. Megamorphic: the arguments are validated at each call
-      if (promoted == null && depth == MAX_DEPTH) {
+      // 3. Megamorphic: the arguments are validated and the defaults filled at each call
+      if (promoted == null && (depth == MAX_DEPTH || (usesDefaults && !notTooManyCaptureArgs))) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
             : insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
@@ -412,10 +450,9 @@ final class FunctionSupport {
       }
 
       // 6. Adapt to the call site
-      var arity = code.arity();
       var adapted = reorderPlan == null
-          ? adapt(code, target, 1 + arity, argCount - arity).asType(type())
-          : adaptKeywords(code, target, type(), reorderPlan);
+          ? adaptArguments(code, target, 1, function.defaults, argCount).asType(type())
+          : adaptKeywords(code, target, type(), reorderPlan, function.defaults);
 
       // 7. Change the target of the existing call site
       if (promoted != null) {
@@ -456,9 +493,11 @@ final class FunctionSupport {
     static MethodHandle getFunctionMH(PyFunction function) {
       var compiledEntry = getCompiledEntry(function.code);
       var capturedArgs = function.capturedArgs;
+
       var mh = capturedArgs.length != 0 ?
           insertArguments(compiledEntry, 0, capturedArgs) :
           compiledEntry;
+
       var bound = mh.bindTo(function);
       return dropArguments(bound, 0, Object.class);  // drop the callee
     }
@@ -548,20 +587,61 @@ final class FunctionSupport {
       return RestAdapter.adapt(entry, position, restCount);
     }
 
+    /// Adapts `entry`, whose declared parameters start at index `firstParam`, to a call with `argCount`
+    /// positional arguments: packs the extra arguments into the rest parameter or, if the call is short,
+    /// binds the default values of the missing parameters (and an empty rest).
+    static MethodHandle adaptArguments(PyFunction.Code code, MethodHandle entry, int firstParam,
+                                       Object[] defaults, int argCount) {
+      var arity = code.arity();
+      if (argCount >= arity) {
+        return adapt(code, entry, firstParam + arity, argCount - arity);
+      }
+      var withRest = code.isVariadic() ? adapt(code, entry, firstParam + arity, 0) : entry;
+      // checkArity guarantees argCount >= firstDefault(); the missing parameters are contiguous
+      var values = Arrays.copyOfRange(defaults, argCount - code.firstDefault(), defaults.length);
+      return insertArguments(withRest, firstParam + argCount, values);   // values is the varargs array
+    }
+
     /// Adapts the entry to the call site, permuting the arguments according to the plan.
-    private MethodHandle adaptKeywords(PyFunction.Code code, MethodHandle entry, MethodType type, int[] plan) {
+    /// The parameters the call does not supply get their default value.
+    private MethodHandle adaptKeywords(PyFunction.Code code, MethodHandle entry, MethodType type,
+                                       int[] plan, Object[] defaults) {
       var arity = code.arity();
       var restCount = Math.max(0, positionalCount - arity);
+      var adapted = adapt(code, entry, 1 + arity, restCount);
 
-      // reorder[j] = position in the call site of the j-th parameter of the adapted entry (the callee stays first)
-      var reorder = new int[1 + arity + restCount];
-      reorder[0] = 0;
-      for (var i = 0; i < plan.length; i++) {
-        reorder[1 + plan[i]] = 1 + i;
+      // bind the defaults of the unassigned parameters, from the last one so positions stay valid
+      var supplied = new boolean[arity];
+      for (var target : plan) {
+        if (target < arity) {
+          supplied[target] = true;
+        }
       }
 
-      var adapted = adapt(code, entry, 1 + arity, restCount).asType(type);
-      return permuteArguments(adapted, type, reorder);
+      var slots = new int[arity];   // position in `adapted` of each supplied parameter, once filled
+      var suppliedCount = 0;
+      for (var i = 0; i < arity; i++) {
+        if (supplied[i]) {
+          slots[i] = 1 + suppliedCount++;
+        }
+      }
+      var firstDefault = code.firstDefault();
+      for (var i = arity - 1; i >= firstDefault; i--) {
+        if (!supplied[i]) {
+          adapted = insertArguments(adapted, 1 + i, defaults[i - firstDefault]);
+        }
+      }
+
+      // reorder[j] = position in the call site of the j-th parameter of `adapted` (the callee stays first)
+      var reorder = new int[1 + suppliedCount + restCount];
+      reorder[0] = 0;
+      for (var i = 0; i < plan.length; i++) {
+        var target = plan[i];
+        var slot = target < arity ? slots[target] : 1 + suppliedCount + (target - arity);
+        reorder[slot] = 1 + i;
+      }
+      var typed = adapted.asType(type);
+      return permuteArguments(typed, type, reorder);
     }
   }
 
@@ -579,13 +659,12 @@ final class FunctionSupport {
   }
 
   static void checkArity(PyFunction.Code code, int argCount) {
-    var arity = code.arity();
-    if (code.isVariadic()) {
-      if (argCount < arity) {
-        throw arityError(code, argCount);
-      }
-    } else if (argCount != arity) {
-      throw arityError(code, argCount);
+    var required = code.firstDefault();
+    if (argCount < required) {
+      throw missingArguments(code, code.parameters().subList(argCount, required));
+    }
+    if (!code.isVariadic() && argCount > code.arity()) {
+      throw tooManyPositional(code, argCount);
     }
   }
 
@@ -624,7 +703,7 @@ final class FunctionSupport {
     }
 
     var missing = (ArrayList<String>) null;
-    for (var i = 0; i < arity; i++) {
+    for (var i = 0; i < code.firstDefault(); i++) {
       if (!assigned[i]) {
         if (missing == null) {
           missing = new ArrayList<>();
@@ -640,12 +719,14 @@ final class FunctionSupport {
 
   // -- errors
 
-  private static PyTypeError arityError(PyFunction.Code code, int given) {
-    var arity = code.arity();
-    if (given < arity) {
-      return missingArguments(code, code.parameters().subList(given, arity));
+  private static int countDefaults(Stmt.FunctionDef def) {
+    var count = 0;
+    for (var parameter : def.parameters()) {
+      if (parameter.defaultExpr().isPresent()) {
+        count++;
+      }
     }
-    return tooManyPositional(code, given);
+    return count;
   }
 
   /// Fixed-arity builtins are positional-only (as in CPython). Variadic builtins accept keywords in CPython
@@ -672,8 +753,11 @@ final class FunctionSupport {
 
   private static PyTypeError tooManyPositional(PyFunction.Code code, int given) {
     var arity = code.arity();
-    return new PyTypeError(code.name() + "() takes " + arity + " positional argument"
-        + (arity == 1 ? "" : "s") + " but " + given + (given == 1 ? " was" : " were") + " given");
+    var required = code.firstDefault();
+    var expected = required == arity ? Integer.toString(arity) : "from " + required + " to " + arity;
+    var plural = required != arity || arity != 1;
+    return new PyTypeError(code.name() + "() takes " + expected + " positional argument"
+        + (plural ? "s" : "") + " but " + given + (given == 1 ? " was" : " were") + " given");
   }
 
   private static String joinNames(List<String> names) {

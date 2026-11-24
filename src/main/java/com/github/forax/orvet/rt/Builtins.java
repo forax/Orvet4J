@@ -37,7 +37,8 @@ final class Builtins {
   // While this class is syntactically declared inside Builtins,
   // it should *never* access fields/methods from Builtins
   static final class CodeInitialization {
-    private static final Object[] NO_CAPTURE_ARGS = new Object[0];
+    static final Object[] EMPTY = new Object[0];
+
     static final HashMap<String, PyFunction> CONSTRUCTOR_FUNCTIONS;
     static final Code[] BUILTINS_CODES;
     static {
@@ -58,7 +59,7 @@ final class Builtins {
       };
       var constructorFunctions = new HashMap<String, PyFunction>();
       for (var code : constructorCodes) {
-        constructorFunctions.put(code.name(), new PyFunction(code, NO_CAPTURE_ARGS));
+        constructorFunctions.put(code.name(), new PyFunction(code, EMPTY, EMPTY));
       }
       CONSTRUCTOR_FUNCTIONS = constructorFunctions;
 
@@ -143,21 +144,21 @@ final class Builtins {
     }
 
     private static Code fixed(String name, String... parameters) {
-      return new Code(name, List.of(parameters), false, 0, null, null);
+      return new Code(name, List.of(parameters), false, 0, 0, null, null);
     }
 
     private static Code variadic(String name) {
-      return new Code(name, List.of(), true, 0, null, null);
+      return new Code(name, List.of(), true, 0, 0, null, null);
     }
 
     private static Code specialized(String name, Class<?> intrinsicClass, Class<?> returnType, String... parameters) {
       var context = new PyFunction.SpecializationContext(intrinsicClass,  returnType);
-      return new Code(name, List.of(parameters), false, 0, context, null);
+      return new Code(name, List.of(parameters), false, 0, 0, context, null);
     }
 
     private static Code specializedVariadic(String name, Class<?> intrinsicClass) {
       var context = new PyFunction.SpecializationContext(intrinsicClass, Object.class);
-      return new Code(name, List.of(), true, 0, context, null);
+      return new Code(name, List.of(), true, 0, 0, context, null);
     }
   }
 
@@ -173,13 +174,10 @@ final class Builtins {
       builtins.put(type.function().name(), type);
     }
     for(var code : CodeInitialization.BUILTINS_CODES) {
-      builtins.put(code.name(), new PyFunction(code, CodeInitialization.NO_CAPTURE_ARGS));
+      builtins.put(code.name(), new PyFunction(code, CodeInitialization.EMPTY, CodeInitialization.EMPTY));
     }
     BUILTINS = builtins;
   }
-
-  private static final BigInteger MAX_ARRAY_SIZE = BigInteger.valueOf(Integer.MAX_VALUE - 8L);
-
 
   /// The entry of a builtin: always a fixed-arity handle. For a variadic builtin the last parameter
   /// is an Object[] that call sites fill explicitly (never through the varargs-collector bit).
@@ -452,7 +450,7 @@ final class Builtins {
 
   @SuppressWarnings("unused")
   public static Object _ascii_(Object value) {
-    var repr = (String) StringIntrinsics.$repr$(value);
+    var repr = StringIntrinsics.$repr$(value);
     var builder = new StringBuilder(repr.length());
     for (var offset = 0; offset < repr.length();) {
       var cp = repr.codePointAt(offset);
