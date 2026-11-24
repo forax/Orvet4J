@@ -77,6 +77,7 @@ public final class StringIntrinsics {
 
   // CPython 3.14 default. sys.set_int_max_str_digits() is not implemented.
   private static final int MAX_INT_STR_DIGITS = 4_300;
+  private static final int MAX_INT_STR_BIT_LENGTH = 14_284;
 
   //  FIXME use ScopeValue instead
   // Shared by recursive tuple/list/dict repr so mixed cycles are handled correctly.
@@ -182,18 +183,23 @@ public final class StringIntrinsics {
   // -- helpers
 
   private static String intString(BigInteger value) {
-    var result = value.toString();
-    var digits = result.charAt(0) == '-'
-        ? result.length() - 1
-        : result.length();
-
-    if (digits > MAX_INT_STR_DIGITS) {
+    if (value.bitLength() > MAX_INT_STR_BIT_LENGTH) {
+      if (value.bitLength() == MAX_INT_STR_BIT_LENGTH + 1) {
+        // To emulate CPython behavior, we still need to check the number of digits
+        var result = value.toString();
+        var digits = result.charAt(0) == '-'
+            ? result.length() - 1
+            : result.length();
+        if (digits <= MAX_INT_STR_DIGITS) {
+          return result;
+        }
+      }
       throw new PyValueError(
           "Exceeds the limit (" + MAX_INT_STR_DIGITS
               + " digits) for integer string conversion; "
               + "use sys.set_int_max_str_digits() to increase the limit");
     }
-    return result;
+    return value.toString();
   }
 
   private static String floatString(double value) {
@@ -651,14 +657,13 @@ public final class StringIntrinsics {
     if (requested <= length) {
       return s;
     }
-    var padding = requested - length;
-    if (padding > Integer.MAX_VALUE - 8) {
-      throw new UnimplementedFeatureError(
-          "string padding exceeds the maximum Java string size");
+    if (requested > Integer.MAX_VALUE - 8) {
+      throw new UnimplementedFeatureError("string padding exceeds the maximum Java string size");
     }
-    var zeros = "0".repeat((int) padding);
+    var padding = (int) (requested - length);
+    var zeros = "0".repeat(padding);
     if (s.startsWith("+") || s.startsWith("-")) {
-      return s.substring(0, 1) + zeros + s.substring(1);
+      return s.charAt(0) + zeros + s.substring(1);
     }
     return zeros + s;
   }

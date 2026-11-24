@@ -2370,7 +2370,6 @@ public final class StringIntrinsicsTest {
     }
 
     @Test
-    @Disabled
     public void zfillHugeWidthIsRejectedBeforeAllocating() {
       var s = "x".repeat(100);
       var width = (long) Integer.MAX_VALUE + 42;
