@@ -2635,6 +2635,980 @@ public final class StringIntrinsicsTest {
   }
 
 
+  @Nested
+  final class Split {
+
+    @Test
+    public void whitespaceSplitting() {
+      assertEquals("['alpha', 'beta']",
+          repr(StringIntrinsics._split_("  alpha   beta  ")));
+      assertEquals("['a', 'b', 'c', 'd']",
+          repr(StringIntrinsics._split_("a\tb\nc\r\nd")));
+      assertEquals("[]",
+          repr(StringIntrinsics._split_("")));
+      assertEquals("[]",
+          repr(StringIntrinsics._split_("   \t\n ")));
+    }
+
+    @Test
+    public void unicodeWhitespace() {
+      // Python treats these as whitespace, Character.isWhitespace() does not for NBSP/U+0085
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._split_("a\u00a0b")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._split_("a\u2003b")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._split_("a\u0085b")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._split_("a\u001cb")));
+    }
+
+    @Test
+    public void whitespaceSplittingWithMaxsplit() {
+      assertEquals("['a b  ']",
+          repr(StringIntrinsics._split_("  a b  ", PyNone.INSTANCE, 0L)));
+      assertEquals("['a', 'b  c ']",
+          repr(StringIntrinsics._split_("a b  c ", PyNone.INSTANCE, 1L)));
+      assertEquals("['a', 'b', 'c d']",
+          repr(StringIntrinsics._split_("a b c d", PyNone.INSTANCE, 2L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._split_("a b c", PyNone.INSTANCE, -1L)));
+      assertEquals("['a', 'b  c  ']",
+          repr(StringIntrinsics._split_("  a  b  c  ", PyNone.INSTANCE, 1L)));
+    }
+
+    @Test
+    public void explicitSeparator() {
+      assertEquals("['a', '', 'b', '']",
+          repr(StringIntrinsics._split_("a,,b,", ",")));
+      assertEquals("['', 'a']",
+          repr(StringIntrinsics._split_(",a", ",")));
+      assertEquals("['abc']",
+          repr(StringIntrinsics._split_("abc", ",")));
+      assertEquals("['']",
+          repr(StringIntrinsics._split_("", ",")));
+      assertEquals("['', '']",
+          repr(StringIntrinsics._split_("abc", "abc")));
+    }
+
+    @Test
+    public void multiCharSeparator() {
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._split_("a,,b,,c", ",,")));
+      // non-overlapping, scanned left to right
+      assertEquals("['', 'a']",
+          repr(StringIntrinsics._split_("aaa", "aa")));
+    }
+
+    @Test
+    public void maxsplit() {
+      assertEquals("['a', 'b,c']",
+          repr(StringIntrinsics._split_("a,b,c", ",", 1L)));
+      assertEquals("['a,b,c']",
+          repr(StringIntrinsics._split_("a,b,c", ",", 0L)));
+      assertEquals("['a', 'b', 'c,d']",
+          repr(StringIntrinsics._split_("a,b,c,d", ",", 2L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._split_("a,b,c", ",", -1L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._split_("a,b,c", ",", 10L)));
+    }
+
+    @Test
+    public void nonBmpSeparator() {
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._split_("a😀b", "😀")));
+    }
+
+    @Test
+    public void emptySeparatorIsAnError() {
+      // Python raises ValueError("empty separator"); adapt to your exception type
+      assertThrows(RuntimeException.class,
+          () -> StringIntrinsics._split_("abc", ""));
+    }
+  }
+
+  @Nested
+  final class Rsplit {
+
+    @Test
+    public void whitespaceSplitting() {
+      assertEquals("['alpha', 'beta']",
+          repr(StringIntrinsics._rsplit_("  alpha   beta  ")));
+      assertEquals("[]",
+          repr(StringIntrinsics._rsplit_("")));
+      assertEquals("[]",
+          repr(StringIntrinsics._rsplit_("   ")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._rsplit_("a\u00a0b")));
+    }
+
+    @Test
+    public void whitespaceSplittingWithMaxsplit() {
+      // unlike split(), trailing whitespace is stripped and leading whitespace is kept
+      assertEquals("['  a b']",
+          repr(StringIntrinsics._rsplit_("  a b  ", PyNone.INSTANCE, 0L)));
+      assertEquals("['  a b', 'c']",
+          repr(StringIntrinsics._rsplit_("  a b c  ", PyNone.INSTANCE, 1L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._rsplit_("a b c", PyNone.INSTANCE, -1L)));
+    }
+
+    @Test
+    public void explicitSeparator() {
+      assertEquals("['a', 'b,c']".replace("b,c", "b,c"), // sanity: left-to-right result for split
+          "['a', 'b,c']");
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._rsplit_("a,b,c", ",")));
+      assertEquals("['a', '', 'b', '']",
+          repr(StringIntrinsics._rsplit_("a,,b,", ",")));
+      assertEquals("['']",
+          repr(StringIntrinsics._rsplit_("", ",")));
+    }
+
+    @Test
+    public void maxsplit() {
+      assertEquals("['a,b', 'c']",
+          repr(StringIntrinsics._rsplit_("a,b,c", ",", 1L)));
+      assertEquals("['a,b,c']",
+          repr(StringIntrinsics._rsplit_("a,b,c", ",", 0L)));
+      assertEquals("['a,b', 'c', 'd']",
+          repr(StringIntrinsics._rsplit_("a,b,c,d", ",", 2L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._rsplit_("a,b,c", ",", -1L)));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._rsplit_("a,b,c", ",", 10L)));
+    }
+
+    @Test
+    public void overlappingSeparatorIsScannedFromTheRight() {
+      // contrast with "aaa".split("aa") -> ['', 'a']
+      assertEquals("['a', '']",
+          repr(StringIntrinsics._rsplit_("aaa", "aa")));
+    }
+
+    @Test
+    public void emptySeparatorIsAnError() {
+      assertThrows(RuntimeException.class,
+          () -> StringIntrinsics._rsplit_("abc", ""));
+    }
+  }
+
+  @Nested
+  final class Strip {
+
+    @Test
+    public void defaultWhitespace() {
+      assertEquals("hello", StringIntrinsics._strip_("  hello  "));
+      assertEquals("hello", StringIntrinsics._strip_("hello"));
+      assertEquals("hello", StringIntrinsics._strip_("\t\n hello \r\n"));
+      assertEquals("a  b", StringIntrinsics._strip_("  a  b  "));
+      assertEquals("", StringIntrinsics._strip_(""));
+      assertEquals("", StringIntrinsics._strip_("   \t\n"));
+    }
+
+    @Test
+    public void unicodeWhitespace() {
+      assertEquals("hello", StringIntrinsics._strip_("\u00a0hello\u00a0"));
+      assertEquals("hello", StringIntrinsics._strip_("\u2003hello\u2003"));
+      assertEquals("hello", StringIntrinsics._strip_("\u0085hello\u0085"));
+      assertEquals("hello", StringIntrinsics._strip_("\u001chello\u001f"));
+      assertEquals("hello", StringIntrinsics._strip_("\u3000hello\u3000"));
+    }
+
+    @Test
+    public void zeroWidthSpaceIsNotWhitespace() {
+      assertEquals("\u200bhello\u200b", StringIntrinsics._strip_("\u200bhello\u200b"));
+    }
+
+    @Test
+    public void withNone() {
+      assertEquals("hello", StringIntrinsics._strip_("  hello  ", PyNone.INSTANCE));
+      assertEquals("", StringIntrinsics._strip_("   ", PyNone.INSTANCE));
+    }
+
+    @Test
+    public void withChars() {
+      assertEquals("hello", StringIntrinsics._strip_("---hello---", "-"));
+      assertEquals("hello", StringIntrinsics._strip_("-_hello_-", "-_"));
+      // the argument is a set of characters, not a prefix/suffix
+      assertEquals("hello", StringIntrinsics._strip_("-_hello_-", "_-"));
+      assertEquals("c", StringIntrinsics._strip_("abcba", "ab"));
+      assertEquals("", StringIntrinsics._strip_("aaa", "a"));
+      assertEquals(" b ", StringIntrinsics._strip_("a b a", "a"));
+      assertEquals("hello", StringIntrinsics._strip_("hello", "xyz"));
+    }
+
+    @Test
+    public void emptyCharsStripsNothing() {
+      assertEquals("  hello  ", StringIntrinsics._strip_("  hello  ", ""));
+      assertEquals("", StringIntrinsics._strip_("", "abc"));
+    }
+
+    @Test
+    public void whitespaceIsNotStrippedWhenCharsAreGiven() {
+      assertEquals(" hello ", StringIntrinsics._strip_("--- hello ---", "-"));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals("hello", StringIntrinsics._strip_("😀hello😀", "😀"));
+      // 😀 and 😁 share the same high surrogate: stripping must work on code points
+      assertEquals("😁hello", StringIntrinsics._strip_("😀😁hello", "😀"));
+      assertEquals("hello😀", StringIntrinsics._strip_("😁hello😀", "😁"));
+    }
+  }
+
+  @Nested
+  final class Lstrip {
+
+    @Test
+    public void defaultWhitespace() {
+      assertEquals("hello  ", StringIntrinsics._lstrip_("  hello  "));
+      assertEquals("hello", StringIntrinsics._lstrip_("hello"));
+      assertEquals("", StringIntrinsics._lstrip_(""));
+      assertEquals("", StringIntrinsics._lstrip_("   "));
+      assertEquals("a b ", StringIntrinsics._lstrip_("\t\n a b "));
+    }
+
+    @Test
+    public void unicodeWhitespace() {
+      assertEquals("hello\u00a0", StringIntrinsics._lstrip_("\u00a0hello\u00a0"));
+      assertEquals("hello", StringIntrinsics._lstrip_("\u0085\u2003hello"));
+    }
+
+    @Test
+    public void withNone() {
+      assertEquals("hello  ", StringIntrinsics._lstrip_("  hello  ", PyNone.INSTANCE));
+    }
+
+    @Test
+    public void withChars() {
+      assertEquals("hello---", StringIntrinsics._lstrip_("---hello---", "-"));
+      assertEquals("hello_-", StringIntrinsics._lstrip_("-_hello_-", "_-"));
+      assertEquals("", StringIntrinsics._lstrip_("aaa", "a"));
+      assertEquals("cba", StringIntrinsics._lstrip_("abcba", "ab"));
+      assertEquals("  hello", StringIntrinsics._lstrip_("  hello", ""));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals("😁hello", StringIntrinsics._lstrip_("😀😁hello", "😀"));
+    }
+  }
+
+  @Nested
+  final class Rstrip {
+
+    @Test
+    public void defaultWhitespace() {
+      assertEquals("  hello", StringIntrinsics._rstrip_("  hello  "));
+      assertEquals("hello", StringIntrinsics._rstrip_("hello"));
+      assertEquals("", StringIntrinsics._rstrip_(""));
+      assertEquals("", StringIntrinsics._rstrip_("   "));
+      assertEquals(" a b", StringIntrinsics._rstrip_(" a b \t\n"));
+    }
+
+    @Test
+    public void unicodeWhitespace() {
+      assertEquals("\u00a0hello", StringIntrinsics._rstrip_("\u00a0hello\u00a0"));
+      assertEquals("hello", StringIntrinsics._rstrip_("hello\u2003\u0085"));
+    }
+
+    @Test
+    public void withNone() {
+      assertEquals("  hello", StringIntrinsics._rstrip_("  hello  ", PyNone.INSTANCE));
+    }
+
+    @Test
+    public void withChars() {
+      assertEquals("---hello", StringIntrinsics._rstrip_("---hello---", "-"));
+      assertEquals("-_hello", StringIntrinsics._rstrip_("-_hello_-", "_-"));
+      assertEquals("", StringIntrinsics._rstrip_("aaa", "a"));
+      assertEquals("abc", StringIntrinsics._rstrip_("abcba", "ab"));
+      assertEquals("hello  ", StringIntrinsics._rstrip_("hello  ", ""));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals("hello😁", StringIntrinsics._rstrip_("hello😁😀", "😀"));
+    }
+  }
+
+  @Nested
+  final class Replace {
+
+    @Test
+    public void basicReplacement() {
+      assertEquals("hello Orvet",
+          StringIntrinsics._replace_("hello world", "world", "Orvet"));
+      assertEquals("hello",
+          StringIntrinsics._replace_("hello", "x", "y"));
+      assertEquals("",
+          StringIntrinsics._replace_("", "a", "b"));
+      assertEquals("xyz",
+          StringIntrinsics._replace_("abc", "abc", "xyz"));
+    }
+
+    @Test
+    public void emptyReplacement() {
+      assertEquals("ac",
+          StringIntrinsics._replace_("abc", "b", ""));
+      assertEquals("",
+          StringIntrinsics._replace_("aaa", "a", ""));
+    }
+
+    @Test
+    public void overlappingMatchesAreNotReused() {
+      assertEquals("bb",
+          StringIntrinsics._replace_("aaaa", "aa", "b"));
+      assertEquals("ba",
+          StringIntrinsics._replace_("aaa", "aa", "b"));
+    }
+
+    @Test
+    public void replacementIsNotRescanned() {
+      assertEquals("aaaa",
+          StringIntrinsics._replace_("aa", "a", "aa"));
+      assertEquals("aXXbXXc",
+          StringIntrinsics._replace_("aXbXc", "X", "XX"));
+    }
+
+    @Test
+    public void count() {
+      assertEquals("bba",
+          StringIntrinsics._replace_("aaa", "a", "b", 2L));
+      assertEquals("hello",
+          StringIntrinsics._replace_("hello", "h", "x", 0L));
+      assertEquals("xxx",
+          StringIntrinsics._replace_("aaa", "a", "x", -1L));
+      assertEquals("xxx",
+          StringIntrinsics._replace_("aaa", "a", "x", -5L));
+      assertEquals("xxx",
+          StringIntrinsics._replace_("aaa", "a", "x", 100L));
+      assertEquals("heLlo",
+          StringIntrinsics._replace_("hello", "l", "L", 1L));
+    }
+
+    @Test
+    public void emptyPattern() {
+      assertEquals("-a-b-c-",
+          StringIntrinsics._replace_("abc", "", "-"));
+      assertEquals("x",
+          StringIntrinsics._replace_("", "", "x"));
+      assertEquals("-a-bc",
+          StringIntrinsics._replace_("abc", "", "-", 2L));
+      assertEquals("abc",
+          StringIntrinsics._replace_("abc", "", "-", 0L));
+      assertEquals("-abc",
+          StringIntrinsics._replace_("abc", "", "-", 1L));
+      assertEquals("-a-b-c-",
+          StringIntrinsics._replace_("abc", "", "-", 10L));
+      assertEquals("-a-b-c-",
+          StringIntrinsics._replace_("abc", "", "-", -1L));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals("a!b",
+          StringIntrinsics._replace_("a😀b", "😀", "!"));
+      // the empty pattern matches between code points, never between surrogates
+      assertEquals("-a-😀-",
+          StringIntrinsics._replace_("a😀", "", "-"));
+    }
+  }
+
+  @Nested
+  final class Startswith {
+
+    @Test
+    public void basic() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello world", "hello"));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "hello"));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "world"));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "hello world"));
+    }
+
+    @Test
+    public void emptyStrings() {
+      assertEquals(true, StringIntrinsics._startswith_("hello", ""));
+      assertEquals(true, StringIntrinsics._startswith_("", ""));
+      assertEquals(false, StringIntrinsics._startswith_("", "a"));
+    }
+
+    @Test
+    public void start() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello world", "world", 6L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "he", 2L));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "he", -5L));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "lo", -2L));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "h", -100L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "h", 10L));
+    }
+
+    @Test
+    public void startAtOrPastTheEnd() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "", 5L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "", 6L));
+    }
+
+    @Test
+    public void startAndEnd() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "e", 1L, 2L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "el", 1L, 2L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "hello", 0L, 3L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "h", 0L, 0L));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", "", 0L, 0L));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", "", 3L, 2L));
+    }
+
+    @Test
+    public void tuple() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", new PyTuple2("x", "he")));
+      assertEquals(false,
+          StringIntrinsics._startswith_("hello", new PyTuple2("x", "y")));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello world", new PyTuple2("x", "world"), 6L));
+      assertEquals(true,
+          StringIntrinsics._startswith_("hello", new PyTuple2("", "x")));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("😀a", "😀"));
+      // indexes are expressed in code points
+      assertEquals(true,
+          StringIntrinsics._startswith_("😀a", "a", 1L));
+    }
+  }
+
+  @Nested
+  final class Endswith {
+
+    @Test
+    public void basic() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello world", "world"));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "hello"));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "world"));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "xhello"));
+    }
+
+    @Test
+    public void emptyStrings() {
+      assertEquals(true, StringIntrinsics._endswith_("hello", ""));
+      assertEquals(true, StringIntrinsics._endswith_("", ""));
+      assertEquals(false, StringIntrinsics._endswith_("", "a"));
+    }
+
+    @Test
+    public void start() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "lo", -2L));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "o", 100L));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "", 5L));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "", 6L));
+    }
+
+    @Test
+    public void startAndEnd() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello world", "hello", 0L, 5L));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "lo", 0L, 3L));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "el", 0L, 3L));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "o", 0L, 100L));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "h", 0L, 1L));
+    }
+
+    @Test
+    public void negativeEnd() {
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", "lo", 0L, -1L));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", "ll", 0L, -1L));
+    }
+
+    @Test
+    public void tuple() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", new PyTuple2("x", "lo")));
+      assertEquals(false,
+          StringIntrinsics._endswith_("hello", new PyTuple2("x", "y")));
+      assertEquals(true,
+          StringIntrinsics._endswith_("hello", new PyTuple2("x", "hell"), 0L, 4L));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("a😀", "😀"));
+      // indexes are expressed in code points
+      assertEquals(true,
+          StringIntrinsics._endswith_("a😀b", "😀", 0L, 2L));
+    }
+  }
+
+  @Nested
+  final class Count {
+
+    @Test
+    public void basic() {
+      assertEquals(1L, StringIntrinsics._count_("banana", "ana"));
+      assertEquals(3L, StringIntrinsics._count_("banana", "a"));
+      assertEquals(0L, StringIntrinsics._count_("banana", "xyz"));
+      assertEquals(0L, StringIntrinsics._count_("abc", "abcd"));
+      assertEquals(0L, StringIntrinsics._count_("", "a"));
+    }
+
+    @Test
+    public void matchesDoNotOverlap() {
+      assertEquals(2L, StringIntrinsics._count_("aaaa", "aa"));
+      assertEquals(1L, StringIntrinsics._count_("aaa", "aa"));
+    }
+
+    @Test
+    public void emptyPattern() {
+      assertEquals(4L, StringIntrinsics._count_("abc", ""));
+      assertEquals(1L, StringIntrinsics._count_("", ""));
+      assertEquals(3L, StringIntrinsics._count_("abc", "", 1L));
+      assertEquals(1L, StringIntrinsics._count_("abc", "", 3L));
+      assertEquals(0L, StringIntrinsics._count_("abc", "", 4L));
+      assertEquals(1L, StringIntrinsics._count_("abc", "", 0L, 0L));
+      assertEquals(0L, StringIntrinsics._count_("abc", "", 2L, 1L));
+    }
+
+    @Test
+    public void startAndEnd() {
+      assertEquals(2L, StringIntrinsics._count_("banana", "a", 2L, 6L));
+      assertEquals(0L, StringIntrinsics._count_("banana", "a", 5L, 2L));
+      assertEquals(1L, StringIntrinsics._count_("banana", "an", 1L, 4L));
+      assertEquals(1L, StringIntrinsics._count_("abcabc", "abc", 1L));
+    }
+
+    @Test
+    public void negativeAndOutOfRangeIndexes() {
+      assertEquals(1L, StringIntrinsics._count_("banana", "a", -2L));
+      assertEquals(2L, StringIntrinsics._count_("banana", "a", 0L, -1L));
+      assertEquals(3L, StringIntrinsics._count_("aaa", "a", -100L, 100L));
+      assertEquals(0L, StringIntrinsics._count_("aaa", "a", 10L));
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals(2L, StringIntrinsics._count_("a😀😀", "😀"));
+      // empty pattern counts code points + 1, not UTF-16 chars + 1
+      assertEquals(2L, StringIntrinsics._count_("😀", ""));
+    }
+  }
+
+  @Nested
+  final class Isdigit {
+
+    @Test
+    public void asciiDigits() {
+      assertEquals(true, StringIntrinsics._isdigit_("0"));
+      assertEquals(true, StringIntrinsics._isdigit_("12345"));
+    }
+
+    @Test
+    public void unicodeDigits() {
+      assertEquals(true, StringIntrinsics._isdigit_("²"));
+      assertEquals(true, StringIntrinsics._isdigit_("٣"));
+      assertEquals(true, StringIntrinsics._isdigit_("\u00b2\u00b3"));
+      assertEquals(true, StringIntrinsics._isdigit_("\u0660\u0661\u0662"));
+      assertEquals(true, StringIntrinsics._isdigit_("\uff11\uff12\uff13")); // full-width
+      assertEquals(true, StringIntrinsics._isdigit_("\u2460"));             // circled digit one
+    }
+
+    @Test
+    public void nonBmpDigit() {
+      assertEquals(true, StringIntrinsics._isdigit_("\uD835\uDFCE")); // MATHEMATICAL BOLD DIGIT ZERO
+    }
+
+    @Test
+    public void numericButNotDigit() {
+      assertEquals(false, StringIntrinsics._isdigit_("½"));
+      assertEquals(false, StringIntrinsics._isdigit_("\u2167")); // Roman numeral eight
+      assertEquals(false, StringIntrinsics._isdigit_("\u4e00")); // CJK ideograph "one"
+    }
+
+    @Test
+    public void notDigits() {
+      assertEquals(false, StringIntrinsics._isdigit_(""));
+      assertEquals(false, StringIntrinsics._isdigit_("12a"));
+      assertEquals(false, StringIntrinsics._isdigit_(" 12"));
+      assertEquals(false, StringIntrinsics._isdigit_("12\n"));
+      assertEquals(false, StringIntrinsics._isdigit_("1.5"));
+      assertEquals(false, StringIntrinsics._isdigit_("-1"));
+      assertEquals(false, StringIntrinsics._isdigit_("1_000"));
+      assertEquals(false, StringIntrinsics._isdigit_("😀"));
+    }
+  }
+
+  @Nested
+  final class Isalnum {
+
+    @Test
+    public void lettersAndDigits() {
+      assertEquals(true, StringIntrinsics._isalnum_("abc123"));
+      assertEquals(true, StringIntrinsics._isalnum_("hello"));
+      assertEquals(true, StringIntrinsics._isalnum_("123"));
+      assertEquals(true, StringIntrinsics._isalnum_("a"));
+      assertEquals(true, StringIntrinsics._isalnum_("1"));
+    }
+
+    @Test
+    public void unicodeLettersAndNumbers() {
+      assertEquals(true, StringIntrinsics._isalnum_("café"));
+      assertEquals(true, StringIntrinsics._isalnum_("ß"));
+      assertEquals(true, StringIntrinsics._isalnum_("\u4e00"));  // CJK ideograph
+      assertEquals(true, StringIntrinsics._isalnum_("٣"));
+      assertEquals(true, StringIntrinsics._isalnum_("²"));
+      assertEquals(true, StringIntrinsics._isalnum_("½"));       // numeric, not a digit
+      assertEquals(true, StringIntrinsics._isalnum_("\u2167"));  // Roman numeral eight
+    }
+
+    @Test
+    public void notAlphanumeric() {
+      assertEquals(false, StringIntrinsics._isalnum_(""));
+      assertEquals(false, StringIntrinsics._isalnum_("hello world"));
+      assertEquals(false, StringIntrinsics._isalnum_("abc "));
+      assertEquals(false, StringIntrinsics._isalnum_("a\n"));
+      assertEquals(false, StringIntrinsics._isalnum_("a_1"));
+      assertEquals(false, StringIntrinsics._isalnum_("_"));
+      assertEquals(false, StringIntrinsics._isalnum_("😀"));
+      assertEquals(false, StringIntrinsics._isalnum_("a😀"));
+    }
+  }
+
+  @Nested
+  final class Isspace {
+
+    @Test
+    public void asciiWhitespace() {
+      assertEquals(true, StringIntrinsics._isspace_(" "));
+      assertEquals(true, StringIntrinsics._isspace_(" \t\n"));
+      assertEquals(true, StringIntrinsics._isspace_("\r\u000b\u000c"));
+    }
+
+    @Test
+    public void unicodeWhitespace() {
+      assertEquals(true, StringIntrinsics._isspace_("\u0085"));
+      assertEquals(true, StringIntrinsics._isspace_("\u001c"));
+      assertEquals(true, StringIntrinsics._isspace_("\u001d\u001e\u001f"));
+      assertEquals(true, StringIntrinsics._isspace_("\u00a0"));
+      assertEquals(true, StringIntrinsics._isspace_("\u2003"));
+      assertEquals(true, StringIntrinsics._isspace_("\u2007")); // figure space
+      assertEquals(true, StringIntrinsics._isspace_("\u202f")); // narrow no-break space
+      assertEquals(true, StringIntrinsics._isspace_("\u2028\u2029"));
+      assertEquals(true, StringIntrinsics._isspace_("\u3000"));
+    }
+
+    @Test
+    public void notWhitespace() {
+      assertEquals(false, StringIntrinsics._isspace_(""));
+      assertEquals(false, StringIntrinsics._isspace_(" a "));
+      assertEquals(false, StringIntrinsics._isspace_("a"));
+      assertEquals(false, StringIntrinsics._isspace_("\u200b")); // zero width space
+      assertEquals(false, StringIntrinsics._isspace_("\ufeff")); // BOM / zero width no-break space
+      assertEquals(false, StringIntrinsics._isspace_(" \u200b "));
+    }
+  }
+
+  @Nested
+  final class Islower {
+
+    @Test
+    public void lowercase() {
+      assertEquals(true, StringIntrinsics._islower_("hello"));
+      assertEquals(true, StringIntrinsics._islower_("a"));
+      assertEquals(true, StringIntrinsics._islower_("hello 123!"));
+      assertEquals(true, StringIntrinsics._islower_("éà"));
+      assertEquals(true, StringIntrinsics._islower_("ß"));
+      assertEquals(true, StringIntrinsics._islower_("hello\n"));
+      assertEquals(true, StringIntrinsics._islower_("_a_"));
+      assertEquals(true, StringIntrinsics._islower_("a😀"));
+    }
+
+    @Test
+    public void notLowercase() {
+      assertEquals(false, StringIntrinsics._islower_(""));
+      assertEquals(false, StringIntrinsics._islower_("Hello"));
+      assertEquals(false, StringIntrinsics._islower_("HELLO"));
+      assertEquals(false, StringIntrinsics._islower_("aB"));
+      assertEquals(false, StringIntrinsics._islower_("abc DEF"));
+      assertEquals(false, StringIntrinsics._islower_("123 !"));
+      assertEquals(false, StringIntrinsics._islower_("1"));
+      assertEquals(false, StringIntrinsics._islower_(" "));
+      assertEquals(false, StringIntrinsics._islower_("😀"));
+    }
+
+    @Test
+    public void titlecaseLetterIsNeitherLowerNorUpper() {
+      assertEquals(false, StringIntrinsics._islower_("\u01c5")); // LATIN CAPITAL LETTER D WITH SMALL LETTER Z WITH CARON
+      assertEquals(false, StringIntrinsics._islower_("a\u01c5"));
+    }
+  }
+
+  @Nested
+  final class Isupper {
+
+    @Test
+    public void uppercase() {
+      assertEquals(true, StringIntrinsics._isupper_("HELLO"));
+      assertEquals(true, StringIntrinsics._isupper_("A"));
+      assertEquals(true, StringIntrinsics._isupper_("HELLO 123!"));
+      assertEquals(true, StringIntrinsics._isupper_("ÉÀ"));
+      assertEquals(true, StringIntrinsics._isupper_("AB CD"));
+      assertEquals(true, StringIntrinsics._isupper_("A\n"));
+      assertEquals(true, StringIntrinsics._isupper_("\u0130"));  // LATIN CAPITAL LETTER I WITH DOT ABOVE
+      assertEquals(true, StringIntrinsics._isupper_("\u1e9e"));  // LATIN CAPITAL LETTER SHARP S
+    }
+
+    @Test
+    public void notUppercase() {
+      assertEquals(false, StringIntrinsics._isupper_(""));
+      assertEquals(false, StringIntrinsics._isupper_("Hello"));
+      assertEquals(false, StringIntrinsics._isupper_("hello"));
+      assertEquals(false, StringIntrinsics._isupper_("Ab"));
+      assertEquals(false, StringIntrinsics._isupper_("123 !"));
+      assertEquals(false, StringIntrinsics._isupper_("1"));
+      assertEquals(false, StringIntrinsics._isupper_(" "));
+      assertEquals(false, StringIntrinsics._isupper_("ß"));
+      assertEquals(false, StringIntrinsics._isupper_("😀"));
+    }
+
+    @Test
+    public void titlecaseLetterIsNeitherLowerNorUpper() {
+      assertEquals(false, StringIntrinsics._isupper_("\u01c5"));
+      assertEquals(false, StringIntrinsics._isupper_("A\u01c5"));
+    }
+  }
+
+  @Nested
+  final class Title {
+
+    @Test
+    public void basic() {
+      assertEquals("Hello World", StringIntrinsics._title_("hello world"));
+      assertEquals("Hello", StringIntrinsics._title_("HELLO"));
+      assertEquals("Hello World", StringIntrinsics._title_("HELLO WORLD"));
+      assertEquals("Hello World", StringIntrinsics._title_("hELLO wORLD"));
+      assertEquals("", StringIntrinsics._title_(""));
+      assertEquals("A", StringIntrinsics._title_("a"));
+    }
+
+    @Test
+    public void wordBoundaries() {
+      // any uncased character starts a new word
+      assertEquals("They'Re Here", StringIntrinsics._title_("they're HERE"));
+      assertEquals("O'Neil", StringIntrinsics._title_("o'neil"));
+      assertEquals("Hello-World", StringIntrinsics._title_("hello-world"));
+      assertEquals("Hello_World", StringIntrinsics._title_("hello_world"));
+      assertEquals("Hello   World", StringIntrinsics._title_("hello   world"));
+      assertEquals(" Leading", StringIntrinsics._title_(" leading"));
+      assertEquals("\tTab", StringIntrinsics._title_("\ttab"));
+    }
+
+    @Test
+    public void digits() {
+      assertEquals("123Abc", StringIntrinsics._title_("123abc"));
+      assertEquals("Abc123Def", StringIntrinsics._title_("abc123def"));
+      assertEquals("1St", StringIntrinsics._title_("1st"));
+      assertEquals("123", StringIntrinsics._title_("123"));
+    }
+
+    @Test
+    public void specialCaseMappings() {
+      assertEquals("Straße", StringIntrinsics._title_("straße"));
+      assertEquals("Ss", StringIntrinsics._title_("ß"));          // titlecase of ß is "Ss"
+      assertEquals("\u01c5", StringIntrinsics._title_("\u01c6")); // dž -> Dž (titlecase digraph)
+      assertEquals("Fish", StringIntrinsics._title_("\ufb01sh")); // ﬁ ligature -> "Fi"
+    }
+
+    @Test
+    public void finalSigma() {
+      assertEquals("\u0391\u03c2", StringIntrinsics._title_("\u0391\u03a3")); // ΑΣ -> Ας
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      // Deseret: U+10428 (small) -> U+10400 (capital) for the first letter only
+      assertEquals("\uD801\uDC00\uD801\uDC28",
+          StringIntrinsics._title_("\uD801\uDC28\uD801\uDC28"));
+    }
+  }
+
+  @Nested
+  final class Casefold {
+
+    @Test
+    public void ascii() {
+      assertEquals("hello", StringIntrinsics._casefold_("HELLO"));
+      assertEquals("hello world", StringIntrinsics._casefold_("Hello WORLD"));
+      assertEquals("", StringIntrinsics._casefold_(""));
+      assertEquals("123 !", StringIntrinsics._casefold_("123 !"));
+    }
+
+    @Test
+    public void multiCharacterExpansions() {
+      assertEquals("strasse", StringIntrinsics._casefold_("Straße"));
+      assertEquals("ss", StringIntrinsics._casefold_("\u1e9e"));            // capital sharp s
+      assertEquals("ffi", StringIntrinsics._casefold_("ﬃ"));
+      assertEquals("st", StringIntrinsics._casefold_("\ufb06"));            // ﬆ ligature
+      assertEquals("\u02bcn", StringIntrinsics._casefold_("\u0149"));       // ŉ
+      assertEquals("j\u030c", StringIntrinsics._casefold_("\u01f0"));       // ǰ
+    }
+
+    @Test
+    public void greekSigma() {
+      assertEquals("οσ", StringIntrinsics._casefold_("ΟΣ"));
+      assertEquals("\u03c3", StringIntrinsics._casefold_("\u03c2"));        // final sigma -> sigma
+      assertEquals("\u03c3", StringIntrinsics._casefold_("\u03a3"));
+    }
+
+    @Test
+    public void turkishDottedAndDotlessI() {
+      assertEquals("i\u0307", StringIntrinsics._casefold_("\u0130"));
+      assertEquals("\u0131", StringIntrinsics._casefold_("\u0131"));
+    }
+
+    @Test
+    public void compatibilityCharacters() {
+      assertEquals("k", StringIntrinsics._casefold_("\u212a"));             // Kelvin sign
+      assertEquals("\u00e5", StringIntrinsics._casefold_("\u212b"));        // Angstrom sign
+      assertEquals("\u03bc", StringIntrinsics._casefold_("\u00b5"));        // micro sign
+      assertEquals("s", StringIntrinsics._casefold_("\u017f"));             // long s
+      assertEquals("\u01c6", StringIntrinsics._casefold_("\u01c5"));        // titlecase dž
+    }
+
+    @Test
+    public void nonBmpCharacters() {
+      assertEquals("\uD801\uDC28", StringIntrinsics._casefold_("\uD801\uDC00")); // Deseret
+      assertEquals("😀", StringIntrinsics._casefold_("😀"));
+    }
+  }
+
+  @Nested
+  final class Splitlines {
+
+    @Test
+    public void basic() {
+      assertEquals("['first', 'second', 'third']",
+          repr(StringIntrinsics._splitlines_("first\nsecond\r\nthird")));
+      assertEquals("['first']",
+          repr(StringIntrinsics._splitlines_("first\n")));
+      assertEquals("[]",
+          repr(StringIntrinsics._splitlines_("")));
+      assertEquals("['abc']",
+          repr(StringIntrinsics._splitlines_("abc")));
+    }
+
+    @Test
+    public void emptyLines() {
+      assertEquals("['']",
+          repr(StringIntrinsics._splitlines_("\n")));
+      assertEquals("['', '']",
+          repr(StringIntrinsics._splitlines_("\n\n")));
+      assertEquals("['a', '', 'b']",
+          repr(StringIntrinsics._splitlines_("a\n\nb")));
+      assertEquals("['a', 'b', '']",
+          repr(StringIntrinsics._splitlines_("a\nb\n\n")));
+      assertEquals("['', '']",
+          repr(StringIntrinsics._splitlines_("\r\n\r\n")));
+      assertEquals("['a', '', 'b']",
+          repr(StringIntrinsics._splitlines_("a\r\n\r\nb")));
+    }
+
+    @Test
+    public void carriageReturnHandling() {
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._splitlines_("a\rb")));
+      assertEquals("['a']",
+          repr(StringIntrinsics._splitlines_("a\r\n")));
+      // "\n\r" is two line breaks, "\r\n" is only one
+      assertEquals("['a', '']",
+          repr(StringIntrinsics._splitlines_("a\n\r")));
+      assertEquals("['a', '', 'b']",
+          repr(StringIntrinsics._splitlines_("a\r\r\nb")));
+    }
+
+    @Test
+    public void otherLineBoundaries() {
+      assertEquals("['first', 'second']",
+          repr(StringIntrinsics._splitlines_("first\u2028second")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._splitlines_("a\u2029b")));
+      assertEquals("['a', 'b']",
+          repr(StringIntrinsics._splitlines_("a\u0085b")));
+      assertEquals("['a', 'b', 'c']",
+          repr(StringIntrinsics._splitlines_("a\u000bb\u000cc")));
+      assertEquals("['a', 'b', 'c', 'd']",
+          repr(StringIntrinsics._splitlines_("a\u001cb\u001dc\u001ed")));
+    }
+
+    @Test
+    public void otherWhitespaceIsNotALineBoundary() {
+      assertEquals(new PyList<>("a\u00a0b"), (PyList<?>) StringIntrinsics._splitlines_("a\u00a0b"));
+      assertEquals(new PyList<>("a b c"), StringIntrinsics._splitlines_("a b c"));
+    }
+
+    @Test
+    public void keepends() {
+      assertEquals("['first\\n', 'second']",
+          repr(StringIntrinsics._splitlines_("first\nsecond", true)));
+      assertEquals("['first\\r\\n', 'second']",
+          repr(StringIntrinsics._splitlines_("first\r\nsecond", true)));
+      assertEquals("['a\\r', 'b']",
+          repr(StringIntrinsics._splitlines_("a\rb", true)));
+      assertEquals("['a\\n']",
+          repr(StringIntrinsics._splitlines_("a\n", true)));
+      assertEquals("['\\n', '\\n']",
+          repr(StringIntrinsics._splitlines_("\n\n", true)));
+      assertEquals("[]",
+          repr(StringIntrinsics._splitlines_("", true)));
+      assertEquals("['abc']",
+          repr(StringIntrinsics._splitlines_("abc", true)));
+    }
+
+    @Test
+    public void keependsFalseIsTheDefault() {
+      assertEquals("['first', 'second']",
+          repr(StringIntrinsics._splitlines_("first\nsecond", false)));
+    }
+  }
+
+
   /// Checks that the method table is reachable from Python source, with every overload.
   @Nested
   public final class ThroughMethodCalls {

@@ -788,6 +788,679 @@ public final class StringIntrinsics {
   }
 
 
+  // split / rsplit
+  public static Object _split_(String s) {
+    return splitWhitespace(s, -1, false);
+  }
+  public static Object _split_(String s, Object separator) {
+    return splitString(s, separator, -1, false);
+  }
+  public static Object _split_(String s, Object separator, Object maxsplit) {
+    return splitString(s, separator, asIndex(maxsplit), false);
+  }
+  public static Object _rsplit_(String s) {
+    return splitWhitespace(s, -1, true);
+  }
+  public static Object _rsplit_(String s, Object separator) {
+    return splitString(s, separator, -1, true);
+  }
+  public static Object _rsplit_(String s, Object separator, Object maxsplit) {
+    return splitString(s, separator, asIndex(maxsplit), true);
+  }
+
+  private static Object splitString(String s, Object separator, long maxsplit, boolean reverse) {
+    if (separator == PyNone.INSTANCE) {
+      return splitWhitespace(s, maxsplit, reverse);
+    }
+    if (!(separator instanceof String sep)) {
+      var typeName = separator == null
+          ? "null"
+          : IntrinsicSupport.typeName(separator);
+      throw new PyTypeError(
+          (reverse ? "rsplit" : "split")
+              + "() separator must be str or None, not " + typeName);
+    }
+    if (sep.isEmpty()) {
+      throw new PyValueError("empty separator");
+    }
+    return splitWithSeparator(s, sep, maxsplit, reverse);
+  }
+
+  private static PyList<String> splitWhitespace(String s, long maxsplit, boolean reverse) {
+    var cps = s.codePoints().toArray();
+    var length = cps.length;
+    var result = new PyList<String>();
+    if (length == 0) {
+      return result;
+    }
+    if (maxsplit == 0) {
+      if (reverse) {
+        var end = length;
+        while (end > 0 && isPythonWhitespace(cps[end - 1])) {
+          end--;
+        }
+        if (end > 0) {
+          result.append(substringByCodePoints(s, 0, end));
+        }
+      } else {
+        var start = 0;
+        while (start < length && isPythonWhitespace(cps[start])) {
+          start++;
+        }
+        if (start < length) {
+          result.append(substringByCodePoints(s, start, length));
+        }
+      }
+      return result;
+    }
+
+    var index = 0;
+    if (!reverse) {
+      // Leading whitespace is discarded.
+      while (index < length && isPythonWhitespace(cps[index])) {
+        index++;
+      }
+      var splits = 0;
+      while (index < length) {
+        var start = index;
+        while (index < length && !isPythonWhitespace(cps[index])) {
+          index++;
+        }
+        result.append(substringByCodePoints(s, start, index));
+        if (index == length) {
+          break;
+        }
+        // A whitespace run separates two fields.
+        while (index < length && isPythonWhitespace(cps[index])) {
+          index++;
+        }
+        splits++;
+        if (maxsplit >= 0 && splits >= maxsplit) {
+          if (index < length) {
+            result.append(substringByCodePoints(s, index, length));
+          }
+          break;
+        }
+      }
+      return result;
+    }
+
+    // rsplit: process from right to left, then reverse the result.
+    index = length;
+    while (index > 0 && isPythonWhitespace(cps[index - 1])) {
+      index--;
+    }
+    var splits = 0;
+    while (index > 0) {
+      var end = index;
+      while (index > 0 && !isPythonWhitespace(cps[index - 1])) {
+        index--;
+      }
+      result.append(substringByCodePoints(s, index, end));
+      if (index == 0) {
+        break;
+      }
+      while (index > 0 && isPythonWhitespace(cps[index - 1])) {
+        index--;
+      }
+      splits++;
+      if (maxsplit >= 0 && splits >= maxsplit) {
+        if (index > 0) {
+          result.append(substringByCodePoints(s, 0, index));
+        }
+        break;
+      }
+    }
+    return reverseList(result);
+  }
+
+  private static PyList<String> splitWithSeparator(String s, String separator, long maxsplit, boolean reverse) {
+    var source = s.codePoints().toArray();
+    var delimiter = separator.codePoints().toArray();
+    var delimiterLength = delimiter.length;
+    var result = new PyList<String>();
+    if (!reverse) {
+      var start = 0;
+      var index = 0;
+      var splits = 0;
+      while (index + delimiterLength <= source.length && (maxsplit < 0 || splits < maxsplit)) {
+        if (matchesAt(source, delimiter, index)) {
+          result.append(substringByCodePoints(s, start, index));
+          index += delimiterLength;
+          start = index;
+          splits++;
+        } else {
+          index++;
+        }
+      }
+      result.append(substringByCodePoints(s, start, source.length));
+      return result;
+    }
+
+    var end = source.length;
+    var index = source.length - delimiterLength;
+    var splits = 0;
+    while (index >= 0 && (maxsplit < 0 || splits < maxsplit)) {
+      if (matchesAt(source, delimiter, index)) {
+        result.append(substringByCodePoints(
+            s, index + delimiterLength, end));
+
+        end = index;
+        index -= delimiterLength;
+        splits++;
+      } else {
+        index--;
+      }
+    }
+    result.append(substringByCodePoints(s, 0, end));
+    return reverseList(result);
+  }
+
+  private static PyList<String> reverseList(PyList<String> source) {
+    var result = new PyList<String>(source.size());
+    for (var i = source.size() - 1; i >= 0; i--) {
+      result.append(source.get(i));
+    }
+    return result;
+  }
+
+
+  // strip / lstrip / rstrip
+  public static Object _strip_(String s) {
+    return stripString(s, null, true, true);
+  }
+  public static Object _strip_(String s, Object chars) {
+    return stripString(s, stripCharacters(chars, "strip"), true, true);
+  }
+  public static Object _lstrip_(String s) {
+    return stripString(s, null, true, false);
+  }
+  public static Object _lstrip_(String s, Object chars) {
+    return stripString(s, stripCharacters(chars, "lstrip"), true, false);
+  }
+  public static Object _rstrip_(String s) {
+    return stripString(s, null, false, true);
+  }
+  public static Object _rstrip_(String s, Object chars) {
+    return stripString(s, stripCharacters(chars, "rstrip"), false, true);
+  }
+
+  private static String stripCharacters(Object chars, String method) {
+    if (chars == PyNone.INSTANCE) {
+      return null;
+    }
+    if (chars instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError(method + " arg must be None or str");
+  }
+
+  private static String stripString(String s, String chars, boolean left, boolean right) {
+    var cps = s.codePoints().toArray();
+    var start = 0;
+    var end = cps.length;
+    if (left) {
+      while (start < end && isStripCharacter(cps[start], chars)) {
+        start++;
+      }
+    }
+    if (right) {
+      while (end > start && isStripCharacter(cps[end - 1], chars)) {
+        end--;
+      }
+    }
+    if (start == 0 && end == cps.length) {
+      return s;
+    }
+    return substringByCodePoints(s, start, end);
+  }
+
+  private static boolean isStripCharacter(int cp, String chars) {
+    if (chars == null) {
+      return isPythonWhitespace(cp);
+    }
+    return chars.codePoints().anyMatch(character -> character == cp);
+  }
+
+
+  // replace
+  public static Object _replace_(String s, Object oldValue, Object newValue) {
+    return replaceString(s, oldValue, newValue, -1);
+  }
+  public static Object _replace_(String s, Object oldValue, Object newValue, Object count) {
+    return replaceString(s, oldValue, newValue, asIndex(count));
+  }
+
+  private static String replaceString(String s, Object oldObject, Object newObject, long maxcount) {
+    var oldValue = requireMethodString(oldObject, "replace", 1);
+    var newValue = requireMethodString(newObject, "replace", 2);
+    if (maxcount == 0) {
+      return s;
+    }
+    var source = s.codePoints().toArray();
+    var oldCps = oldValue.codePoints().toArray();
+    var builder = new StringBuilder();
+
+    // Python inserts the replacement at every code-point boundary
+    // when the search string is empty.
+    if (oldCps.length == 0) {
+      var replacements = 0L;
+      for (var i = 0; i <= source.length; i++) {
+        if (maxcount < 0 || replacements < maxcount) {
+          builder.append(newValue);
+          replacements++;
+        }
+        if (i < source.length) {
+          builder.appendCodePoint(source[i]);
+        }
+      }
+      return builder.toString();
+    }
+
+    var index = 0;
+    var replacements = 0L;
+    while (index < source.length) {
+      if ((maxcount < 0 || replacements < maxcount) && matchesAt(source, oldCps, index)) {
+        builder.append(newValue);
+        index += oldCps.length;
+        replacements++;
+      } else {
+        builder.appendCodePoint(source[index]);
+        index++;
+      }
+    }
+    return builder.toString();
+  }
+
+
+  // startswith / endswith
+
+  public static Object _startswith_(String s, Object prefix) {
+    return startsOrEndsWith(s, prefix, PyNone.INSTANCE, PyNone.INSTANCE, false);
+  }
+  public static Object _startswith_(String s, Object prefix, Object start) {
+    return startsOrEndsWith(s, prefix, start, PyNone.INSTANCE, false);
+  }
+  public static Object _startswith_(String s, Object prefix, Object start, Object end) {
+    return startsOrEndsWith(s, prefix, start, end, false);
+  }
+
+  public static Object _endswith_(String s, Object suffix) {
+    return startsOrEndsWith(s, suffix, PyNone.INSTANCE, PyNone.INSTANCE, true);
+  }
+  public static Object _endswith_(String s, Object suffix, Object start) {
+    return startsOrEndsWith(s, suffix, start, PyNone.INSTANCE, true);
+  }
+  public static Object _endswith_(String s, Object suffix, Object start, Object end) {
+    return startsOrEndsWith(s, suffix, start, end, true);
+  }
+
+  private static boolean startsOrEndsWith(String s, Object prefixObject, Object startObject, Object endObject, boolean reverse) {
+    var source = s.codePoints().toArray();
+    var start = normalizeStartBound(startObject, source.length);
+    var end = normalizeStringBound(endObject, source.length, source.length);
+
+    var method = reverse ? "endswith" : "startswith";
+    if (prefixObject instanceof String prefix) {
+      return matchesPrefixOrSuffix(source, prefix, start, end, reverse);
+    }
+
+    if (prefixObject instanceof PyTuple tuple) {
+      // Validate all tuple elements before testing any of them.
+      var size = TupleIntrinsics.$size$(tuple);
+      for (var i = 0L; i < size; i++) {
+        var item = TupleIntrinsics.$get$(tuple, i);
+        if (!(item instanceof String)) {
+          throw new PyTypeError(
+              "tuple for " + method + " must only contain str, not "
+                  + IntrinsicSupport.typeName(item));
+        }
+      }
+      for (var i = 0L; i < size; i++) {
+        var prefix = (String) TupleIntrinsics.$get$(tuple, i);
+        if (matchesPrefixOrSuffix(source, prefix, start, end, reverse)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    throw new PyTypeError(method + " first arg must be str or a tuple of str, not "
+        + IntrinsicSupport.typeName(prefixObject));
+  }
+
+  private static boolean matchesPrefixOrSuffix(int[] source, String value, long start, int end, boolean reverse) {
+    if (start > end) {
+      return false;
+    }
+    var candidate = value.codePoints().toArray();
+    if (candidate.length > end - start) {
+      return false;
+    }
+    var position = reverse
+        ? end - candidate.length
+        : (int) start;
+    return matchesAt(source, candidate, position);
+  }
+
+
+  public static Object _count_(String s, Object sub) {
+    return countString(s, sub, PyNone.INSTANCE, PyNone.INSTANCE);
+  }
+  public static Object _count_(String s, Object sub, Object start) {
+    return countString(s, sub, start, PyNone.INSTANCE);
+  }
+  public static Object _count_(String s, Object sub, Object start, Object end) {
+    return countString(s, sub, start, end);
+  }
+
+  private static Object countString(String s, Object subObject, Object startObject, Object endObject) {
+    var sub = requireMethodString(subObject, "count", 1);
+    var source = s.codePoints().toArray();
+    var needle = sub.codePoints().toArray();
+    var start = normalizeStartBound(startObject, source.length);
+    var end = normalizeStringBound(endObject, source.length, source.length);
+    if (start > end) {
+      return 0L;
+    }
+    if (needle.length == 0) {
+      return end - start + 1;
+    }
+
+    var count = 0L;
+    var index = (int) start;
+    while (index + needle.length <= end) {
+      if (matchesAt(source, needle, index)) {
+        count++;
+        index += needle.length;
+      } else {
+        index++;
+      }
+    }
+    return count;
+  }
+
+
+  // Unicode character classification
+  public static Object _isdigit_(String s) {
+    return !s.isEmpty() && allCodePoints(s, StringIntrinsics::isDigit);
+  }
+
+  public static Object _isalnum_(String s) {
+    return !s.isEmpty() && allCodePoints(s, StringIntrinsics::isAlphaNumeric);
+  }
+
+  public static Object _isspace_(String s) {
+    return !s.isEmpty() && allCodePoints(s, StringIntrinsics::isPythonWhitespace);
+  }
+
+  public static Object _islower_(String s) {
+    var hasCased = false;
+    for (var cp : s.codePoints().toArray()) {
+      if (isCased(cp)) {
+        hasCased = true;
+        if (!Character.isLowerCase(cp)) {
+          return false;
+        }
+      }
+    }
+    return hasCased;
+  }
+
+  public static Object _isupper_(String s) {
+    var hasCased = false;
+    for (var cp : s.codePoints().toArray()) {
+      if (isCased(cp)) {
+        hasCased = true;
+        if (!Character.isUpperCase(cp)) {
+          return false;
+        }
+      }
+    }
+    return hasCased;
+  }
+
+  private static boolean isPythonWhitespace(int cp) {
+    // Python also treats NEL and the ASCII information separators
+    // as whitespace.
+    return cp == 0x85
+        || (cp >= 0x1c && cp <= 0x1f)
+        || Character.isWhitespace(cp)
+        || Character.isSpaceChar(cp);
+  }
+
+  private static boolean isDigit(int cp) {
+    var type = Character.getType(cp);
+    if (type == Character.DECIMAL_DIGIT_NUMBER) {
+      return true;
+    }
+    // Python's isdigit() includes numeric characters such as superscript ²,
+    // but does not include every Unicode numeric character.
+    return type == Character.OTHER_NUMBER
+        && Character.getNumericValue(cp) >= 0
+        && Character.getNumericValue(cp) <= 9;
+  }
+
+  private static boolean isAlphaNumeric(int cp) {
+    return isLetter(cp)
+        || isDigit(cp)
+        || Character.getType(cp) == Character.LETTER_NUMBER
+        || Character.getType(cp) == Character.OTHER_NUMBER;
+  }
+
+  private static boolean isLetter(int cp) {
+    return switch (Character.getType(cp)) {
+      case Character.UPPERCASE_LETTER,
+           Character.LOWERCASE_LETTER,
+           Character.TITLECASE_LETTER,
+           Character.MODIFIER_LETTER,
+           Character.OTHER_LETTER -> true;
+      default -> false;
+    };
+  }
+
+  private static boolean isCased(int cp) {
+    return Character.isUpperCase(cp)
+        || Character.isLowerCase(cp)
+        || Character.isTitleCase(cp);
+  }
+
+
+  // title
+  public static Object _title_(String s) {
+    var cps = s.codePoints().toArray();
+    var builder = new StringBuilder(s.length());
+    var previousWasCased = false;
+    for (var i = 0; i < cps.length; i++) {
+      var cp = cps[i];
+      if (isCased(cp)) {
+        if (previousWasCased) {
+          appendLowerCase(builder, cps, i);
+        } else {
+          builder.append(fullTitle(cp));
+        }
+        previousWasCased = true;
+      } else {
+        builder.appendCodePoint(cp);
+        previousWasCased = false;
+      }
+    }
+    return builder.toString();
+  }
+
+
+  // casefold
+  public static Object _casefold_(String s) {
+    var builder = new StringBuilder(s.length());
+    for (var cp : s.codePoints().toArray()) {
+      appendCaseFolded(builder, cp);
+    }
+    return builder.toString();
+  }
+
+  private static void appendCaseFolded(StringBuilder builder, int cp) {
+    // Unicode default case folding preserves dotless i.
+    if (cp == 0x0131) {
+      builder.appendCodePoint(cp);
+      return;
+    }
+    if (cp == 0x1e9e) {
+      builder.append("ss");
+      return;
+    }
+
+    // Uppercase followed by lowercase gives full expansions for many
+    // characters which have no one-code-point lowercase mapping:
+    // sharp-s, ligatures, Greek iota-subscript forms, etc.
+    var value = new String(Character.toChars(cp))
+        .toUpperCase(Locale.ROOT)
+        .toLowerCase(Locale.ROOT);
+    value.codePoints().forEach(folded -> {
+      // Cherokee uses uppercase characters as its case-folded form.
+      if ((folded >= 0xab70 && folded <= 0xabbf)
+          || (folded >= 0x13f8 && folded <= 0x13fd)) {
+        builder.appendCodePoint(Character.toUpperCase(folded));
+      } else {
+        builder.appendCodePoint(folded);
+      }
+    });
+  }
+
+
+  // splitlines
+
+  public static Object _splitlines_(String s) {
+    return splitLines(s, false);
+  }
+  public static Object _splitlines_(String s, Object keepends) {
+    return splitLines(s, TruthinessIntrinsics.$truthy$(keepends));
+  }
+
+  private static Object splitLines(String s, boolean keepends) {
+    var cps = s.codePoints().toArray();
+    var result = new PyList<String>();
+    var start = 0;
+    var index = 0;
+    while (index < cps.length) {
+      var cp = cps[index];
+      if (!isLineBreak(cp)) {
+        index++;
+        continue;
+      }
+      var end = index + 1;
+
+      // CRLF is one line boundary.
+      if (cp == '\r' && end < cps.length && cps[end] == '\n') {
+        end++;
+      }
+      result.append(substringByCodePoints(s, start, keepends ? end : index));
+      start = end;
+      index = end;
+    }
+
+    // A trailing line boundary does not produce an additional empty item.
+    if (start < cps.length) {
+      result.append(substringByCodePoints(s, start, cps.length));
+    }
+    return result;
+  }
+
+  private static boolean isLineBreak(int cp) {
+    return switch (cp) {
+      case '\n', '\r', '\u000b', '\u000c', '\u001c', '\u001d', '\u001e',
+           '\u0085', '\u2028', '\u2029' -> true;
+      default -> false;
+    };
+  }
+
+
+  // Shared helpers for the methods above.
+
+  private static void appendLowerCase(StringBuilder builder, int[] cps, int index) {
+    var cp = cps[index];
+    if (cp == 0x03a3) {
+      builder.appendCodePoint(isFinalSigma(cps, index) ? 0x03c2 : 0x03c3);
+      return;
+    }
+    builder.append(new String(Character.toChars(cp)).toLowerCase(Locale.ROOT));
+  }
+
+  // cased case-ignorable* SIGMA !(case-ignorable* cased)
+  private static boolean isFinalSigma(int[] cps, int index) {
+    var j = index - 1;
+    while (j >= 0 && isCaseIgnorable(cps[j])) {
+      j--;
+    }
+    if (j < 0 || !isCased(cps[j])) {
+      return false;
+    }
+    j = index + 1;
+    while (j < cps.length && isCaseIgnorable(cps[j])) {
+      j++;
+    }
+    return j == cps.length || !isCased(cps[j]);
+  }
+
+  // Approximation of the Unicode Case_Ignorable property.
+  private static boolean isCaseIgnorable(int cp) {
+    return switch (Character.getType(cp)) {
+      case Character.NON_SPACING_MARK,
+           Character.ENCLOSING_MARK,
+           Character.FORMAT,
+           Character.MODIFIER_LETTER,
+           Character.MODIFIER_SYMBOL -> true;
+      default -> switch (cp) {
+        case '\'', '.', ':', 0x00b7, 0x0387, 0x055f, 0x05f4, 0x2018, 0x2019,
+             0x2024, 0x2027, 0xfe13, 0xfe52, 0xfe55, 0xff07, 0xff0e, 0xff1a -> true;
+        default -> false;
+      };
+    };
+  }
+
+  private static long normalizeStartBound(Object value, int length) {
+    var bound = asSliceIndex(value, 0);
+    return bound < 0 ? Math.max(0L, bound + length) : bound;
+  }
+
+  private static String requireMethodString(Object value, String method, int argument) {
+    if (value instanceof String s) {
+      return s;
+    }
+    throw new PyTypeError(method + "() argument " + argument
+            + " must be str, not " + IntrinsicSupport.typeName(value));
+  }
+
+  private static int normalizeStringBound(Object value, int length, int defaultValue) {
+    var bound = asSliceIndex(value, defaultValue);
+    if (bound < 0) {
+      bound = Math.max(0L, bound + length);
+    } else {
+      bound = Math.min(bound, length);
+    }
+    return (int) bound;
+  }
+
+  private static String substringByCodePoints(String s, int start, int end) {
+    if (start == end) {
+      return "";
+    }
+    var from = s.offsetByCodePoints(0, start);
+    var to = s.offsetByCodePoints(from, end - start);
+    return s.substring(from, to);
+  }
+
+  private static boolean matchesAt(int[] source, int[] needle, int position) {
+    if (position < 0 || position + needle.length > source.length) {
+      return false;
+    }
+    for (var i = 0; i < needle.length; i++) {
+      if (source[position + i] != needle[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+
   // -- helpers
 
   private static String requireOperandString(Object value) {
