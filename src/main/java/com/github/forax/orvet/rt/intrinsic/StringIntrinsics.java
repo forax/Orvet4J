@@ -64,6 +64,7 @@ public final class StringIntrinsics {
     return s.chars().spliterator().getClass() == spliteratorClass;
   }
 
+  // acessed by IsLatin1BenchMark
   private static boolean isLatin1(String s) {
     try {
       return (boolean) IS_LATIN1.invokeExact(s);

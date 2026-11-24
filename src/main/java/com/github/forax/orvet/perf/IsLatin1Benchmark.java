@@ -1,5 +1,6 @@
 package com.github.forax.orvet.perf;
 
+import com.github.forax.orvet.rt.intrinsic.StringIntrinsics;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -28,30 +29,13 @@ public class IsLatin1Benchmark {
 
   static final MethodHandle IS_LATIN1;
   static {
-    var spliteratorLatinClass = "A"
-        .chars().spliterator().getClass();
-    var spliteratorNonLatinClass = "\uD83D\uDE42"
-        .chars().spliterator().getClass();
-    MethodHandle target;
-    if (spliteratorLatinClass != spliteratorNonLatinClass) {
-      MethodHandle mh;
-      try {
-        mh = MethodHandles.lookup()
-            .findStatic(IsLatin1Benchmark.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, String.class));
-      } catch (NoSuchMethodException | IllegalAccessException e) {
-        throw new AssertionError(e);
-      }
-      target = mh.bindTo(spliteratorLatinClass);
-    } else {
-      target = MethodHandles.dropArguments(
-          MethodHandles.constant(boolean.class, false),
-      0, String.class);
+    var lookup = MethodHandles.lookup();
+    try {
+      var teleport = MethodHandles.privateLookupIn(StringIntrinsics.class, lookup);
+      IS_LATIN1 = teleport.findStatic(StringIntrinsics.class, "isLatin1", MethodType.methodType(boolean.class, String.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new AssertionError(e);
     }
-    IS_LATIN1 = target;
-  }
-
-  private static boolean isSameClass(Class<?> spliteratorClass, String s) {
-    return s.chars().spliterator().getClass() == spliteratorClass;
   }
 
   public IsLatin1Benchmark() {
