@@ -79,6 +79,16 @@ public final class StringIntrinsics {
   private static final int MAX_INT_STR_DIGITS = 4_300;
   private static final int MAX_INT_STR_BIT_LENGTH = 14_284;
 
+  // Precomputed all Latin1 characters as String for $getItem$ fastpath
+  private static final String[] LATIN1_CHARS;
+  static {
+    var chars = new String[256];
+    for (var c = 0; c < 256; c++) {
+      chars[c] = String.valueOf((char) c);
+    }
+    LATIN1_CHARS = chars;
+  }
+
   //  FIXME use ScopeValue instead
   // Shared by recursive tuple/list/dict repr so mixed cycles are handled correctly.
   private static final ThreadLocal<IdentityHashMap<Object, Boolean>> ACTIVE_REPR =
@@ -101,12 +111,14 @@ public final class StringIntrinsics {
         if (i < 0 || i >= length) {
           throw badIndex("string index out of range");
         }
-        yield "" + s.charAt((int) i);
+        yield LATIN1_CHARS[s.charAt((int) i)];
       }
     };
   }
 
   private static Object getItemCodePoint(String s, long i) {
+    // Note: this implementation uses offsetByCodePoints()
+    // which is linear, one solution is to use a concurrent weak cache
     int start;
     if (i < 0) {
       // Negative index: count backwards from the end.
@@ -670,16 +682,22 @@ public final class StringIntrinsics {
 
     // Python implementation drains the iterable before looking at any item
     // This is not really necessary now given that all our iterators have no side effects
+    // We use it to pre-compute the total length of the resulting string
     var items = new ArrayList<>();
+    var total = 0L;
     {
       Object item;
       while ((item = IteratorIntrinsics.$next$(iterator)) != null) {
+        if (item instanceof String s) {
+          total += s.length();
+        }
         items.add(item);
       }
     }
+    total += Math.max(0L, items.size() - 1L) * separator.length();
 
     var sep = "";
-    var builder = new StringBuilder();
+    var builder = new StringBuilder((int) Math.min(total, Integer.MAX_VALUE - 8));
     for (var index = 0; index < items.size(); index++) {
       var item = items.get(index);
       if (!(item instanceof String string)) {
