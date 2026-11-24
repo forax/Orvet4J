@@ -90,7 +90,7 @@ public final class ItemIntrinsics {
       case Long l -> l;
       case Boolean b -> b ? 1L : 0L;
       case BigInteger _ -> throw new PyIndexError("cannot fit 'int' into an index-sized integer");
-      default -> throw typeError(name + " indices must be integers or slices, not " + typeName(index));
+      default -> throw typeError(name + " indices must be integers, not " + typeName(index));
     };
   }
 
