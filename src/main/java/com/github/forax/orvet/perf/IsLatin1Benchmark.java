@@ -19,6 +19,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.concurrent.TimeUnit;
 
+//Benchmark                   Mode  Cnt  Score   Error  Units
+//IsLatin1Benchmark.isLatin1  avgt    5  2,558 ± 0,379  ns/op
+
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1, jvmArgsAppend = {"--enable-preview"})
