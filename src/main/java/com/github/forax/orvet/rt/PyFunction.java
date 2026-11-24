@@ -88,10 +88,10 @@ public final class PyFunction {
   final Object[] defaults;
   final Object[] capturedArgs;
 
-  PyFunction(Code code, Object[] defaults, Object[] capturedArgs) {
+  PyFunction(Code code, Object[] capturedArgs, Object[] defaults) {
     this.code = code;
-    this.defaults = defaults;
     this.capturedArgs = capturedArgs;
+    this.defaults = defaults;
     super();
   }
 

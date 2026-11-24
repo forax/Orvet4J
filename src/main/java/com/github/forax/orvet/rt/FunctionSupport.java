@@ -62,8 +62,10 @@ final class FunctionSupport {
   ///
   /// ## Function Creation
   /// ```
-  /// (Object[] captures) -> Object
+  /// (Object... captures Object... defaults) -> Object
   /// ```
+  /// The captured arguments and the default values are evaluated each time the `def` is
+  /// executed, in that order, and stored in a fresh function object.
   static final class DefCallSite {
     private DefCallSite() {
       throw new AssertionError();
@@ -95,12 +97,12 @@ final class FunctionSupport {
 
       // CPython, creates a fresh function object each time it is executed
       var factory = PY_FUNCTION.bindTo(code);
-      var mh = defaultCount == 0
-          ? insertArguments(factory, 1, (Object) EMPTY)
-          : collectArguments(factory, 1, arrayCollector(defaultCount));
-      mh = captureCount == 0
-          ? insertArguments(mh, 0, (Object) EMPTY)
-          : collectArguments(mh, 0, arrayCollector(captureCount));
+      var mh = captureCount == 0
+          ? insertArguments(factory, 0, (Object) EMPTY)
+          : collectArguments(factory, 0, arrayCollector(captureCount));
+      mh = defaultCount == 0
+          ? insertArguments(mh, captureCount, (Object) EMPTY)
+          : collectArguments(mh, captureCount, arrayCollector(defaultCount));
       var target = mh.asType(type);
       return new ConstantCallSite(target);
     }
