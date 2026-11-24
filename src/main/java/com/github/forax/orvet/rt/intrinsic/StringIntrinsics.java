@@ -79,14 +79,17 @@ public final class StringIntrinsics {
   private static final int MAX_INT_STR_DIGITS = 4_300;
   private static final int MAX_INT_STR_BIT_LENGTH = 14_284;
 
-  // Precomputed all Latin1 characters as String for $getItem$ fastpath
-  private static final String[] LATIN1_CHARS;
-  static {
-    var chars = new String[256];
-    for (var c = 0; c < 256; c++) {
-      chars[c] = String.valueOf((char) c);
+  // Precomputed all Latin1 characters as String for $getItem$ fast path
+  private static final class Latin1Chars {
+    static final String[] LATIN1_CHARS;
+
+    static {
+      var chars = new String[256];
+      for (var c = 0; c < 256; c++) {
+        chars[c] = String.valueOf((char) c);
+      }
+      LATIN1_CHARS = chars;
     }
-    LATIN1_CHARS = chars;
   }
 
   //  FIXME use ScopeValue instead
@@ -111,7 +114,7 @@ public final class StringIntrinsics {
         if (i < 0 || i >= length) {
           throw badIndex("string index out of range");
         }
-        yield LATIN1_CHARS[s.charAt((int) i)];
+        yield Latin1Chars.LATIN1_CHARS[s.charAt((int) i)];
       }
     };
   }
