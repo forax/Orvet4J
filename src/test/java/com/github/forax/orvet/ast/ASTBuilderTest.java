@@ -377,7 +377,6 @@ public final class ASTBuilderTest {
 
   @Test
   public void unsupportedFunctionFeatures() {
-    assertUnsupported("def f(a=1):\n    pass\n", "default parameter value", 1, 6);
     assertUnsupported("def f(a, /):\n    pass\n", "positional-only parameter marker '/'", 1, 9);
     assertUnsupported("def f(*, a):\n    pass\n", "keyword-only parameter", 1, 6);
     assertUnsupported("def f(*a, b):\n    pass\n", "keyword-only parameter", 1, 10);

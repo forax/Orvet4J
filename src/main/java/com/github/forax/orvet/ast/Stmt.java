@@ -86,11 +86,13 @@ public sealed interface Stmt {
   record FunctionDef(String name, List<Param> parameters, Optional<Param> rest, Block body,
                      int line, int column) implements Stmt {
 
-    public record Param(String name, int line, int column) {
+    public record Param(String name, Optional<Expr> defaultExpr, int line, int column) {
       public Param {
         requireNonNull(name);
+        requireNonNull(defaultExpr);
       }
     }
+
 
     public FunctionDef {
       requireNonNull(name);

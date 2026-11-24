@@ -491,8 +491,14 @@ public final class ASTBuilder {
           case Slash_no_defaultContext c ->
               throw unsupported("positional-only parameter marker '/'", terminal(c, "/"));
           case Slash_with_defaultContext c -> throw unsupported("default parameter value", c);
-          case Param_no_defaultContext c -> parameters.add(param(one(c, ParamContext.class)));
-          case Param_with_defaultContext c -> throw unsupported("default parameter value", c);
+          case Param_no_defaultContext c -> parameters.add(param(one(c, ParamContext.class), null));
+          case Param_with_defaultContext c ->
+              parameters.add(param(
+                  one(c, ParamContext.class),
+                  expression(one(
+                      one(c, PythonParser.Default_assignmentContext.class),
+                      ExpressionContext.class))));
+
           case Star_etcContext c -> rest = starEtc(c);
           default -> throw new AssertionError(child.getText());
         }
@@ -523,13 +529,14 @@ public final class ASTBuilder {
     return new Stmt.FunctionDef(name, parameters, Optional.ofNullable(rest), body, line(ctx), column(ctx));
   }
 
-  private Param param(ParamContext ctx) {
+  private Param param(ParamContext ctx, Expr defaultExpr) {
     var annotation = one(ctx, AnnotationContext.class);
     if (annotation != null) {
       throw unsupported("annotation", annotation);
     }
     var name = one(ctx, NameContext.class);
-    return new Param(identifier(name), line(name), column(name));
+    return new Param(identifier(name), Optional.ofNullable(defaultExpr),
+        line(name), column(name));
   }
 
   /** Only {@code *name} is accepted. */
@@ -548,7 +555,7 @@ public final class ASTBuilder {
       var extra = ctx.getChild(2);
       throw unsupported(extra instanceof KwdsContext ? "**kwargs parameter" : "keyword-only parameter", extra);
     }
-    return param(one(p, ParamContext.class));
+    return param(one(p, ParamContext.class), null);
   }
 
   /** Shared by {@code if_stmt} and {@code elif_stmt}. */

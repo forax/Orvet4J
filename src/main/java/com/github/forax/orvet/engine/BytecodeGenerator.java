@@ -19,6 +19,7 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodTooLargeException;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
+import org.openjdk.jmh.annotations.Param;
 
 import java.lang.invoke.MethodType;
 import java.math.BigInteger;
@@ -525,13 +526,24 @@ public final class BytecodeGenerator {
     /// Captured values are pushed in `freeVariables` order, the order `insertArguments` binds them.
     /// A function defined at module level captures nothing: its free names are globals.
     private void functionDef(Stmt.FunctionDef def) {
+      // capture values
       var captures = function == null
           ? List.<String>of()
           : captureNames(def, context.scopeOf(def).analysis());
       for (var capture : captures) {
         loadName(capture);
       }
-      mv.visitInvokeDynamicInsn(def.name(), "(" + O.repeat(captures.size()) + ")" + O,
+      // default values
+      var defaultCount = 0;
+      for (var parameter : def.parameters()) {
+        var defaultExpr = parameter.defaultExpr();
+        if (defaultExpr.isPresent()) {
+          expr(defaultExpr.get());
+          defaultCount++;
+        }
+      }
+      var argumentCount = captures.size() + defaultCount;
+      mv.visitInvokeDynamicInsn(def.name(), "(" + O.repeat(argumentCount) + ")" + O,
           BSM_DEF, dictionary.register(def));
       storeName(def.name());
     }
