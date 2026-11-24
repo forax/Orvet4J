@@ -102,7 +102,7 @@ public final class StringIntrinsics {
     return "" + s.charAt(offset);
   }
 
-  public static Object getItemCodePoint(String s, long i) {
+  private static Object getItemCodePoint(String s, long i) {
     int start;
     if (i < 0) {
       // Negative index: count backwards from the end.
