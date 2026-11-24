@@ -17,7 +17,6 @@ import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -27,6 +26,7 @@ import java.math.BigInteger;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1199,6 +1199,71 @@ public final class StringIntrinsicsTest {
       assertEquals("😀", StringIntrinsics.$getItem$("😀😀", -1L));
       assertEquals("😀", StringIntrinsics.$getItem$("😀😀", -2L));
       assertEquals("b", StringIntrinsics.$getItem$("a😀b😀", 2L));
+    }
+  }
+
+  @Nested
+  public final class Slice {
+
+    private final Object NONE = PyNone.INSTANCE;  //FIXME, rename INSTANCE to NONE
+
+    @Test
+    public void simpleSlices() {
+      var s = "abcdef";
+
+      assertEquals("abc",
+          StringIntrinsics.$slice$(s, PySlice.of(0L, 3L, NONE)));
+      assertEquals("bcd",
+          StringIntrinsics.$slice$(s, PySlice.of(1L, 4L, NONE)));
+      assertEquals("def",
+          StringIntrinsics.$slice$(s, PySlice.of(-3L, NONE, NONE)));
+      assertEquals("",
+          StringIntrinsics.$slice$(s, PySlice.of(2L, 2L, NONE)));
+    }
+
+    @Test
+    public void reverse() {
+      var s = "abcdef";
+
+      assertEquals("fedcba",
+          StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, -1L)));
+      assertEquals("fdb",
+          StringIntrinsics.$slice$(s, PySlice.of(NONE, 0L, -2L)));
+    }
+
+    @Test
+    public void positiveStep() {
+      var s = "abcdef";
+
+      assertEquals("ace",
+          StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, 2L)));
+    }
+
+    @Test
+    public void unicodeCodePoints() {
+      var s = "a😀bc";
+
+      assertEquals("😀b",
+          StringIntrinsics.$slice$(s, PySlice.of(1L, 3L, NONE)));
+      assertEquals("ab",
+          StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, 2L)));
+      assertEquals("cb😀a",
+          StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, -1L)));
+    }
+
+    @Test
+    public void zeroStep() {
+      var s = "abcdef";
+
+      assertThrows(PyValueError.class,
+          () -> StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, 0L)));
+    }
+
+    @Test
+    public void fullSlice() {
+      var s = "hello";
+
+      assertSame(s, StringIntrinsics.$slice$(s, PySlice.of(NONE, NONE, NONE)));
     }
   }
 

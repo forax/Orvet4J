@@ -87,19 +87,23 @@ public final class StringIntrinsics {
   /// Python `string[index]` and `string[slice]`, using Unicode code points.
   @Intrinsic
   public static Object $getItem$(String s, Object index) {
-    var i = ItemIntrinsics.$toIndex$(index, "string");
-    if (!isLatin1(s)) {
-      return getItemCodePoint(s, i);
-    }
-    var length = s.length();
-    if (i < 0) {
-      i += length;
-    }
-    if (i < 0 || i >= length) {
-      throw badIndex("string index out of range");
-    }
-    var offset = (int) i;
-    return "" + s.charAt(offset);
+    return switch (index) {
+      case PySlice slice -> $slice$(s, slice);
+      default -> {
+        var i = ItemIntrinsics.$toIndex$(index, "string");
+        if (!isLatin1(s)) {
+          yield getItemCodePoint(s, i);
+        }
+        var length = s.length();
+        if (i < 0) {
+          i += length;
+        }
+        if (i < 0 || i >= length) {
+          throw badIndex("string index out of range");
+        }
+        yield "" + s.charAt((int) i);
+      }
+    };
   }
 
   private static Object getItemCodePoint(String s, long i) {
@@ -130,6 +134,61 @@ public final class StringIntrinsics {
     }
     var end = start + Character.charCount(s.codePointAt(start));
     return s.substring(start, end);
+  }
+
+
+  @Intrinsic
+  public static String $slice$(String s, PySlice slice) {
+    var length = s.codePointCount(0, s.length());
+    var resolved = slice.resolve(length);
+
+    // Preserve the original String for s[:].
+    if (resolved.step() == 1 && resolved.count() == length) {
+      return s;
+    }
+    if (resolved.count() == 0) {
+      return "";
+    }
+
+    // Contiguous slice: use substring if possible.
+    var latin1 = isLatin1(s);
+    if (resolved.step() == 1) {
+      var from = latin1
+          ? (int) resolved.start()
+          : s.offsetByCodePoints(0, (int) resolved.start());
+      var to = latin1
+          ? (int) resolved.stop()
+          : s.offsetByCodePoints(0, (int) resolved.stop());
+      return s.substring(from, to);
+    }
+    return latin1 ? stridedSlice(s, resolved) : stridedSliceCodePoint(s, resolved);
+  }
+
+  private static String stridedSlice(String s, PySlice.Resolved resolved) {
+    var count = (int) resolved.count();
+    var builder = new StringBuilder(count);
+    var position = resolved.start();
+    for (var i = 0; i < count; i++) {
+      builder.append(s.charAt((int) position));
+      if (i + 1 < count) {
+        position += resolved.step();
+      }
+    }
+    return builder.toString();
+  }
+
+  // General Unicode: navigate by code points
+  private static String stridedSliceCodePoint(String s, PySlice.Resolved resolved) {
+    var count = (int) resolved.count();
+    var builder = new StringBuilder(count);
+    var offset = s.offsetByCodePoints(0, (int) resolved.start());
+    for (var i = 0; i < count; i++) {
+      builder.appendCodePoint(s.codePointAt(offset));
+      if (i + 1 < count) {
+        offset = s.offsetByCodePoints(offset, (int) resolved.step());
+      }
+    }
+    return builder.toString();
   }
 
 
