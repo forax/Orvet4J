@@ -1433,7 +1433,7 @@ public final class StringIntrinsicsTest {
     public void expansionDoesNotDesynchronizeTheLoweredIndex() {
       // İ lowers to two UTF-16 chars; the characters after it must still be taken from the right offset.
       assertEquals("i\u0307aBc", StringIntrinsics._swapcase_("\u0130AbC"));
-      assertEquals("i\u0307i\u0307\u03C2", StringIntrinsics._swapcase_("\u0130\u0130\u03A3".replace("\u03A3", "\u03A3")));
+      assertEquals("i\u0307i\u0307\u03C2", StringIntrinsics._swapcase_("\u0130\u0130\u03A3"));
     }
 
     @Test
@@ -2307,7 +2307,7 @@ public final class StringIntrinsicsTest {
 
     @Test
     public void onlyTheFirstSignIsSpecial() {
-      assertEquals("0--42", StringIntrinsics._zfill_("--42", 5L).toString().replaceFirst("^-0", "0-"));
+      assertEquals("+0042", StringIntrinsics._zfill_("+42", 5L));
       assertEquals("-0-42", StringIntrinsics._zfill_("--42", 5L));
       assertEquals("0004-2", StringIntrinsics._zfill_("4-2", 6L));
     }
