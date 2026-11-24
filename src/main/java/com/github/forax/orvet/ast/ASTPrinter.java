@@ -73,7 +73,14 @@ final class ASTPrinter {
       case Stmt.For s ->
           node("for", l, c, target(s.target()), expr(s.iter()), block(s.body()), block(s.orElse()));
       case Stmt.FunctionDef s -> node("def", l, c, s.name(),
-          list(s.parameters(), p -> leaf(p.name(), p.line(), p.column())),
+          list(s.parameters(), p -> p.defaultExpr()
+              .map(defaultExpr -> node(
+                  "default",
+                  p.line(),
+                  p.column(),
+                  p.name(),
+                  expr(defaultExpr)))
+              .orElseGet(() -> leaf(p.name(), p.line(), p.column()))),
           "rest=" + s.rest().map(p -> leaf(p.name(), p.line(), p.column())).orElse("-"),
           block(s.body()));
     };

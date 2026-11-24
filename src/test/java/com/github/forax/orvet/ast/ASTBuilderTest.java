@@ -325,6 +325,23 @@ public final class ASTBuilderTest {
         "(block@1:0 (def@1:0 f [a@1:6] rest=- (block@2:4 (return@2:4 (method@2:11 a@2:11 b 1@2:15)))))");
   }
 
+  // -- default arguments
+
+  @Test
+  void defaultArguments() {
+    assertAst("def f(a, b=2, c=1 + 2, d=None):\n    pass\n",
+        "(block (def f [a (default b 2) (default c (+ 1 2)) (default d None)] rest=- (block)))");
+
+    assertAst("def f(a=1, *rest):\n    pass\n",
+        "(block (def f [(default a 1)] rest=rest (block)))");
+  }
+
+  @Test
+  void defaultArgumentPositions() {
+    assertAstAt("def f(a=1 + 2):\n    pass\n",
+        "(block@1:0 (def@1:0 f [(default@1:6 a (+@1:8 1@1:8 2@1:12))] rest=- (block@2:4)))");
+  }
+
   // ---------------------------------------------------------------------------- unsupported syntax
 
   @Test
