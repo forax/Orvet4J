@@ -3100,6 +3100,27 @@ public final class StringIntrinsicsTest {
       assertEquals(true,
           StringIntrinsics._startswith_("😀a", "a", 1L));
     }
+
+    @Test
+    public void startswithTupleShortCircuit() {
+      assertEquals(true,
+          StringIntrinsics._startswith_("foo", TupleIntrinsics.fromArray("f", 1L)));
+      assertEquals(true,
+          StringIntrinsics._startswith_("foo", TupleIntrinsics.fromArray("x", "f")));
+    }
+
+    @Test
+    public void startswithTupleInvalidElement() {
+      assertThrows(PyTypeError.class,
+          () -> StringIntrinsics._startswith_("foo", TupleIntrinsics.fromArray("x", 1L)));
+    }
+
+
+    @Test
+    public void emptyPrefixOrSuffixTuple() {
+      assertEquals(false,
+          StringIntrinsics._startswith_("foo", TupleIntrinsics.empty()));
+    }
   }
 
   @Nested
@@ -3175,6 +3196,28 @@ public final class StringIntrinsicsTest {
       // indexes are expressed in code points
       assertEquals(true,
           StringIntrinsics._endswith_("a😀b", "😀", 0L, 2L));
+    }
+
+    @Test
+    public void endswithTupleShortCircuit() {
+      assertEquals(true,
+          StringIntrinsics._endswith_("foo",
+              TupleIntrinsics.fromArray("o", 1L)));
+
+      assertEquals(true,
+          StringIntrinsics._endswith_("foo", TupleIntrinsics.fromArray("x", "o")));
+    }
+
+    @Test
+    public void endswithTupleInvalidElement() {
+      assertThrows(PyTypeError.class,
+          () -> StringIntrinsics._endswith_("foo", TupleIntrinsics.fromArray("x", 1L)));
+    }
+
+    @Test
+    public void emptyPrefixOrSuffixTuple() {
+      assertEquals(false,
+          StringIntrinsics._endswith_("foo", TupleIntrinsics.empty()));
     }
   }
 
@@ -3272,6 +3315,40 @@ public final class StringIntrinsicsTest {
       assertEquals(false, StringIntrinsics._isdigit_("-1"));
       assertEquals(false, StringIntrinsics._isdigit_("1_000"));
       assertEquals(false, StringIntrinsics._isdigit_("😀"));
+    }
+
+    @Test
+    public void decimalDigits() {
+      assertEquals(true, StringIntrinsics._isdigit_("0123456789"));
+      assertEquals(true, StringIntrinsics._isdigit_("١٢٣"));
+      assertEquals(true, StringIntrinsics._isdigit_("१२३"));
+    }
+
+    @Test
+    public void nonDecimalDigits() {
+      assertEquals(true, StringIntrinsics._isdigit_("²"));
+      assertEquals(true, StringIntrinsics._isdigit_("³"));
+      assertEquals(true, StringIntrinsics._isdigit_("⁹"));
+      assertEquals(true, StringIntrinsics._isdigit_("\u1369"));
+      assertEquals(true, StringIntrinsics._isdigit_("\u2085"));
+    }
+
+    @Test
+    public void numericCharactersAreNotNecessarilyDigits() {
+      assertEquals(false, StringIntrinsics._isdigit_("½"));
+      assertEquals(false, StringIntrinsics._isdigit_("⅕"));
+      assertEquals(false, StringIntrinsics._isdigit_("\u17f1"));
+    }
+
+    @Test
+    public void emptyStringIsNotDigit() {
+      assertEquals(false, StringIntrinsics._isdigit_(""));
+    }
+
+    @Test
+    public void mixedStringIsNotDigit() {
+      assertEquals(false, StringIntrinsics._isdigit_("12a"));
+      assertEquals(false, StringIntrinsics._isdigit_("²a"));
     }
   }
 
