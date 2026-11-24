@@ -1,6 +1,5 @@
 package com.github.forax.orvet.rt.intrinsic;
 
-import com.github.forax.orvet.perf.IsLatin1Benchmark;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyList;
