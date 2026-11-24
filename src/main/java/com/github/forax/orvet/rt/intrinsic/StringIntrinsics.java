@@ -636,16 +636,16 @@ public final class StringIntrinsics {
   }
 
   public static Object _removeprefix_(String s, Object prefix) {
-    var p = requireArgumentString(prefix, "removeprefix");
-    return s.startsWith(p) && isCodePointBoundary(s, p.length())
-        ? s.substring(p.length())
+    var pre = requireArgumentString(prefix, "removeprefix");
+    return s.startsWith(pre) && isCodePointBoundary(s, pre.length())
+        ? s.substring(pre.length())
         : s;
   }
 
   public static Object _removesuffix_(String s, Object suffix) {
-    var p = requireArgumentString(suffix, "removesuffix");
-    var cut = s.length() - p.length();
-    return !p.isEmpty() && s.endsWith(p) && isCodePointBoundary(s, cut)
+    var suf = requireArgumentString(suffix, "removesuffix");
+    var cut = s.length() - suf.length();
+    return !suf.isEmpty() && s.endsWith(suf) && isCodePointBoundary(s, cut)
         ? s.substring(0, cut)
         : s;
   }
