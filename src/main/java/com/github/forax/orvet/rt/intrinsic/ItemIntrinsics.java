@@ -25,7 +25,7 @@ public final class ItemIntrinsics {
       case PyList<?> list -> (long) list.size();
       case PyDict<?,?> dictionary -> DictIntrinsics.$size$(dictionary);
       case PyRange range -> RangeIntrinsics.$size$(range);
-      default -> throw new PyTypeError("object of type '" + typeName(value) + "' has no len()");
+      default -> throw typeError("object of type '" + typeName(value) + "' has no len()");
     };
   }
 
@@ -55,7 +55,6 @@ public final class ItemIntrinsics {
   @SuppressWarnings("unchecked")
   public static Object $setItem$(Object container, Object index, Object value) {
     switch (container) {
-      case Long _, BigInteger _ -> throw new PyTypeError("'int' object does not support item assignment");
       case PyList<?> list  -> {
         switch (index) {
           case PySlice slice -> { return ListIntrinsics.$setSlice$((PyList<Object>) list, slice, value); }
@@ -63,10 +62,7 @@ public final class ItemIntrinsics {
         }
       }
       case PyDict<?,?> dict -> { return DictIntrinsics.$set$((PyDict<Object, Object>) dict, index, value); }
-      case PyTuple _ -> throw new PyTypeError("'tuple' object does not support item assignment");
-      case PyRange _ -> throw new PyTypeError("'range' object does not support item assignment");
-      case String _ -> throw new PyTypeError("'str' object does not support item assignment");
-      default -> throw new PyTypeError("'" + typeName(container) + "' does not support item assignment");
+      default -> throw typeError("'" + typeName(container) + "' does not support item assignment");
     }
   }
 
@@ -74,7 +70,6 @@ public final class ItemIntrinsics {
   @SuppressWarnings("unchecked")
   public static Object $deleteItem$(Object container, Object index) {
     switch (container) {
-      case Long _, BigInteger _ -> throw new PyTypeError("'int' object doesn't support item deletion");
       case PyList<?> list  -> {
         switch (index) {
           case PySlice slice -> { return ListIntrinsics.$deleteSlice$((PyList<Object>) list, slice); }
@@ -82,10 +77,7 @@ public final class ItemIntrinsics {
         }
       }
       case PyDict<?,?> dict -> { return DictIntrinsics.$delete$((PyDict<Object, ?>) dict, index); }
-      case PyTuple _ -> throw new PyTypeError("'tuple' object doesn't support item deletion");
-      case PyRange _ -> throw new PyTypeError("'range' object doesn't support item deletion");
-      case String _ -> throw new PyTypeError("'str' object doesn't support item deletion");
-      default -> throw new PyTypeError("'" + typeName(container) + "' object doesn't support item deletion");
+      default -> throw typeError("'" + typeName(container) + "' object doesn't support item deletion");
     }
   }
 
@@ -98,8 +90,11 @@ public final class ItemIntrinsics {
       case Long l -> l;
       case Boolean b -> b ? 1L : 0L;
       case BigInteger _ -> throw new PyIndexError("cannot fit 'int' into an index-sized integer");
-      default -> throw new PyTypeError(name + " indices must be integers or slices, not " + typeName(index));
+      default -> throw typeError(name + " indices must be integers or slices, not " + typeName(index));
     };
+  }
 
+  private static PyTypeError typeError(String message) {
+    return new PyTypeError(message);
   }
 }
