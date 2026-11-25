@@ -397,7 +397,6 @@ public final class ASTBuilderTest {
     assertUnsupported("def f(a, /):\n    pass\n", "positional-only parameter marker '/'", 1, 9);
     assertUnsupported("def f(*, a):\n    pass\n", "keyword-only parameter", 1, 6);
     assertUnsupported("def f(*a, b):\n    pass\n", "keyword-only parameter", 1, 10);
-    assertUnsupported("def f(**k):\n    pass\n", "**kwargs parameter", 1, 6);
     assertUnsupported("def f(a: int):\n    pass\n", "annotation", 1, 7);
     assertUnsupported("def f() -> int:\n    pass\n", "return annotation", 1, 8);
     assertUnsupported("@d\ndef f():\n    pass\n", "decorator", 1, 0);

@@ -173,6 +173,8 @@ public final class ASTBuilder {
   // ---------------------------------------------------------------------------------------------
   // helpers
 
+  private record VariadicParams(Param rest, Param keywordRest) {}
+
   private static Token token(ParseTree tree) {
     return switch (tree) {
       case TerminalNode terminal -> terminal.getSymbol();
@@ -484,6 +486,7 @@ public final class ASTBuilder {
 
     var parameters = new ArrayList<Param>();
     Param rest = null;
+    Param keywordRest = null;
     var params = one(raw, ParamsContext.class);
     if (params != null) {
       for (var child : one(params, ParametersContext.class).children) {
@@ -499,7 +502,11 @@ public final class ASTBuilder {
                       one(c, PythonParser.Default_assignmentContext.class),
                       ExpressionContext.class))));
 
-          case Star_etcContext c -> rest = starEtc(c);
+          case Star_etcContext c -> {
+            var variadicParams = starEtc(c);
+            rest = variadicParams.rest;
+            keywordRest = variadicParams.keywordRest;
+          }
           default -> throw new AssertionError(child.getText());
         }
       }
@@ -509,6 +516,9 @@ public final class ASTBuilder {
     var everyParameter = new ArrayList<>(parameters);
     if (rest != null) {
       everyParameter.add(rest);
+    }
+    if (keywordRest != null) {
+      everyParameter.add(keywordRest);
     }
     for (var parameter : everyParameter) {
       if (!seen.add(parameter.name())) {
@@ -526,7 +536,9 @@ public final class ASTBuilder {
     inFunction = savedInFunction;
     loopDepth = savedLoopDepth;
 
-    return new Stmt.FunctionDef(name, parameters, Optional.ofNullable(rest), body, line(ctx), column(ctx));
+    return new Stmt.FunctionDef(name, parameters,
+        Optional.ofNullable(rest), Optional.ofNullable(keywordRest),
+        body, line(ctx), column(ctx));
   }
 
   private Param param(ParamContext ctx, Expr defaultExpr) {
@@ -539,23 +551,30 @@ public final class ASTBuilder {
         line(name), column(name));
   }
 
-  /** Only {@code *name} is accepted. */
-  private Param starEtc(Star_etcContext ctx) {
-    if (ctx.getChild(0) instanceof KwdsContext) {
-      throw unsupported("**kwargs parameter", ctx);
+  private Param keywordStarParam(KwdsContext ctx) {
+    var paramNoDefaultContext = one(ctx, Param_no_defaultContext.class);
+    return param(one(paramNoDefaultContext, ParamContext.class), null);
+  }
+
+  private VariadicParams starEtc(Star_etcContext ctx) {
+    if (ctx.getChild(0) instanceof KwdsContext kwds) {
+      return new VariadicParams(null, keywordStarParam(kwds));
     }
     var second = ctx.getChild(1);
     if (second instanceof Param_no_default_star_annotationContext c) {
       throw unsupported("annotation", c);
     }
-    if (!(second instanceof Param_no_defaultContext p)) {  // '*' ',' ...
+    if (!(second instanceof Param_no_defaultContext p)) {
       throw unsupported("keyword-only parameter", ctx);
     }
-    if (ctx.getChildCount() > 2) {
-      var extra = ctx.getChild(2);
-      throw unsupported(extra instanceof KwdsContext ? "**kwargs parameter" : "keyword-only parameter", extra);
+    var rest = param(one(p, ParamContext.class), null);
+    if (ctx.getChildCount() == 2) {
+      return new VariadicParams(rest, null);
     }
-    return param(one(p, ParamContext.class), null);
+    if (ctx.getChildCount() == 3 && ctx.getChild(2) instanceof KwdsContext kwds) {
+      return new VariadicParams(rest, keywordStarParam(kwds));
+    }
+    throw unsupported("keyword-only parameter", ctx.getChild(2));
   }
 
   /** Shared by {@code if_stmt} and {@code elif_stmt}. */
