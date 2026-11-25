@@ -560,6 +560,15 @@ public final class FunctionSupportTest {
       assertSame(module.getGlobal("f"), module.getGlobal("h"));
       assertGlobal(module, "r", 2L);
     }
+
+    @Test
+    public void functionValueExposesItsDefaultValues() {
+      var f = assertInstanceOf(PyFunction.class, run("""
+          def f(a, b=10, c=20):
+              return a
+          """).getGlobal("f"));
+      assertEquals(List.of(10L, 20L), List.of(f.defaults()));
+    }
   }
 
 
@@ -575,6 +584,18 @@ public final class FunctionSupportTest {
       broken(1, 2)
       """;
       assertEquals("broken() takes 1 positional argument but 2 were given", assertTypeErrorMessage(source));
+    }
+
+    @Test
+    public void defaultsDefineTheAcceptedArityRange() {
+      var prefix = """
+          def f(a, b=2, c=3):
+              return a + b + c
+          """;
+      assertEquals("f() missing 1 required positional argument: 'a'",
+          assertTypeErrorMessage(prefix + "f()\n"));
+      assertEquals("f() takes from 1 to 3 positional arguments but 4 were given",
+          assertTypeErrorMessage(prefix + "f(1, 2, 3, 4)\n"));
     }
   }
 
@@ -677,23 +698,23 @@ public final class FunctionSupportTest {
     @Test
     public void sameCodeSiteWithDefaultsAndKeywords() {
       var module = run("""
-      def make(k):
-          def f(a, b=k, c=k * 2):
-              return a * 10000 + b * 100 + c
-          return f
-      def positional(fn):
-          return fn(1)
-      def keyword(fn):
-          return fn(1, c=9)
-      def keyword_only_required(fn):
-          return fn(a=1)
-      c1 = make(1)
-      c2 = make(2)
-      c3 = make(3)
-      p = [positional(c1), positional(c2), positional(c3), positional(c1)]
-      k = [keyword(c1), keyword(c2), keyword(c3), keyword(c2)]
-      r = [keyword_only_required(c1), keyword_only_required(c2), keyword_only_required(c3)]
-      """);
+          def make(k):
+              def f(a, b=k, c=k * 2):
+                  return a * 10000 + b * 100 + c
+              return f
+          def positional(fn):
+              return fn(1)
+          def keyword(fn):
+              return fn(1, c=9)
+          def keyword_only_required(fn):
+              return fn(a=1)
+          c1 = make(1)
+          c2 = make(2)
+          c3 = make(3)
+          p = [positional(c1), positional(c2), positional(c3), positional(c1)]
+          k = [keyword(c1), keyword(c2), keyword(c3), keyword(c2)]
+          r = [keyword_only_required(c1), keyword_only_required(c2), keyword_only_required(c3)]
+          """);
       assertGlobal(module, "p", new PyList<>(10102L, 10204L, 10306L, 10102L));
       assertGlobal(module, "k", new PyList<>(10109L, 10209L, 10309L, 10209L));
       assertGlobal(module, "r", new PyList<>(10102L, 10204L, 10306L));
@@ -702,20 +723,20 @@ public final class FunctionSupportTest {
     @Test
     public void sameCodeSiteWithDefaultsAndRest() {
       var module = run("""
-      def make(k):
-          def f(a, b=k, *r):
-              return b
-          return f
-      def apply1(fn):
-          return fn(0)
-      def apply3(fn):
-          return fn(0, 5, 6, 7)
-      c1 = make(1)
-      c2 = make(2)
-      c3 = make(3)
-      r1 = [apply1(c1), apply1(c2), apply1(c3)]
-      r2 = [apply3(c1), apply3(c2), apply3(c3)]
-      """);
+          def make(k):
+              def f(a, b=k, *r):
+                  return b
+              return f
+          def apply1(fn):
+              return fn(0)
+          def apply3(fn):
+              return fn(0, 5, 6, 7)
+          c1 = make(1)
+          c2 = make(2)
+          c3 = make(3)
+          r1 = [apply1(c1), apply1(c2), apply1(c3)]
+          r2 = [apply3(c1), apply3(c2), apply3(c3)]
+          """);
       assertGlobal(module, "r1", new PyList<>(1L, 2L, 3L));
       assertGlobal(module, "r2", new PyList<>(5L, 5L, 5L));
     }
@@ -940,6 +961,24 @@ public final class FunctionSupportTest {
           """;
       assertEquals(5L, eval(source, "r"));
     }
+
+    @Test
+    public void defaultArgumentsThroughOneMonomorphicSite() {
+      var module = run("""
+          def add(value, step=10):
+              return value + step
+          def apply(fn, value):
+              return fn(value)
+          r1 = apply(add, 1)
+          r2 = apply(add, 2)
+          r3 = add(3, 100)
+          r4 = apply(add, 4)
+          """);
+      assertGlobal(module, "r1", 11L);
+      assertGlobal(module, "r2", 12L);
+      assertGlobal(module, "r3", 103L);
+      assertGlobal(module, "r4", 14L);
+    }
   }
 
 
@@ -1022,6 +1061,32 @@ public final class FunctionSupportTest {
     }
 
     @Test
+    public void distinctCalleesKeepTheirOwnDefaultsAtOneSite() {
+      var module = run("""
+          def f0(x, offset=10):
+              return x + offset
+          def f1(x, offset=20):
+              return x + offset
+          def f2(x, offset=30):
+              return x + offset
+          def f3(x, offset=40):
+              return x + offset
+          def apply(fn, value):
+              return fn(value)
+          r0 = apply(f0, 1)
+          r1 = apply(f1, 1)
+          r2 = apply(f2, 1)
+          r3 = apply(f3, 1)
+          r4 = apply(f0, 2)
+          """);
+      assertGlobal(module, "r0", 11L);
+      assertGlobal(module, "r1", 21L);
+      assertGlobal(module, "r2", 31L);
+      assertGlobal(module, "r3", 41L);
+      assertGlobal(module, "r4", 12L);
+    }
+
+    @Test
     public void plainAndRestFunctionsAtOneSite() {
       checkKinds(List.of(PLAIN, REST0, REST1, REST2), false);
     }
@@ -1095,6 +1160,30 @@ public final class FunctionSupportTest {
       var ctx = megamorphicSession();
       runIn(ctx, "q = apply(f7, 1) + apply(f0, 1) + apply(f4, 1) + apply(f2, 1)\n");
       assertGlobal(ctx, "q", (1L + 7) + (1L + 0) + (1L + 4) + (1L + 2));
+    }
+
+    @Test
+    public void megamorphicSiteKeepsEachCalleesDefaults() {
+      var builder = new StringBuilder();
+      for (var i = 0; i < 8; i++) {
+        builder.append("def f").append(i).append("(x, offset=").append(i * 10)
+            .append("):\n    return x + offset\n");
+      }
+      builder.append("""
+          def apply(fn, value):
+              return fn(value)
+          """);
+      for (var i = 0; i < 8; i++) {
+        builder.append("r").append(i).append(" = apply(f").append(i).append(", 1)\n");
+      }
+      builder.append("again = apply(f3, 2)\n");
+      var source = builder.toString();
+
+      var module = run(source);
+      for (var i = 0; i < 8; i++) {
+        assertGlobal(module, "r" + i, 1L + 10L * i);
+      }
+      assertGlobal(module, "again", 32L);
     }
 
     @Test
@@ -1354,6 +1443,23 @@ public final class FunctionSupportTest {
       assertGlobal(module, "r0", 123L);
       assertGlobal(module, "r1", 1123L);
     }
+
+    @Test
+    public void defaultArgumentBeforeRestParameter() {
+      var module = run("""
+          def f(a, b=10, *rest):
+              total = b
+              for value in rest:
+                  total += value
+              return total
+          r0 = f(1)
+          r1 = f(1, 2, 3, 4)
+          r2 = f(1, b=5)
+          """);
+      assertGlobal(module, "r0", 10L);
+      assertGlobal(module, "r1", 9L);
+      assertGlobal(module, "r2", 5L);
+    }
   }
 
 
@@ -1535,6 +1641,25 @@ public final class FunctionSupportTest {
           r = run(50)
           """;
       assertEquals(350L, eval(source, "r"));
+    }
+
+    @Test
+    public void defaultValueAndCapturedValueAreIndependent() {
+      var module = run("""
+          def make(base):
+              initial = base * 10
+              def add(value=initial):
+                  return base + value
+              return add
+          a = make(1)
+          b = make(2)
+          r0 = a()
+          r1 = b()
+          r2 = a(5)
+          """);
+      assertGlobal(module, "r0", 11L);
+      assertGlobal(module, "r1", 22L);
+      assertGlobal(module, "r2", 6L);
     }
   }
 
@@ -1816,6 +1941,26 @@ public final class FunctionSupportTest {
       assertGlobal(module, "r5", 123L);
       assertGlobal(module, "r6", 3123L);
     }
+
+    @Test
+    public void closuresOfOneDefKeepTheirDefaultsAndCapturesAtOneSite() {
+      var module = run("""
+          def make(k):
+              def add(value=k * 10):
+                  return value + k
+              return add
+          def apply(fn):
+              return fn()
+          a = make(1)
+          b = make(2)
+          r0 = apply(a)
+          r1 = apply(b)
+          r2 = apply(a)
+          """);
+      assertGlobal(module, "r0", 11L);
+      assertGlobal(module, "r1", 22L);
+      assertGlobal(module, "r2", 11L);
+    }
   }
 
 
@@ -1901,6 +2046,22 @@ public final class FunctionSupportTest {
       assertGlobal(module, "a", 1L);
       assertGlobal(module, "b", 2L);
     }
+
+    @Test
+    public void reboundGlobalFunctionUsesItsNewDefaults() {
+      var module = run("""
+          def f(value, offset=1):
+              return value + offset
+          def apply(value):
+              return f(value)
+          before = apply(10)
+          def f(value, offset=100):
+              return value + offset
+          after = apply(10)
+          """);
+      assertGlobal(module, "before", 11L);
+      assertGlobal(module, "after", 110L);
+    }
   }
 
 
@@ -1979,6 +2140,18 @@ public final class FunctionSupportTest {
           r = run(20)
           """;
       assertEquals(20L, eval(source, "r"));
+    }
+
+    @Test
+    public void defaultsAreEvaluatedForEachDefinitionInALoop() {
+      var module = run("""
+          total = 0
+          for i in range(5):
+              def current(value=i):
+                  return value
+              total += current()
+          """);
+      assertGlobal(module, "total", 10L);
     }
   }
 
@@ -2127,6 +2300,16 @@ public final class FunctionSupportTest {
               return a
           f(a=1)
           """));
+    }
+
+    @Test
+    public void multipleValuesForDefaultedParameter() {
+      assertEquals("f() got multiple values for argument 'b'",
+          assertTypeErrorMessage("""
+              def f(a, b=2):
+                  return a + b
+              f(1, 3, b=4)
+              """));
     }
   }
 
@@ -2293,6 +2476,27 @@ public final class FunctionSupportTest {
 
       assertGlobal(ctx, "ok", 7123L);
     }
+
+    @Test
+    public void defaultedCalleeStillWorksAfterAnotherCalleeThrows() {
+      var ctx = new ModuleContext();
+      runIn(ctx, """
+          def add(x, amount=10):
+              return x + amount
+          def divide(x, divisor=0):
+              return x // divisor
+          def apply(fn, value):
+              return fn(value)
+          before = apply(add, 1)
+          """);
+
+      assertThrows(PyZeroDivisionError.class,
+          () -> runIn(ctx, "bad = apply(divide, 1)"));
+
+      runIn(ctx, "after = apply(add, 2)");
+      assertGlobal(ctx, "before", 11L);
+      assertGlobal(ctx, "after", 12L);
+    }
   }
 
 
@@ -2352,6 +2556,20 @@ public final class FunctionSupportTest {
       apply(one)
       """);
       assertEquals("one() got an unexpected keyword argument 'x'", assertTypeErrorMessage(source));
+    }
+
+    @Test
+    public void keywordCallUsesDefaultsForOmittedParameters() {
+      var module = run("""
+          def f(a, b=10, c=100):
+              return a * 100 + b * 10 + c
+          def apply(fn):
+              return fn(c=3, a=1)
+          r0 = apply(f)
+          r1 = f(2, b=5)
+          """);
+      assertGlobal(module, "r0", 203L);
+      assertGlobal(module, "r1", 350L);
     }
   }
 
@@ -2420,6 +2638,33 @@ public final class FunctionSupportTest {
         }
         for (var future : futures) {
           assertEquals(610L, future.get());
+        }
+      }
+    }
+
+    @Test
+    @Timeout(120)
+    public void threadsCallingThroughASiteWithDefaultArguments() throws Throwable {
+      var ctx = new ModuleContext();
+      runIn(ctx, """
+          def add(x, amount=1):
+              return x + amount
+          def apply(fn, value):
+              return fn(value)
+          """);
+
+      var threads = 8;
+      try (var pool = Executors.newFixedThreadPool(threads)) {
+        var futures = new ArrayList<Future<Object>>();
+        for (var t = 0; t < threads; t++) {
+          var name = "defaultResult" + t;
+          futures.add(pool.submit(() -> {
+            runIn(ctx, name + " = apply(add, 0)");
+            return ctx.getGlobal(name);
+          }));
+        }
+        for (var future : futures) {
+          assertEquals(1L, future.get());
         }
       }
     }
