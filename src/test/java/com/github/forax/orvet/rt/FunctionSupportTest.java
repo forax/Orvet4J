@@ -675,6 +675,52 @@ public final class FunctionSupportTest {
     }
 
     @Test
+    public void sameCodeSiteWithDefaultsAndKeywords() {
+      var module = run("""
+      def make(k):
+          def f(a, b=k, c=k * 2):
+              return a * 10000 + b * 100 + c
+          return f
+      def positional(fn):
+          return fn(1)
+      def keyword(fn):
+          return fn(1, c=9)
+      def keyword_only_required(fn):
+          return fn(a=1)
+      c1 = make(1)
+      c2 = make(2)
+      c3 = make(3)
+      p = [positional(c1), positional(c2), positional(c3), positional(c1)]
+      k = [keyword(c1), keyword(c2), keyword(c3), keyword(c2)]
+      r = [keyword_only_required(c1), keyword_only_required(c2), keyword_only_required(c3)]
+      """);
+      assertGlobal(module, "p", new PyList<>(10102L, 10204L, 10306L, 10102L));
+      assertGlobal(module, "k", new PyList<>(10109L, 10209L, 10309L, 10209L));
+      assertGlobal(module, "r", new PyList<>(10102L, 10204L, 10306L));
+    }
+
+    @Test
+    public void sameCodeSiteWithDefaultsAndRest() {
+      var module = run("""
+      def make(k):
+          def f(a, b=k, *r):
+              return b
+          return f
+      def apply1(fn):
+          return fn(0)
+      def apply3(fn):
+          return fn(0, 5, 6, 7)
+      c1 = make(1)
+      c2 = make(2)
+      c3 = make(3)
+      r1 = [apply1(c1), apply1(c2), apply1(c3)]
+      r2 = [apply3(c1), apply3(c2), apply3(c3)]
+      """);
+      assertGlobal(module, "r1", new PyList<>(1L, 2L, 3L));
+      assertGlobal(module, "r2", new PyList<>(5L, 5L, 5L));
+    }
+
+    @Test
     public void manyClosuresMakeTheSiteMegamorphicButKeepTheirDefaults() {
       var module = run("""
           def make(k):

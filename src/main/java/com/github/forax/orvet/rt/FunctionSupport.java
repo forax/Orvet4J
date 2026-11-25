@@ -361,7 +361,7 @@ final class FunctionSupport {
 
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
-    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS;
+    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS, DEFAULT_AT;
     private static final VarHandle INFO;
     static {
       var lookup = MethodHandles.lookup();
@@ -375,6 +375,8 @@ final class FunctionSupport {
             methodType(boolean.class, PyFunction.Code.class, Object.class));
         CAPTURED_ARGS = lookup.findVirtual(PyFunction.class, "capturedArgs",
             methodType(Object[].class));
+        DEFAULT_AT = lookup.findStatic(FunctionCallSite.class, "defaultAt",
+            methodType(Object.class, PyFunction.class, int.class));
         INFO = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
       } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
@@ -413,16 +415,15 @@ final class FunctionSupport {
       var function = asFunction(callee);
       var argCount = type().parameterCount() - 1;
 
-      // 2. Check if there is an existing call site to update (promote).
+      // 2. Check if there is not an existing call site to update (promote)
       var code = function.code;
       var notTooManyCaptureArgs = code.captureCount() < 200; // Java MH implementation has a limit at 250
-      var usesDefaults = code.defaultCount() != 0 && argCount < code.arity();
-      var promoted = callee instanceof PyFunction && notTooManyCaptureArgs && !usesDefaults ?
+      var promoted = callee instanceof PyFunction && notTooManyCaptureArgs ?
           findPromoted(root, code) :
           null;
 
       // 3. Megamorphic: the arguments are validated and the defaults filled at each call
-      if (promoted == null && (depth == MAX_DEPTH || (usesDefaults && !notTooManyCaptureArgs))) {
+      if (promoted == null && depth == MAX_DEPTH) {
         var entryPoint = keywordNames.length == 0
             ? Megamorphic.MEGAMORPHIC
             : insertArguments(Megamorphic.MEGAMORPHIC_WITH_KEYWORDS, 2, positionalCount, keywordNames);
@@ -442,8 +443,9 @@ final class FunctionSupport {
       }
 
       // 5. Entry of the callee: (Object callee | PyFunction self, <declared parameters> [, rest])
+      var byIdentity = promoted == null && notTooManyCaptureArgs;
       MethodHandle target, test;
-      if (promoted == null && notTooManyCaptureArgs) {
+      if (byIdentity) {
         test = SAME_CALLEE.bindTo(callee);
         target = getFunctionMH(function);
       } else {
@@ -451,10 +453,11 @@ final class FunctionSupport {
         target = getEntry(code);
       }
 
-      // 6. Adapt to the call site
+      // 6. Adapt to the call site.
+      var defaultValues = byIdentity ? function.defaults : null;
       var adapted = reorderPlan == null
-          ? adaptArguments(code, target, 1, function.defaults, argCount).asType(type())
-          : adaptKeywords(code, target, type(), reorderPlan, function.defaults);
+          ? adaptArguments(code, target, 1, defaultValues, argCount).asType(type())
+          : adaptKeywords(code, target, type(), reorderPlan, defaultValues);
 
       // 7. Change the target of the existing call site
       if (promoted != null) {
@@ -557,6 +560,10 @@ final class FunctionSupport {
       return callee instanceof PyFunction f && f.code == expected;
     }
 
+    private static Object defaultAt(PyFunction function, int index) {
+      return function.defaults[index];
+    }
+
     private static MethodHandle compileBody(ModuleContext context, Stmt.FunctionDef def) {
       var scope = context.scopeFor(def);
       ScopeAnalyzer.checkDefiniteAssignment(scope);
@@ -591,59 +598,93 @@ final class FunctionSupport {
 
     /// Adapts `entry`, whose declared parameters start at index `firstParam`, to a call with `argCount`
     /// positional arguments: packs the extra arguments into the rest parameter or, if the call is short,
-    /// binds the default values of the missing parameters (and an empty rest).
+    /// supplies the default values of the missing parameters (and an empty rest).
+    /// If `defaults` is null, the entry is (PyFunction self, ...) and the defaults are read from self.
     static MethodHandle adaptArguments(PyFunction.Code code, MethodHandle entry, int firstParam,
                                        Object[] defaults, int argCount) {
       var arity = code.arity();
       if (argCount >= arity) {
         return adapt(code, entry, firstParam + arity, argCount - arity);
       }
-      var withRest = code.isVariadic() ? adapt(code, entry, firstParam + arity, 0) : entry;
       // checkArity guarantees argCount >= firstDefault(); the missing parameters are contiguous
-      var values = Arrays.copyOfRange(defaults, argCount - code.firstDefault(), defaults.length);
-      return insertArguments(withRest, firstParam + argCount, values);   // values is the varargs array
+      var first = code.firstDefault();
+      var adapted = code.isVariadic() ? adapt(code, entry, firstParam + arity, 0) : entry;
+
+      if (defaults != null) {   // constants
+        var values = Arrays.copyOfRange(defaults, argCount - first, defaults.length);
+        return insertArguments(adapted, firstParam + argCount, values);   // values is the varargs array
+      }
+
+      // dynamic: insert all the default value calling DEFAULT_AT on `self`
+      assert firstParam == 1;
+      for (var i = arity - 1; i >= argCount; i--) {   // each step replaces one parameter by one: positions stay valid
+        var filter = insertArguments(DEFAULT_AT, 1, i - first);
+        adapted = collectArguments(adapted, firstParam + i, filter);
+      }
+      // adapted: (PyFunction self, Object x argCount, PyFunction x (arity - argCount)) -> Object
+      // all the trailing PyFunction parameters are the same `self`
+      var adaptedType = adapted.type();
+      var keep = firstParam + argCount;
+      var reorder = new int[adaptedType.parameterCount()];
+      for (var j = 0; j < reorder.length; j++) {
+        reorder[j] = j < keep ? j : 0;
+      }
+      return permuteArguments(adapted, adaptedType.dropParameterTypes(keep, adaptedType.parameterCount()), reorder);
     }
 
     /// Adapts the entry to the call site, permuting the arguments according to the plan.
-    /// The parameters the call does not supply get their default value.
+    /// The parameters the call does not supply get their default value (see adaptArguments for `defaults`).
     private MethodHandle adaptKeywords(PyFunction.Code code, MethodHandle entry, MethodType type,
                                        int[] plan, Object[] defaults) {
       var arity = code.arity();
       var restCount = Math.max(0, positionalCount - arity);
-      var adapted = adapt(code, entry, 1 + arity, restCount);
 
-      // bind the defaults of the unassigned parameters, from the last one so positions stay valid
       var supplied = new boolean[arity];
       for (var target : plan) {
         if (target < arity) {
           supplied[target] = true;
         }
       }
+      var adapted = adapt(code, entry, 1 + arity, restCount);   // (X, Object x (arity + restCount)) -> Object
 
-      var slots = new int[arity];   // position in `adapted` of each supplied parameter, once filled
-      var suppliedCount = 0;
-      for (var i = 0; i < arity; i++) {
-        if (supplied[i]) {
-          slots[i] = 1 + suppliedCount++;
+      var first = code.firstDefault();
+      if (defaults != null) {   // constants: insert defaults for all the unsupplied parameters
+        var slots = new int[arity];   // position in `adapted` of each supplied parameter once the others are bound
+        var suppliedCount = 0;
+        for (var i = 0; i < arity; i++) {
+          if (supplied[i]) {
+            slots[i] = 1 + suppliedCount++;
+          }
         }
+        for (var i = arity - 1; i >= first; i--) {
+          if (!supplied[i]) {
+            adapted = insertArguments(adapted, 1 + i, defaults[i - first]);
+          }
+        }
+        var reorder = new int[1 + suppliedCount + restCount];
+        for (var i = 0; i < plan.length; i++) {
+          var target = plan[i];
+          var slot = target < arity ? slots[target] : 1 + suppliedCount + (target - arity);
+          reorder[slot] = 1 + i;
+        }
+        return permuteArguments(adapted.asType(type), type, reorder);
       }
-      var firstDefault = code.firstDefault();
-      for (var i = arity - 1; i >= firstDefault; i--) {
+
+      // dynamic: for each unsupplied parameter, call DEFAULT_AT on `self`
+      // filtered into its default value
+      for (var i = arity - 1; i >= first; i--) {
         if (!supplied[i]) {
-          adapted = insertArguments(adapted, 1 + i, defaults[i - firstDefault]);
+          var filter = insertArguments(DEFAULT_AT, 1, i - first);
+          adapted = collectArguments(adapted, 1 + i, filter);
         }
       }
-
-      // reorder[j] = position in the call site of the j-th parameter of `adapted` (the callee stays first)
-      var reorder = new int[1 + suppliedCount + restCount];
-      reorder[0] = 0;
+      var reorder = new int[1 + arity + restCount];   // zero (`self`) unless a call-site argument goes there
       for (var i = 0; i < plan.length; i++) {
-        var target = plan[i];
-        var slot = target < arity ? slots[target] : 1 + suppliedCount + (target - arity);
-        reorder[slot] = 1 + i;
+        reorder[1 + plan[i]] = 1 + i;
       }
-      var typed = adapted.asType(type);
-      return permuteArguments(typed, type, reorder);
+      // the extra copies of self are PyFunction parameters, make everything an Object so the types match
+      var generic = adapted.asType(MethodType.genericMethodType(reorder.length));
+      return permuteArguments(generic, type, reorder);
     }
   }
 
