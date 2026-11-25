@@ -558,7 +558,18 @@ public final class StringIntrinsics {
   // -- method table
 
   public static Object _lower_(String s) {
-    return s.toLowerCase(Locale.ROOT);
+    // Final_Sigma is the only context-sensitive lowercase mapping: CPython maps
+    // Σ to ς using the Unicode Case_Ignorable property, while the JDK toLowerCase
+    // uses its own context rule and disagrees with CPython.
+    if (s.indexOf(0x3a3) < 0) {   // no uppercase sigma: no context-sensitive mapping
+      return s.toLowerCase(Locale.ROOT);
+    }
+    var cps = s.codePoints().toArray();
+    var builder = new StringBuilder(cps.length);
+    for (var i = 0; i < cps.length; i++) {
+      appendLowerCase(builder, cps, i);   // Σ -> isFinalSigma(cps, i) ? ς : σ, else ROOT-lowercase
+    }
+    return builder.toString();
   }
 
   public static Object _upper_(String s) {

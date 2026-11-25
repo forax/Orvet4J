@@ -1357,8 +1357,29 @@ public final class StringIntrinsicsTest {
       assertEquals("\u03bf\u03b4\u03bf\u03c2 \u03bf\u03b4\u03bf\u03c2",
           _lower_("\u039f\u0394\u039f\u03a3 \u039f\u0394\u039f\u03a3"));
 
-      assertEquals("ας_α", _lower_("ΑΣ_Α"));
-      assertEquals("α_σ", _lower_("Α_Σ"));
+      assertEquals("\u03B1_\u03C3", _lower_("\u0391_\u03A3"));
+
+      // a case-ignorable character is looked through in both directions, ...
+      assertEquals("a:\u03C2", _lower_("A:\u03A3"));
+      assertEquals("\u02B0\u03C3", _lower_("\u02B0\u03A3"));      // modifier letter: case-ignorable
+      assertEquals("\u03B1\u00B7\u03C2", _lower_("\u0391\u00B7\u03A3"));    // middle dot: case-ignorable
+
+      // ... while any other uncased character stops the scan
+      assertEquals("a1\u03C3", _lower_("A1\u03A3"));    // no cased character right before -> σ
+
+
+      // Java's cased predicates cover Other_Uppercase/Other_Lowercase like CPython
+      assertEquals("\u2170\u03C2", _lower_("\u2160\u03A3"));      // Roman numeral: cased
+      assertEquals("\u24D0\u03C2", _lower_("\u24B6\u03A3"));      // circled letter: cased
+      assertEquals("\u02B0\u03C3\u02B0", _lower_("\u02B0\u03A3\u02B0"));
+
+      // astral: Deseret 𐐀 is cased (Lu), Old Italic 𐌀 is not (Lo)
+      assertEquals("\uD801\uDC28\u03c2", _lower_("\uD801\uDC00\u03a3"));  // 𐐀Σ -> 𐐨ς
+      assertEquals("\uD800\uDF00\u03c3", _lower_("\uD800\uDF00\u03a3"));  // 𐌀Σ -> 𐌀σ
+
+      // real words
+      assertEquals("\u03B9\u03B5\u03C3\u03C5\u03C2 \u03C7\u03C1\u03B9\u03C3\u03C4\u03BF\u03C2",
+          _lower_("\u0399\u0395\u03A3\u03A5\u03A3 \u03A7\u03A1\u0399\u03A3\u03A4\u039F\u03A3"));
     }
 
     @Test
@@ -1366,6 +1387,11 @@ public final class StringIntrinsicsTest {
       assertEquals("\u03c3", _lower_("\u03a3"));                      // lone Σ -> σ
       assertEquals("\u03c3\u03b1", _lower_("\u03a3\u0391"));          // ΣΑ -> σα
       assertEquals("\u03b1\u03c3\u03b2", _lower_("\u0391\u03a3\u0392")); // ΑΣΒ -> ασβ
+      assertEquals("\u03B1\u03C2_\u03B1", _lower_("\u0391\u03A3_\u0391"));
+      assertEquals("a\u03C3:b", _lower_("A\u03A3:B"));
+      assertEquals("\u03C30\u03B1", _lower_("\u03A30\u0391"));
+      assertEquals("a\u03C21b", _lower_("A\u03A31B"));  // no cased character right after -> ς
+      assertEquals("\u03c3\uD801\uDC28", _lower_("\u03a3\uD801\uDC00"));  // Σ𐐀 -> σ𐐨
       assertEquals("1\u03c3", _lower_("1\u03a3"));
     }
 
