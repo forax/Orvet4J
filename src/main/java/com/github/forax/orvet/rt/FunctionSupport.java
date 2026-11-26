@@ -216,7 +216,7 @@ final class FunctionSupport {
       var keywordRest = newKeywordRest(code);
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        if (isKeywordTarget(target)) {
+        if (isKwArgTarget(target)) {
           keywordRest.put(keywordNames[i - positionalCount], args[i]);
         } else {
           ordered[target] = args[i];
@@ -677,7 +677,7 @@ final class FunctionSupport {
       var extraNames = new ArrayList<String>();   // keywords collected by **kwargs, in call-site order
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        if (isKeywordTarget(target)) {
+        if (isKwArgTarget(target)) {
           extraNames.add(keywordNames[i - positionalCount]);
         } else if (target < arity) {
           supplied[target] = true;
@@ -709,7 +709,7 @@ final class FunctionSupport {
         for (var i = 0; i < plan.length; i++) {
           var target = plan[i];
           int slot;
-          if (isKeywordTarget(target)) {
+          if (isKwArgTarget(target)) {
             slot = 1 + suppliedCount + restCount + extraIndex++;
           } else if (target < arity) {
             slot = slots[target];
@@ -732,7 +732,7 @@ final class FunctionSupport {
       var extraIndex = 0;
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        var slot = isKeywordTarget(target) ? 1 + arity + restCount + extraIndex++ : 1 + target;
+        var slot = isKwArgTarget(target) ? 1 + arity + restCount + extraIndex++ : 1 + target;
         reorder[slot] = 1 + i;
       }
       var generic = adapted.asType(MethodType.genericMethodType(reorder.length));
@@ -754,7 +754,7 @@ final class FunctionSupport {
 
   private static final int KWARG_TARGET = -1;
 
-  private static boolean isKeywordTarget(int target) {
+  private static boolean isKwArgTarget(int target) {
     // equivalent to == KWARG_INDEX but merged with subsequent bound check
     return target < 0;
   }
