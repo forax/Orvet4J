@@ -378,9 +378,43 @@ final class FunctionSupport {
     }
   }
 
+  private static final class KeywordRestAdapter {
+    private KeywordRestAdapter() {
+      throw new AssertionError();
+    }
+
+    static final MethodHandle CREATE_DICT;
+    static {
+      var lookup = MethodHandles.lookup();
+      try {
+        CREATE_DICT = lookup.findStatic(KeywordRestAdapter.class, "createDict",
+            methodType(PyDict.class, String[].class, Object[].class));
+      } catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    private static PyDict<Object, Object> createDict(String[] names, Object[] values) {
+      var dict = new PyDict<>();
+      for (var i = 0; i < names.length; i++) {
+        dict.put(names[i], values[i]);
+      }
+      return dict;
+    }
+
+    /// Replaces the last parameter of `entry` (the `**kwargs` dict) by one parameter per extra keyword value.
+    /// The dict is created at each call, with the keywords in call-site order.
+    static MethodHandle collectKeywordRest(MethodHandle entry, String[] names) {
+      var position = entry.type().parameterCount() - 1;
+      var collector = insertArguments(CREATE_DICT, 0, (Object) names)
+          .asCollector(Object[].class, names.length);
+      return collectArguments(entry, position, collector);
+    }
+  }
+
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
-    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS, DEFAULT_AT, BUILD_KEYWORD_REST;
+    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS, DEFAULT_AT;
     private static final VarHandle INFO;
     private static final String[] EMPTY_NAMES = new String[0];
     static {
@@ -397,8 +431,6 @@ final class FunctionSupport {
             methodType(Object[].class));
         DEFAULT_AT = lookup.findStatic(FunctionCallSite.class, "defaultAt",
             methodType(Object.class, PyFunction.class, int.class));
-        BUILD_KEYWORD_REST = lookup.findStatic(FunctionCallSite.class, "buildKeywordRest",
-            methodType(PyDict.class, String[].class, Object[].class));
         INFO = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
       } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
@@ -586,14 +618,6 @@ final class FunctionSupport {
       return function.defaults[index];
     }
 
-    private static PyDict<Object, Object> buildKeywordRest(String[] names, Object[] values) {
-      var dict = new PyDict<Object, Object>();
-      for (var i = 0; i < names.length; i++) {
-        dict.put(names[i], values[i]);
-      }
-      return dict;
-    }
-
     private static MethodHandle compileBody(ModuleContext context, Stmt.FunctionDef def) {
       var scope = context.scopeFor(def);
       ScopeAnalyzer.checkDefiniteAssignment(scope);
@@ -634,7 +658,7 @@ final class FunctionSupport {
     static MethodHandle adaptArguments(PyFunction.Code code, MethodHandle entry, int firstParam,
                                        Object[] defaults, int argCount) {
       if (code.hasKeywordRest()) {
-        entry = collectKeywordRest(entry, EMPTY_NAMES);   // positional call: an empty dict per call
+        entry = KeywordRestAdapter.collectKeywordRest(entry, EMPTY_NAMES);   // positional call: an empty dict per call
       }
       var arity = code.arity();
       if (argCount >= arity) {
@@ -685,7 +709,7 @@ final class FunctionSupport {
       }
       var extraCount = extraNames.size();
       if (code.hasKeywordRest()) {
-        entry = collectKeywordRest(entry, extraNames.toArray(EMPTY_NAMES));
+        entry = KeywordRestAdapter.collectKeywordRest(entry, extraNames.toArray(EMPTY_NAMES));
       }
       // (X, Object x (arity + restCount + extraCount)) -> Object
       var adapted = adapt(code, entry, 1 + arity, restCount);
@@ -737,15 +761,6 @@ final class FunctionSupport {
       }
       var generic = adapted.asType(MethodType.genericMethodType(reorder.length));
       return permuteArguments(generic, type, reorder);
-    }
-
-    /// Replaces the last parameter of `entry` (the `**kwargs` dict) by one parameter per extra keyword value.
-    /// The dict is created at each call, with the keywords in call-site order.
-    private static MethodHandle collectKeywordRest(MethodHandle entry, String[] names) {
-      var position = entry.type().parameterCount() - 1;
-      var collector = insertArguments(BUILD_KEYWORD_REST, 0, (Object) names)
-          .asCollector(Object[].class, names.length);
-      return collectArguments(entry, position, collector);
     }
   }
 
