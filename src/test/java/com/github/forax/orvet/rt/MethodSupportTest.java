@@ -4,6 +4,7 @@ import com.github.forax.orvet.rt.error.PyAttributeError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.CallSite;
@@ -165,13 +166,61 @@ public final class MethodSupportTest {
     assertEquals("method calls with keyword arguments are not supported yet", error.getMessage());
   }
 
-  @Test
-  @Disabled
-  public void existingMethodWithWrongArityShouldRaiseTypeError() {
-    var upper = methodCallSite("upper", 2);
 
-    var exception = assertThrows(PyTypeError.class,
-        () -> invoke(upper, "orvet", "unexpected"));
-    assertEquals("upper expected at most 1 arguments, got 2", exception.getMessage());
+  @Nested
+  public class MethodCallError {
+
+    @Test
+    public void zeroArgumentMethodWithExtraArgumentsShouldRaiseTypeError() {
+      var upper = methodCallSite("upper", 2);
+
+      var exception = assertThrows(PyTypeError.class,
+          () -> invoke(upper, "orvet", "unexpected"));
+      assertEquals("str.upper() takes no arguments (1 given)",
+          exception.getMessage());
+    }
+
+    @Test
+    public void methodWithRequiredArgumentsShouldReportTooFewArguments() {
+      var find = methodCallSite("find", 1);
+
+      var exception = assertThrows(PyTypeError.class,
+          () -> invoke(find, "orvet"));
+      assertEquals("find expected at least 1 argument, got 0",
+          exception.getMessage());
+    }
+
+    @Test
+    public void overloadedMethodShouldReportTooManyArguments() {
+      var find = methodCallSite("find", 5);
+
+      var exception = assertThrows(PyTypeError.class,
+          () -> invoke(find, "orvet", "r", 0L, 1L, 2L));
+      assertEquals("find expected at most 3 arguments, got 4",
+          exception.getMessage());
+    }
+
+    @Test
+    public void methodWithOneOptionalArgumentShouldUseSingular() {
+      var pop = methodCallSite("pop", 3);
+      var list = new PyList<>(10L, 20L);
+
+      var exception = assertThrows(PyTypeError.class,
+          () -> invoke(pop, list, 0L, 1L));
+      assertEquals("pop expected at most 1 argument, got 2",
+          exception.getMessage());
+    }
+
+    @Test
+    public void missingMethodShouldNotBeReportedAsWrongArity() {
+      var site = methodCallSite("does_not_exist", 1);
+
+      var exception = assertThrows(PyAttributeError.class,
+          () -> invoke(site, "orvet"));
+      assertEquals("'str' object has no attribute 'does_not_exist'",
+          exception.getMessage());
+    }
   }
+
+
 }

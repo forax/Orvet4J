@@ -110,17 +110,29 @@ final class MethodSupport {
     }
 
     private PyException methodNotFound(Object receiver, Class<?> intrinsic, String name) {
-      var argumentCount = Arrays.stream(intrinsic.getDeclaredMethods())
-        .filter(m -> m.getName().equals("_" + name + "_"))
-        .mapToInt(m -> m.getParameterCount() - 1)
-        .max()
-        .orElse(-1);
-      if (argumentCount == -1) {
+      var stats = Arrays.stream(intrinsic.getDeclaredMethods())
+          .filter(m -> m.getName().equals("_" + name + "_"))
+          .mapToInt(m -> m.getParameterCount() - 1)
+          .summaryStatistics();
+
+      if (stats.getCount() == 0) {
         return new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
             "' object has no attribute '" + name + "'");
       }
-      return new PyTypeError(name + " expected at most " + argumentCount +
-          " arguments, got " + (type().parameterCount() - 1));
+      var actual = type().parameterCount() - 1;
+      var minimum = stats.getMin();
+      var maximum = stats.getMax();
+
+      if (maximum == 0) {
+        return new PyTypeError(IntrinsicSupport.typeName(receiver) + "." + name +
+            "() takes no arguments (" + actual + " given)");
+      }
+      if (actual < minimum) {
+        return new PyTypeError(name + " expected at least " + minimum +
+            (minimum == 1 ? " argument" : " arguments") + ", got " + actual);
+      }
+      return new PyTypeError(name + " expected at most " + maximum +
+          (maximum == 1 ? " argument" : " arguments") + ", got " + actual);
     }
 
     private static MethodHandle lookup(Class<?> intrinsic, String name, MethodType methodType) {
