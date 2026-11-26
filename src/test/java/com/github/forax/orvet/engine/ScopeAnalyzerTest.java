@@ -190,6 +190,15 @@ public final class ScopeAnalyzerTest {
                     """);
       assertEquals(Set.of("y"), byName(result, "f").locals());
     }
+
+    @Test
+    public void keywordRestParameterIsLocal() {
+      var result = analyze("""
+      def f(a, *rest, **kw):
+          pass
+      """);
+      assertEquals(Set.of("a", "rest", "kw"), byName(result, "f").locals());
+    }
   }
 
   // =====================================================================
@@ -542,6 +551,17 @@ public final class ScopeAnalyzerTest {
                   return x
               return g
           """, "captured by 'g'");
+    }
+
+    @Test
+    public void reassignedCapturedKeywordRestRejected() {
+      assertRejected("""
+      def outer(**kw):
+          kw = 1
+          def inner():
+              return kw
+          return inner
+      """, "reassigned");
     }
   }
 
