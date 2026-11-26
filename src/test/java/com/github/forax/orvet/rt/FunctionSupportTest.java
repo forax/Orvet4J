@@ -71,6 +71,14 @@ public final class FunctionSupportTest {
     return TupleIntrinsics.fromArray(items);
   }
 
+  private static PyDict<Object, Object> dict(Object... keysAndValues) {
+    var dict = new PyDict<>();
+    for (var i = 0; i < keysAndValues.length; i += 2) {
+      dict.put(keysAndValues[i], keysAndValues[i + 1]);
+    }
+    return dict;
+  }
+
   private static String csv(int n, IntFunction<String> element) {
     return IntStream.range(0, n).mapToObj(element).collect(Collectors.joining(", "));
   }
@@ -430,6 +438,28 @@ public final class FunctionSupportTest {
       b.append("apply(f").append(i).append(")\n");
     }
     return b.append(builtinCall).toString();
+  }
+
+  private static String keywordRestDispatchSource(int n) {
+    var builder = new StringBuilder();
+    for (var i = 0; i < n; i++) {
+      builder.append("def f").append(i).append("(a, **kw):\n    return a + len(kw) * 10 + ")
+          .append(i * 100).append('\n');
+    }
+    builder.append("""
+      def apply_kw(fn):
+          return fn(1, x=2, y=3)
+      def apply_plain(fn):
+          return fn(1)
+      """);
+    for (var round = 0; round < 2; round++) {
+      for (var j = 0; j < n; j++) {
+        var i = round == 0 ? j : n - 1 - j;
+        builder.append("k").append(round).append('_').append(i).append(" = apply_kw(f").append(i).append(")\n");
+        builder.append("p").append(round).append('_').append(i).append(" = apply_plain(f").append(i).append(")\n");
+      }
+    }
+    return builder.toString();
   }
 
 
@@ -2570,6 +2600,150 @@ public final class FunctionSupportTest {
           """);
       assertGlobal(module, "r0", 203L);
       assertGlobal(module, "r1", 350L);
+    }
+  }
+
+
+  @Nested
+  public final class KeywordRestParameters {
+
+    @Test
+    public void collectsEveryKeywordInCallOrder() {
+      var module = run("""
+          def f(**kw):
+              return kw
+          def keys(**kw):
+              s = ''
+              for k in kw:
+                  s += k
+              return s
+          a = f()
+          b = f(x=1, y=2)
+          order = keys(b=1, a=2, c=3)
+          """);
+      assertGlobal(module, "a", dict());
+      assertGlobal(module, "b", dict("x", 1L, "y", 2L));
+      assertGlobal(module, "order", "bac");
+    }
+
+    @Test
+    public void namedParametersTakeTheirKeywordsAndTheRestGoesToTheDict() {
+      var module = run("""
+          def f(a, b=2, **kw):
+              return a * 100 + b * 10 + len(kw)
+          r0 = f(1)
+          r1 = f(1, x=5)
+          r2 = f(1, b=3, x=5, y=6)
+          r3 = f(b=3, x=5, a=1)
+          r4 = f(a=1)
+          """);
+      assertGlobal(module, "r0", 120L);
+      assertGlobal(module, "r1", 121L);
+      assertGlobal(module, "r2", 132L);
+      assertGlobal(module, "r3", 131L);
+      assertGlobal(module, "r4", 120L);
+    }
+
+    @Test
+    public void withRestParameter() {
+      var module = run("""
+          def f(a, *r, **kw):
+              return [a, r, kw]
+          r0 = f(1)
+          r1 = f(1, 2, 3, x=4)
+          """);
+      assertGlobal(module, "r0", new PyList<Object>(1L, tuple(), dict()));
+      assertGlobal(module, "r1", new PyList<Object>(1L, tuple(2L, 3L), dict("x", 4L)));
+    }
+
+    @Test
+    public void everyCallGetsItsOwnMutableDict() {
+      var module = run("""
+          def f(**kw):
+              kw['n'] = 1
+              return kw
+          a = f()
+          b = f()
+          c = f(m=2)
+          """);
+      assertNotSame(module.getGlobal("a"), module.getGlobal("b"));
+      assertGlobal(module, "a", dict("n", 1L));
+      assertGlobal(module, "b", dict("n", 1L));
+      assertGlobal(module, "c", dict("m", 2L, "n", 1L));
+    }
+
+    @Test
+    public void errors() {
+      var prefix = "def f(a, **kw):\n    return a\n";
+      assertEquals("f() got multiple values for argument 'a'",
+          assertTypeErrorMessage(prefix + "f(1, a=2)\n"));
+      assertEquals("f() missing 1 required positional argument: 'a'",
+          assertTypeErrorMessage(prefix + "f(x=1)\n"));
+      assertEquals("f() takes 1 positional argument but 2 were given",
+          assertTypeErrorMessage(prefix + "f(1, 2, x=3)\n"));
+      assertEquals("f() takes 1 positional argument but 2 were given",
+          assertTypeErrorMessage(prefix + "f(1, 2)\n"));
+    }
+
+    @Test
+    public void withoutKeywordRestUnknownKeywordsStillFail() {
+      assertEquals("f() got an unexpected keyword argument 'x'",
+          assertTypeErrorMessage("def f(a):\n    return a\nf(1, x=2)\n"));
+    }
+
+    @ParameterizedTest(name = "{0} callees at one site")
+    @ValueSource(ints = {1, 2, 4, 5, 8})
+    public void dispatchThroughASharedSite(int n) {
+      var module = run(keywordRestDispatchSource(n));
+      for (var round = 0; round < 2; round++) {
+        for (var i = 0; i < n; i++) {
+          assertGlobal(module, "k" + round + "_" + i, 21L + 100L * i);
+          assertGlobal(module, "p" + round + "_" + i, 1L + 100L * i);
+        }
+      }
+    }
+
+    @Test
+    public void closuresOfOneDefKeepTheirCapturesAndDefaults() {
+      var module = run("""
+          def make(k):
+              def g(a, b=k, **kw):
+                  return a * 100 + b * 10 + len(kw)
+              return g
+          def apply(fn):
+              return fn(1, z=0)
+          def apply2(fn):
+              return fn(1, b=5, z=0, w=1)
+          c1 = make(1)
+          c2 = make(2)
+          c3 = make(3)
+          r = [apply(c1), apply(c2), apply(c3), apply(c1)]
+          s = [apply2(c1), apply2(c2)]
+          """);
+      assertGlobal(module, "r", new PyList<Object>(111L, 121L, 131L, 111L));
+      assertGlobal(module, "s", new PyList<Object>(152L, 152L));
+    }
+
+    @Test
+    public void capturedValuesAndKeywordRest() {
+      var module = run("""
+          def make(k):
+              def g(**kw):
+                  return k + len(kw)
+              return g
+          def apply(fn):
+              return fn(x=1)
+          r = [apply(make(10)), apply(make(20)), make(5)()]
+          """);
+      assertGlobal(module, "r", new PyList<Object>(11L, 21L, 5L));
+    }
+
+    @Test
+    public void pyFunctionCallAndDirectMethodHandle() throws Throwable {
+      var f = (PyFunction) run("def f(a, **kw):\n    return kw\n").getGlobal("f");
+      assertEquals(dict(), f.call(1L));
+      var mh = f.createDirectMethodHandle(MethodType.methodType(Object.class, Object.class));
+      assertEquals(dict(), (Object) mh.invokeExact((Object) 1L));
     }
   }
 
