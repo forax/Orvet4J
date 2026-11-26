@@ -4,7 +4,6 @@ import java.util.List;
 
 public enum PyType {
   //OBJECT("object"),
-  //TYPE("type"),
   INT("int"),
   BOOL("bool"),
   FLOAT("float"),
