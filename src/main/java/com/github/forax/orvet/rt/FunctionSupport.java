@@ -163,7 +163,7 @@ final class FunctionSupport {
     //            (Retrieves or lazily constructs the uniform thunk)
     //                                 |
     //                                 v
-    //     thunkEntry.invokeExact(function.capturedArgs, function, args_ordered)
+    //     thunkEntry.invokeExact(function.capturedArgs, function, args_ordered, keyword_rest)
 
     static final MethodHandle MEGAMORPHIC, MEGAMORPHIC_WITH_KEYWORDS;
     private static final MethodHandle ARRAY_ELEMENT, REST_TUPLE, BUILTIN_REST;
@@ -216,7 +216,7 @@ final class FunctionSupport {
       var keywordRest = newKeywordRest(code);
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        if (target < 0) {   // extra keyword, only possible if the function has **kwargs
+        if (isKeywordTarget(target)) {
           keywordRest.put(keywordNames[i - positionalCount], args[i]);
         } else {
           ordered[target] = args[i];
@@ -677,7 +677,7 @@ final class FunctionSupport {
       var extraNames = new ArrayList<String>();   // keywords collected by **kwargs, in call-site order
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        if (target < 0) {
+        if (isKeywordTarget(target)) {
           extraNames.add(keywordNames[i - positionalCount]);
         } else if (target < arity) {
           supplied[target] = true;
@@ -709,7 +709,7 @@ final class FunctionSupport {
         for (var i = 0; i < plan.length; i++) {
           var target = plan[i];
           int slot;
-          if (target < 0) {
+          if (isKeywordTarget(target)) {
             slot = 1 + suppliedCount + restCount + extraIndex++;
           } else if (target < arity) {
             slot = slots[target];
@@ -732,7 +732,7 @@ final class FunctionSupport {
       var extraIndex = 0;
       for (var i = 0; i < plan.length; i++) {
         var target = plan[i];
-        var slot = target < 0 ? 1 + arity + restCount + extraIndex++ : 1 + target;
+        var slot = isKeywordTarget(target) ? 1 + arity + restCount + extraIndex++ : 1 + target;
         reorder[slot] = 1 + i;
       }
       var generic = adapted.asType(MethodType.genericMethodType(reorder.length));
@@ -751,6 +751,13 @@ final class FunctionSupport {
 
 
   // -- helpers
+
+  private static final int KWARG_TARGET = -1;
+
+  private static boolean isKeywordTarget(int target) {
+    // equivalent to == KWARG_INDEX but merged with subsequent bound check
+    return target < 0;
+  }
 
   static PyFunction asFunction(Object callee) {
     if (callee instanceof PyFunction function) {
@@ -800,7 +807,7 @@ final class FunctionSupport {
         if (!code.hasKeywordRest()) {
           throw unexpectedKeyword(code, name);
         }
-        plan[positionalCount + i] = -1;   // goes to **kwargs
+        plan[positionalCount + i] = KWARG_TARGET;   // goes to **kwargs
         continue;
       }
       if (assigned[index]) {
