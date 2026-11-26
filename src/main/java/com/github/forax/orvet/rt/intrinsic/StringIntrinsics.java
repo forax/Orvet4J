@@ -19,13 +19,17 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.function.IntPredicate;
 
+import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.isInt;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.normalize;
+import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toBigInteger;
+import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toDouble;
 import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStart;
 import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStep;
 import static com.github.forax.orvet.rt.intrinsic.RangeIntrinsics.bigStop;
@@ -251,6 +255,28 @@ public final class StringIntrinsics {
       case PyType t -> t.toString();
       default -> throw notCanonical("repr", value);
     };
+  }
+
+  /// Python's `ascii()`: the repr with the non-ASCII characters escaped.
+  public static String ascii(Object value) {
+    var repr = $repr$(value);
+    var builder = new StringBuilder(repr.length());
+    for (var offset = 0; offset < repr.length();) {
+      var cp = repr.codePointAt(offset);
+      if (cp < 128) {
+        builder.appendCodePoint(cp);
+      } else {
+        var width = cp <= 0xFF ? 2 : cp <= 0xFFFF ? 4 : 8;
+        var prefix = cp <= 0xFF ? "\\x"
+            : cp <= 0xFFFF ? "\\u" : "\\U";
+        var hex = Integer.toHexString(cp);
+        builder.append(prefix)
+            .repeat("0", width - hex.length())
+            .append(hex);
+      }
+      offset += Character.charCount(cp);
+    }
+    return builder.toString();
   }
 
 

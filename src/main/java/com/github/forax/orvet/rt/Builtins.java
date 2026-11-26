@@ -450,24 +450,7 @@ final class Builtins {
 
   @SuppressWarnings("unused")
   public static Object _ascii_(Object value) {
-    var repr = StringIntrinsics.$repr$(value);
-    var builder = new StringBuilder(repr.length());
-    for (var offset = 0; offset < repr.length();) {
-      var cp = repr.codePointAt(offset);
-      if (cp < 128) {
-        builder.appendCodePoint(cp);
-      } else {
-        var width = cp <= 0xFF ? 2 : cp <= 0xFFFF ? 4 : 8;
-        var prefix = cp <= 0xFF ? "\\x"
-            : cp <= 0xFFFF ? "\\u" : "\\U";
-        var hex = Integer.toHexString(cp);
-        builder.append(prefix)
-            .repeat("0", width - hex.length())
-            .append(hex);
-      }
-      offset += Character.charCount(cp);
-    }
-    return builder.toString();
+    return StringIntrinsics.ascii(value);
   }
 
   @SuppressWarnings("unused")

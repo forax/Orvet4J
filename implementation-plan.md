@@ -381,7 +381,7 @@ surface remain unsupported.
 | `obj.name(args)` | parsed as `Expr.MethodCall` | [PARTIAL] only the intrinsic-backed methods listed in §5.4; no keyword arguments |
 | Tuple-unpacking assignment / `for` target | parsed into tuple target | [NOT IMPLEMENTED] rejected by code generation |
 | General attribute reads/writes | rejected by front end | [NOT IMPLEMENTED] |
-| `%` string formatting | parsed as `%` binary operator | [NOT IMPLEMENTED] runtime `UnimplementedFeatureError` |
+| `%` string formatting | parsed as `%` binary operator | [IMPLEMENTED] printf-style: `s r a c d i u f F e E g G x X o %%`, flags `-+ 0#`, width, precision, `*` width/precision and `%(key)s` mapping keys restricted to `PyDict` |
 
 ### 6.2 Front-end rejections
 

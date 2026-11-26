@@ -2,11 +2,6 @@ package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyTuple;
-import com.github.forax.orvet.rt.PyTuple.PyTuple1;
-import com.github.forax.orvet.rt.PyTuple.PyTuple2;
-import com.github.forax.orvet.rt.PyTuple.PyTuple3;
-import com.github.forax.orvet.rt.PyTuple.PyTuple4;
-import com.github.forax.orvet.rt.PyTuple.PyTupleN;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -14,7 +9,6 @@ import com.github.forax.orvet.rt.error.PyZeroDivisionError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigInteger;
-import java.util.Arrays;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.badUnaryOperand;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.isInt;
@@ -576,8 +570,8 @@ public final class ArithmeticIntrinsics {
   }
 
   private static Object modGeneric(Object left, Object right) {
-    if (left instanceof String) {
-      throw new UnimplementedFeatureError("'%' string formatting");
+    if (left instanceof String s) {
+      return FormattingIntrinsics.stringMod(s, right);
     }
     if (isInt(left) && isInt(right)) {
       var divisor = toBigInteger(right);

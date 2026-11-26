@@ -609,10 +609,10 @@ public final class ArithmeticIntrinsicsTest {
     }
 
     @Test
-    public void modStringFormattingUnimplemented() {
-      assertEquals("'%' string formatting",
-          assertThrows(UnimplementedFeatureError.class,
-              () -> ArithmeticIntrinsics.$mod$("hello %s", "world")).getMessage());
+    public void modStringFormatting() {
+      assertEquals("hello world", ArithmeticIntrinsics.$mod$("hello %s", "world"));
+      assertEquals("42 3.14", ArithmeticIntrinsics.$mod$("%s %.2f", pyTuple(42L, 3.14159)));
+      assertEquals("a=7", ArithmeticIntrinsics.$imod$("a=%d", 7L));
     }
 
     @Test
