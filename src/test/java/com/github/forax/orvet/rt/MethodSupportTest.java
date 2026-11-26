@@ -1,7 +1,9 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyAttributeError;
+import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.CallSite;
@@ -161,5 +163,15 @@ public final class MethodSupportTest {
     var error = assertThrows(UnimplementedFeatureError.class,
         () -> invoke(site, new PyDict<>(), "missing"));
     assertEquals("method calls with keyword arguments are not supported yet", error.getMessage());
+  }
+
+  @Test
+  @Disabled
+  public void existingMethodWithWrongArityShouldRaiseTypeError() {
+    var upper = methodCallSite("upper", 2);
+
+    var exception = assertThrows(PyTypeError.class,
+        () -> invoke(upper, "orvet", "unexpected"));
+    assertEquals("upper expected at most 1 arguments, got 2", exception.getMessage());
   }
 }

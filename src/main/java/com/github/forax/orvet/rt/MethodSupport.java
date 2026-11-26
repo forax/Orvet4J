@@ -1,6 +1,8 @@
 package com.github.forax.orvet.rt;
 
 import com.github.forax.orvet.rt.error.PyAttributeError;
+import com.github.forax.orvet.rt.error.PyException;
+import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.DictIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
@@ -13,6 +15,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.invoke.MethodHandles.dropArguments;
@@ -66,10 +69,10 @@ final class MethodSupport {
       var methodType = MethodType.genericMethodType(type().parameterCount())
           .changeParameterType(0, receiverClass);
 
-      var mh = resolveAndCache(intrinsicAndTest.intrinsicClass, name, methodType);
+      var intrinsicClass = intrinsicAndTest.intrinsicClass;
+      var mh = resolveAndCache(intrinsicClass, name, methodType);
       if (mh == null) {
-        throw new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
-            "' object has no attribute '" + name + "'");
+        throw methodNotFound(receiver, intrinsicClass, name);
       }
 
       var test = intrinsicAndTest.test;
@@ -104,6 +107,20 @@ final class MethodSupport {
       }
       // the methodMap has been updated by another thread
        return existingMH;
+    }
+
+    private PyException methodNotFound(Object receiver, Class<?> intrinsic, String name) {
+      var argumentCount = Arrays.stream(intrinsic.getDeclaredMethods())
+        .filter(m -> m.getName().equals("_" + name + "_"))
+        .mapToInt(m -> m.getParameterCount() - 1)
+        .max()
+        .orElse(-1);
+      if (argumentCount == -1) {
+        return new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
+            "' object has no attribute '" + name + "'");
+      }
+      return new PyTypeError(name + " expected at most " + argumentCount +
+          " arguments, got " + (type().parameterCount() - 1));
     }
 
     private static MethodHandle lookup(Class<?> intrinsic, String name, MethodType methodType) {
