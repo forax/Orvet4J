@@ -109,32 +109,6 @@ final class MethodSupport {
        return existingMH;
     }
 
-    private PyException methodNotFound(Object receiver, Class<?> intrinsic, String name) {
-      var stats = Arrays.stream(intrinsic.getDeclaredMethods())
-          .filter(m -> m.getName().equals("_" + name + "_"))
-          .mapToInt(m -> m.getParameterCount() - 1)
-          .summaryStatistics();
-
-      if (stats.getCount() == 0) {
-        return new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
-            "' object has no attribute '" + name + "'");
-      }
-      var actual = type().parameterCount() - 1;
-      var minimum = stats.getMin();
-      var maximum = stats.getMax();
-
-      if (maximum == 0) {
-        return new PyTypeError(IntrinsicSupport.typeName(receiver) + "." + name +
-            "() takes no arguments (" + actual + " given)");
-      }
-      if (actual < minimum) {
-        return new PyTypeError(name + " expected at least " + minimum +
-            (minimum == 1 ? " argument" : " arguments") + ", got " + actual);
-      }
-      return new PyTypeError(name + " expected at most " + maximum +
-          (maximum == 1 ? " argument" : " arguments") + ", got " + actual);
-    }
-
     private static MethodHandle lookup(Class<?> intrinsic, String name, MethodType methodType) {
       try {
         return LOOKUP.findStatic(intrinsic, "_" + name + "_", methodType);
@@ -190,6 +164,32 @@ final class MethodSupport {
       return dropArguments(
           throwException(type.returnType(), throwable.getClass()).bindTo(throwable),
           0, type.parameterArray());
+    }
+
+    private PyException methodNotFound(Object receiver, Class<?> intrinsic, String name) {
+      var stats = Arrays.stream(intrinsic.getDeclaredMethods())
+          .filter(m -> m.getName().equals("_" + name + "_"))
+          .mapToInt(m -> m.getParameterCount() - 1)
+          .summaryStatistics();
+
+      if (stats.getCount() == 0) {
+        return new PyAttributeError("'" + IntrinsicSupport.typeName(receiver) +
+            "' object has no attribute '" + name + "'");
+      }
+      var actual = type().parameterCount() - 1;
+      var minimum = stats.getMin();
+      var maximum = stats.getMax();
+
+      if (maximum == 0) {
+        return new PyTypeError(IntrinsicSupport.typeName(receiver) + "." + name +
+            "() takes no arguments (" + actual + " given)");
+      }
+      if (actual < minimum) {
+        return new PyTypeError(name + " expected at least " + minimum +
+            (minimum == 1 ? " argument" : " arguments") + ", got " + actual);
+      }
+      return new PyTypeError(name + " expected at most " + maximum +
+          (maximum == 1 ? " argument" : " arguments") + ", got " + actual);
     }
   }
 }
