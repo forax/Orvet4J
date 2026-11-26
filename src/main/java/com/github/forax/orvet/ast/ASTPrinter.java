@@ -2,6 +2,9 @@ package com.github.forax.orvet.ast;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,6 +48,11 @@ final class ASTPrinter {
     return list;
   }
 
+  @SafeVarargs
+  private static <T> List<T> list(T first, T... rest) {
+    return prepend(first, Arrays.asList(rest));
+  }
+
   private static <T> String list(List<T> items, Function<? super T, String> printer) {
     return items.stream().map(printer).collect(Collectors.joining(" ", "[", "]"));
   }
@@ -72,17 +80,15 @@ final class ASTPrinter {
       case Stmt.While s -> node("while", l, c, expr(s.test()), block(s.body()), block(s.orElse()));
       case Stmt.For s ->
           node("for", l, c, target(s.target()), expr(s.iter()), block(s.body()), block(s.orElse()));
-      case Stmt.FunctionDef s -> node("def", l, c, s.name(),
-          list(s.parameters(), p -> p.defaultExpr()
-              .map(defaultExpr -> node(
-                  "default",
-                  p.line(),
-                  p.column(),
-                  p.name(),
-                  expr(defaultExpr)))
-              .orElseGet(() -> leaf(p.name(), p.line(), p.column()))),
-          "rest=" + s.rest().map(p -> leaf(p.name(), p.line(), p.column())).orElse("-"),
-          block(s.body()));
+      case Stmt.FunctionDef s ->
+          node("def", l, c, list(
+              s.name(),
+              list(s.parameters(), p -> p.defaultExpr()
+                  .map(defaultExpr -> node("default", p.line(), p.column(), p.name(), expr(defaultExpr)))
+                  .orElseGet(() -> leaf(p.name(), p.line(), p.column()))),
+              "rest=" + s.rest().map(p -> leaf(p.name(), p.line(), p.column())).orElse("-"),
+              "kwrest=" + s.keywordRest().map(p -> leaf(p.name(), p.line(), p.column())).orElse("-"),
+              block(s.body())));
     };
   }
 

@@ -255,9 +255,9 @@ public final class ASTBuilderTest {
 
   @Test
   public void returns() {
-    assertAst("def f():\n    return 1\n", "(block (def f [] rest=- (block (return 1))))");
-    assertAst("def f():\n    return\n", "(block (def f [] rest=- (block (return None))))");
-    assertAst("def f():\n    return 1, 2\n", "(block (def f [] rest=- (block (return (tuple 1 2)))))");
+    assertAst("def f():\n    return 1\n", "(block (def f [] rest=- kwrest=- (block (return 1))))");
+    assertAst("def f():\n    return\n", "(block (def f [] rest=- kwrest=- (block (return None))))");
+    assertAst("def f():\n    return 1, 2\n", "(block (def f [] rest=- kwrest=- (block (return (tuple 1 2)))))");
   }
 
   @Test
@@ -298,16 +298,16 @@ public final class ASTBuilderTest {
 
   @Test
   public void functionDefinitions() {
-    assertAst("def f():\n    pass\n", "(block (def f [] rest=- (block)))");
-    assertAst("def f(a, b):\n    pass\n", "(block (def f [a b] rest=- (block)))");
-    assertAst("def f(a, *r):\n    pass\n", "(block (def f [a] rest=r (block)))");
-    assertAst("def f(*r):\n    pass\n", "(block (def f [] rest=r (block)))");
-    assertAst("def f(*r,):\n    pass\n", "(block (def f [] rest=r (block)))");
-    assertAst("def f(a): return a\n", "(block (def f [a] rest=- (block (return a))))");
+    assertAst("def f():\n    pass\n", "(block (def f [] rest=- kwrest=- (block)))");
+    assertAst("def f(a, b):\n    pass\n", "(block (def f [a b] rest=- kwrest=- (block)))");
+    assertAst("def f(a, *r):\n    pass\n", "(block (def f [a] rest=r kwrest=- (block)))");
+    assertAst("def f(*r):\n    pass\n", "(block (def f [] rest=r kwrest=- (block)))");
+    assertAst("def f(*r,):\n    pass\n", "(block (def f [] rest=r kwrest=- (block)))");
+    assertAst("def f(a): return a\n", "(block (def f [a] rest=- kwrest=- (block (return a))))");
     assertAst("def f():\n    def g():\n        return 1\n    return g\n",
-        "(block (def f [] rest=- (block (def g [] rest=- (block (return 1))) (return g))))");
+        "(block (def f [] rest=- kwrest=- (block (def g [] rest=- kwrest=- (block (return 1))) (return g))))");
     assertAst("while a:\n    def f():\n        return 1\n    break\n",
-        "(block (while a (block (def f [] rest=- (block (return 1))) (break)) (block)))");
+        "(block (while a (block (def f [] rest=- kwrest=- (block (return 1))) (break)) (block)))");
   }
 
   // ---------------------------------------------------------------------------- positions
@@ -322,7 +322,7 @@ public final class ASTBuilderTest {
   @Test
   public void positionsInsideFunctions() {
     assertAstAt("def f(a):\n    return a.b(1)\n",
-        "(block@1:0 (def@1:0 f [a@1:6] rest=- (block@2:4 (return@2:4 (method@2:11 a@2:11 b 1@2:15)))))");
+        "(block@1:0 (def@1:0 f [a@1:6] rest=- kwrest=- (block@2:4 (return@2:4 (method@2:11 a@2:11 b 1@2:15)))))");
   }
 
   // -- default arguments
@@ -330,16 +330,33 @@ public final class ASTBuilderTest {
   @Test
   void defaultArguments() {
     assertAst("def f(a, b=2, c=1 + 2, d=None):\n    pass\n",
-        "(block (def f [a (default b 2) (default c (+ 1 2)) (default d None)] rest=- (block)))");
+        "(block (def f [a (default b 2) (default c (+ 1 2)) (default d None)] rest=- kwrest=- (block)))");
 
     assertAst("def f(a=1, *rest):\n    pass\n",
-        "(block (def f [(default a 1)] rest=rest (block)))");
+        "(block (def f [(default a 1)] rest=rest kwrest=- (block)))");
   }
 
   @Test
   void defaultArgumentPositions() {
     assertAstAt("def f(a=1 + 2):\n    pass\n",
-        "(block@1:0 (def@1:0 f [(default@1:6 a (+@1:8 1@1:8 2@1:12))] rest=- (block@2:4)))");
+        "(block@1:0 (def@1:0 f [(default@1:6 a (+@1:8 1@1:8 2@1:12))] rest=- kwrest=- (block@2:4)))");
+  }
+
+  // -- keyword rest
+
+  @Test
+  public void keywordRestParameter() {
+    assertAst("def f(**kw):\n    pass\n", "(block (def f [] rest=- kwrest=kw (block)))");
+    assertAst("def f(a, *r, **kw):\n    pass\n", "(block (def f [a] rest=r kwrest=kw (block)))");
+    assertAst("def f(a=1, **kw):\n    pass\n",
+        "(block (def f [(default a 1)] rest=- kwrest=kw (block)))");
+    assertAstAt("def f(**kw):\n    pass\n",
+        "(block@1:0 (def@1:0 f [] rest=- kwrest=kw@1:8 (block@2:4)))");
+  }
+
+  @Test
+  public void duplicateKeywordRestParameter() {
+    assertSyntaxError("def f(a, **a):\n    pass\n", 1, 11);
   }
 
   // ---------------------------------------------------------------------------- unsupported syntax
