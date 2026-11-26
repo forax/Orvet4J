@@ -37,13 +37,13 @@ import static java.lang.invoke.MethodType.methodType;
 /// Every compiled or native function entry point adheres to one of two signatures:
 /// - **Python Function:**
 ///   ```
-///   (captures..., PyFunction self, Object p0..pn-1 [, PyTuple rest]) -> Object
+///   (captures..., PyFunction self, Object p0..pn-1 [, PyTuple rest] [, PyDict kwargs]) -> Object
 ///   ```
 ///   Captured variables precede `self`. When the function is variadic, excess arguments
 ///   are collected into an immutable [PyTuple].
 /// - **Built-in / Native Function:**
 ///   ```
-///   (PyFunction self, Object p0..pn-1 [, Object[] rest]) -> Object
+///   (Object[] captured, PyFunction self, Object[] args, PyDict kwargs) -> Object
 ///   ```
 ///   Built-ins do not capture variables. When variadic, excess arguments are delivered
 ///   as a raw `Object[]` array.
@@ -195,7 +195,8 @@ final class FunctionSupport {
       var code = function.code;
       checkArity(code, args.length);
       var thunkEntry = getThunkEntry(code);
-      return thunkEntry.invokeExact(function.capturedArgs, function, withDefaults(function, args));
+      return thunkEntry.invokeExact(function.capturedArgs, function,
+          withDefaults(function, args), newKeywordRest(code));
     }
 
     /// Entry point for megamorphic calls with keyword arguments.
@@ -212,12 +213,22 @@ final class FunctionSupport {
       var code = function.code;
       var plan = reorderKeywordArguments(code, positionalCount, keywordNames);
       var ordered = new Object[Math.max(positionalCount, code.arity())];
+      var keywordRest = newKeywordRest(code);
       for (var i = 0; i < plan.length; i++) {
-        ordered[plan[i]] = args[i];
+        var target = plan[i];
+        if (target < 0) {   // extra keyword, only possible if the function has **kwargs
+          keywordRest.put(keywordNames[i - positionalCount], args[i]);
+        } else {
+          ordered[target] = args[i];
+        }
       }
       fillMissing(function, ordered);
       var thunkEntry = getThunkEntry(code);
-      return thunkEntry.invokeExact(function.capturedArgs, function, ordered);
+      return thunkEntry.invokeExact(function.capturedArgs, function, ordered, keywordRest);
+    }
+
+    private static PyDict<Object, Object> newKeywordRest(PyFunction.Code code) {
+      return code.hasKeywordRest() ? new PyDict<>() : null;
     }
 
     /// The thunk spreads exactly `arity` declared parameters: complete a short array with the defaults.
@@ -257,20 +268,22 @@ final class FunctionSupport {
     }
 
     /// Creates a universal thunk handle adapting the compiled entry to
-    /// `(Object[] captured, PyFunction self, Object[] args) -> Object`.
+    /// `(Object[] captured, PyFunction self, Object[] args, PyDict kwargs) -> Object`.
     private static MethodHandle createThunk(MethodHandle compiledEntry, PyFunction.Code code) {
-      // 1. (Object[] captured, PyFunction self, <declared parameters> [, rest])
+      // 1. (Object[] captured, PyFunction self, <declared parameters> [, rest] [, kwargs])
       var captureCount = code.captureCount();
       var handle = captureCount == 0
           ? dropArguments(compiledEntry, 0, Object[].class)
           : compiledEntry.asSpreader(0, Object[].class, captureCount);
 
-      // 2. No rest parameter: spread the declared parameters (or ignore the array if there is none).
+      // 2. No rest parameter: spread the declared parameters (a trailing kwargs parameter is untouched).
       var arity = code.arity();
+      var keywordRest = code.hasKeywordRest();
       if (!code.isVariadic()) {
-        return arity == 0
+        var spread = arity == 0
             ? dropArguments(handle, 2, Object[].class)
             : handle.asSpreader(2, Object[].class, arity);
+        return keywordRest ? spread : dropArguments(spread, 3, PyDict.class);
       }
 
       // 3. Rest parameter (a PyTuple for Python code, an Object[] for a builtin):
@@ -283,13 +296,19 @@ final class FunctionSupport {
       filters[arity] = insertArguments(packer, 1, arity);
       var filtered = filterArguments(handle, 2, filters);
 
-      // 4. Every filtered parameter reads the same args array.
-      var type = methodType(Object.class, Object[].class, PyFunction.class, Object[].class);
+      // 4. Every filtered parameter reads the same args array
       var reorder = new int[filtered.type().parameterCount()];
       reorder[0] = 0;  // captured
       reorder[1] = 1;  // self
-      Arrays.fill(reorder, 2, reorder.length, 2);  // args
-      return permuteArguments(filtered, type, reorder);
+      Arrays.fill(reorder, 2, 2 + arity + 1, 2);  // args
+      if (keywordRest) {
+        reorder[reorder.length - 1] = 3;  // kwargs
+        return permuteArguments(filtered,
+            methodType(Object.class, Object[].class, PyFunction.class, Object[].class, PyDict.class), reorder);
+      }
+      var mh = permuteArguments(filtered,
+          methodType(Object.class, Object[].class, PyFunction.class, Object[].class), reorder);
+      return dropArguments(mh, 3, PyDict.class);
     }
 
     private static PyTuple restTuple(Object[] args, int start) {
@@ -361,8 +380,9 @@ final class FunctionSupport {
 
   static final class FunctionCallSite extends MutableCallSite {
     private static final MethodHandles.Lookup LOOKUP;
-    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS, DEFAULT_AT;
+    private static final MethodHandle FALLBACK, SAME_CALLEE, SAME_CODE, CAPTURED_ARGS, DEFAULT_AT, BUILD_KEYWORD_REST;
     private static final VarHandle INFO;
+    private static final String[] EMPTY_NAMES = new String[0];
     static {
       var lookup = MethodHandles.lookup();
       LOOKUP = lookup;
@@ -377,6 +397,8 @@ final class FunctionSupport {
             methodType(Object[].class));
         DEFAULT_AT = lookup.findStatic(FunctionCallSite.class, "defaultAt",
             methodType(Object.class, PyFunction.class, int.class));
+        BUILD_KEYWORD_REST = lookup.findStatic(FunctionCallSite.class, "buildKeywordRest",
+            methodType(PyDict.class, String[].class, Object[].class));
         INFO = lookup.findVarHandle(FunctionCallSite.class, "guardInfo", GuardInfo.class);
       } catch (NoSuchMethodException | IllegalAccessException | NoSuchFieldException e) {
         throw new AssertionError(e);
@@ -564,6 +586,14 @@ final class FunctionSupport {
       return function.defaults[index];
     }
 
+    private static PyDict<Object, Object> buildKeywordRest(String[] names, Object[] values) {
+      var dict = new PyDict<Object, Object>();
+      for (var i = 0; i < names.length; i++) {
+        dict.put(names[i], values[i]);
+      }
+      return dict;
+    }
+
     private static MethodHandle compileBody(ModuleContext context, Stmt.FunctionDef def) {
       var scope = context.scopeFor(def);
       ScopeAnalyzer.checkDefiniteAssignment(scope);
@@ -575,7 +605,8 @@ final class FunctionSupport {
       var clazz = RT.defineClass(context, dictionary, className, bytes);
 
       var captureCount = BytecodeGenerator.captureNames(def, scope.analysis()).size();
-      var type = BytecodeGenerator.bodyType(captureCount, def.parameters().size(), def.rest().isPresent());
+      var type = BytecodeGenerator.bodyType(captureCount, def.parameters().size(),
+          def.rest().isPresent(), def.keywordRest().isPresent());
       try {
         return LOOKUP.findStatic(clazz, def.name(), type);
       } catch (NoSuchMethodException | IllegalAccessException e) {
@@ -602,6 +633,9 @@ final class FunctionSupport {
     /// If `defaults` is null, the entry is (PyFunction self, ...) and the defaults are read from self.
     static MethodHandle adaptArguments(PyFunction.Code code, MethodHandle entry, int firstParam,
                                        Object[] defaults, int argCount) {
+      if (code.hasKeywordRest()) {
+        entry = collectKeywordRest(entry, EMPTY_NAMES);   // positional call: an empty dict per call
+      }
       var arity = code.arity();
       if (argCount >= arity) {
         return adapt(code, entry, firstParam + arity, argCount - arity);
@@ -635,17 +669,26 @@ final class FunctionSupport {
     /// Adapts the entry to the call site, permuting the arguments according to the plan.
     /// The parameters the call does not supply get their default value (see adaptArguments for `defaults`).
     private MethodHandle adaptKeywords(PyFunction.Code code, MethodHandle entry, MethodType type,
-                                       int[] plan, Object[] defaults) {
+                                        int[] plan, Object[] defaults) {
       var arity = code.arity();
       var restCount = Math.max(0, positionalCount - arity);
 
       var supplied = new boolean[arity];
-      for (var target : plan) {
-        if (target < arity) {
+      var extraNames = new ArrayList<String>();   // keywords collected by **kwargs, in call-site order
+      for (var i = 0; i < plan.length; i++) {
+        var target = plan[i];
+        if (target < 0) {
+          extraNames.add(keywordNames[i - positionalCount]);
+        } else if (target < arity) {
           supplied[target] = true;
         }
       }
-      var adapted = adapt(code, entry, 1 + arity, restCount);   // (X, Object x (arity + restCount)) -> Object
+      var extraCount = extraNames.size();
+      if (code.hasKeywordRest()) {
+        entry = collectKeywordRest(entry, extraNames.toArray(EMPTY_NAMES));
+      }
+      // (X, Object x (arity + restCount + extraCount)) -> Object
+      var adapted = adapt(code, entry, 1 + arity, restCount);
 
       var first = code.firstDefault();
       if (defaults != null) {   // constants: insert defaults for all the unsupplied parameters
@@ -661,30 +704,48 @@ final class FunctionSupport {
             adapted = insertArguments(adapted, 1 + i, defaults[i - first]);
           }
         }
-        var reorder = new int[1 + suppliedCount + restCount];
+        var reorder = new int[1 + suppliedCount + restCount + extraCount];
+        var extraIndex = 0;
         for (var i = 0; i < plan.length; i++) {
           var target = plan[i];
-          var slot = target < arity ? slots[target] : 1 + suppliedCount + (target - arity);
+          int slot;
+          if (target < 0) {
+            slot = 1 + suppliedCount + restCount + extraIndex++;
+          } else if (target < arity) {
+            slot = slots[target];
+          } else {
+            slot = 1 + suppliedCount + (target - arity);
+          }
           reorder[slot] = 1 + i;
         }
         return permuteArguments(adapted.asType(type), type, reorder);
       }
 
       // dynamic: for each unsupplied parameter, call DEFAULT_AT on `self`
-      // filtered into its default value
       for (var i = arity - 1; i >= first; i--) {
         if (!supplied[i]) {
           var filter = insertArguments(DEFAULT_AT, 1, i - first);
           adapted = collectArguments(adapted, 1 + i, filter);
         }
       }
-      var reorder = new int[1 + arity + restCount];   // zero (`self`) unless a call-site argument goes there
+      var reorder = new int[1 + arity + restCount + extraCount];   // zero (`self`) unless a call-site argument goes there
+      var extraIndex = 0;
       for (var i = 0; i < plan.length; i++) {
-        reorder[1 + plan[i]] = 1 + i;
+        var target = plan[i];
+        var slot = target < 0 ? 1 + arity + restCount + extraIndex++ : 1 + target;
+        reorder[slot] = 1 + i;
       }
-      // the extra copies of self are PyFunction parameters, make everything an Object so the types match
       var generic = adapted.asType(MethodType.genericMethodType(reorder.length));
       return permuteArguments(generic, type, reorder);
+    }
+
+    /// Replaces the last parameter of `entry` (the `**kwargs` dict) by one parameter per extra keyword value.
+    /// The dict is created at each call, with the keywords in call-site order.
+    private static MethodHandle collectKeywordRest(MethodHandle entry, String[] names) {
+      var position = entry.type().parameterCount() - 1;
+      var collector = insertArguments(BUILD_KEYWORD_REST, 0, (Object) names)
+          .asCollector(Object[].class, names.length);
+      return collectArguments(entry, position, collector);
     }
   }
 
@@ -736,13 +797,22 @@ final class FunctionSupport {
       var name = keywordNames[i];
       var index = code.parameterIndex(name);
       if (index < 0) {
-        throw unexpectedKeyword(code, name);
+        if (!code.hasKeywordRest()) {
+          throw unexpectedKeyword(code, name);
+        }
+        plan[positionalCount + i] = -1;   // goes to **kwargs
+        continue;
       }
       if (assigned[index]) {
         throw multipleValues(code, name);
       }
       assigned[index] = true;
       plan[positionalCount + i] = index;
+    }
+
+    // as CPython: checked after the keywords, before the missing arguments
+    if (!code.isVariadic() && positionalCount > arity) {
+      throw tooManyPositional(code, positionalCount);
     }
 
     var missing = (ArrayList<String>) null;

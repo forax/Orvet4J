@@ -168,6 +168,7 @@ public final class ScopeAnalyzer {
     var scope = new FunctionScope(parent, function);
     function.parameters().forEach(scope::addParam);
     function.rest().ifPresent(scope::addParam);
+    function.keywordRest().ifPresent(scope::addParam);
     if (parent != null) {
       parent.children.add(scope);
       parent.childByDef.put(function, scope);

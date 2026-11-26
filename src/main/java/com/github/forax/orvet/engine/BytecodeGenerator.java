@@ -10,6 +10,7 @@ import com.github.forax.orvet.engine.ScopeAnalyzer.FunctionAnalysis;
 import com.github.forax.orvet.engine.ScopeAnalyzer.FunctionScope;
 import com.github.forax.orvet.rt.Dictionary;
 import com.github.forax.orvet.rt.ModuleContext;
+import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyFunction;
 import com.github.forax.orvet.rt.PyTuple;
 import org.objectweb.asm.ClassWriter;
@@ -110,8 +111,8 @@ public final class BytecodeGenerator {
     return captureNames;
   }
 
-  /// (Object x captures, PyFunction self, Object x arity [, PyTuple rest]) -> Object
-  public static MethodType bodyType(int captures, int arity, boolean varargs) {
+  /// (Object x captures, PyFunction self, Object x arity [, PyTuple rest] [, PyDict kwargs]) -> Object
+  public static MethodType bodyType(int captures, int arity, boolean varargs, boolean keywordRest) {
     var types = new ArrayList<Class<?>>();
     for (var i = 0; i < captures; i++) {
       types.add(Object.class);
@@ -122,6 +123,9 @@ public final class BytecodeGenerator {
     }
     if (varargs) {
       types.add(PyTuple.class);
+    }
+    if (keywordRest) {
+      types.add(PyDict.class);
     }
     return MethodType.methodType(Object.class, types);
   }
@@ -148,14 +152,15 @@ public final class BytecodeGenerator {
     var captures = captureNames(def, analysis);
     var arity = def.parameters().size();
     var varargs = def.rest().isPresent();
-    var parameterCount = captures.size() + 1 + arity + (varargs ? 1 : 0);
+    var keywordRest = def.keywordRest().isPresent();
+    var parameterCount = captures.size() + 1 + arity + (varargs ? 1 : 0) + (keywordRest ? 1 : 0);
     if (parameterCount > MAX_PARAMETERS) {
       throw new SemanticErrorException("function '" + def.name() + "' has too many parameters and captured variables ("
           + parameterCount + ", at most " + MAX_PARAMETERS + " are supported)", def.line(), def.column());
     }
 
     var cw = newClassWriter(functionClassName(def));
-    var descriptor = bodyType(captures.size(), arity, varargs).toMethodDescriptorString();
+    var descriptor = bodyType(captures.size(), arity, varargs, keywordRest).toMethodDescriptorString();
     var mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, def.name(), descriptor, null, null);
     mv.visitCode();
 
@@ -168,6 +173,7 @@ public final class BytecodeGenerator {
       emitter.declare(parameter.name());
     }
     def.rest().ifPresent(rest -> emitter.declare(rest.name()));
+    def.keywordRest().ifPresent(kw -> emitter.declare(kw.name()));
     for (var local : analysis.locals()) {
       if (!emitter.slots.containsKey(local)) {
         emitter.declare(local);

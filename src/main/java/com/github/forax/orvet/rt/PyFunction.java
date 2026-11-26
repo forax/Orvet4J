@@ -57,7 +57,6 @@ public final class PyFunction {
     String name() { return name; }
     List<String> parameters() { return parameters; }
     int arity() { return parameters.size(); }
-    int defaultCount() { return defaultCount; }
     int firstDefault() { return parameters.size() - defaultCount; }
     int captureCount() { return captureCount; }
 
@@ -82,6 +81,9 @@ public final class PyFunction {
 
     /// True if the function has a rest parameter, builtin or not.
     boolean isVariadic() { return varargs; }
+
+    /// True if the function declares a `**kwargs` parameter.
+    boolean hasKeywordRest() { return functionDef != null && functionDef.keywordRest().isPresent(); }
   }
 
   final Code code;
