@@ -10,7 +10,6 @@ import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -144,14 +143,21 @@ public class FormattingIntrinsicTest {
       assertEquals("\u0001", stringMod("%c", true));
       assertEquals("    A", stringMod("%5c", 65L));
       assertEquals("A    |", stringMod("%-5c|", 65L));
-      assertEquals("%c requires int or char",
+      assertEquals("%c requires an int or a unicode character, not a string of length 2",
           assertThrows(PyTypeError.class, () -> stringMod("%c", "ab")).getMessage());
-      assertEquals("%c requires int or char",
+      assertEquals("%c requires an int or a unicode character, not float",
           assertThrows(PyTypeError.class, () -> stringMod("%c", 1.5)).getMessage());
       assertEquals("%c arg not in range(0x110000)",
           assertThrows(PyOverflowError.class, () -> stringMod("%c", 1114112L)).getMessage());
       assertEquals("%c arg not in range(0x110000)",
           assertThrows(PyOverflowError.class, () -> stringMod("%c", -1L)).getMessage());
+      // unlike the % operator, the format-spec path converts through a C long first
+      assertEquals("Python int too large to convert to C long",
+          assertThrows(PyOverflowError.class,
+              () -> formatValue(new BigInteger("9223372036854775808"), "c")).getMessage());
+      assertEquals("%c arg not in range(0x110000)",
+          assertThrows(PyOverflowError.class,
+              () -> stringMod("%c", new BigInteger("9223372036854775808"))).getMessage());
     }
 
     @Test
@@ -235,13 +241,12 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void dynamicPrecisionBoundaries() {
       assertEquals("",
-          stringMod("%.*s", args(Integer.MIN_VALUE, "abc")));
+          stringMod("%.*s", args((long) Integer.MIN_VALUE, "abc")));
 
       assertEquals("x",
-          stringMod("%.*s", args(Integer.MAX_VALUE, "x")));
+          stringMod("%.*s", args((long) Integer.MAX_VALUE, "x")));
 
       assertEquals("Python int too large to convert to C int",
           assertThrows(PyOverflowError.class,
@@ -269,7 +274,7 @@ public class FormattingIntrinsicTest {
   @Nested
   public class Integers {
     @Test
-    public void cpython314IntegerFormatting() {
+    public void integerFormatting() {
       var hex = new BigInteger("1234567890abcdef12345", 16);
 
       assertEquals("0x001234567890abcdef12345",
@@ -305,7 +310,7 @@ public class FormattingIntrinsicTest {
   @Nested
   public class Floats {
     @Test
-    public void cpython314FloatFormatting() {
+    public void foatFormatting() {
       assertEquals("2.67", stringMod("%.2f", 2.675));
       assertEquals("1.00", stringMod("%.2f", 1.005));
 
@@ -329,7 +334,7 @@ public class FormattingIntrinsicTest {
   @Nested
   public class Unicode {
     @Test
-    public void cpython314UnicodeFormatting() {
+    public void unicodeFormatting() {
       assertEquals("'\\u0378'", stringMod("%r", "\u0378"));
       assertEquals("'\\u0378'", stringMod("%a", "\u0378"));
 
@@ -349,7 +354,7 @@ public class FormattingIntrinsicTest {
   @Nested
   public class ParseError {
     @Test
-    public void cpython314MappingFormatting() {
+    public void mappingFormatting() {
       var dict = new PyDict<String, Object>();
       dict.put("outer(inner)", "nested");
       dict.put("unused", 42L);
@@ -359,7 +364,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void formattingErrors() {
       // CPython checks for a mapping before parsing the mapping key.
       assertEquals("format requires a mapping",
@@ -404,6 +408,29 @@ public class FormattingIntrinsicTest {
       assertEquals("0.3", formatValue(0.1 + 0.2, ".10"));  // precision without type: 'g'
       assertEquals("ff", formatValue(255L, "x"));
       assertEquals("00,001,234", formatValue(1234L, "010,"));
+    }
+
+    @Test
+    public void groupedZeroFilledScientific() {
+      // regression: exponent bodies without a decimal point were left ungrouped
+      assertEquals("0,001e-320", formatValue(1e-320, "010,"));
+      assertEquals("0,001e-320", formatValue(1e-320, "=010,"));
+      assertEquals("00,001e+23", formatValue(1e23, "010,"));
+      assertEquals("0,001e+300", formatValue(1e300, "=010,"));
+      assertEquals("-0,001e-11", formatValue(-1e-11, "010,"));
+      assertEquals("0,001.235e+06", formatValue(1234567.0, "012,.3e"));
+      assertEquals("00,123,456.789", formatValue(123456.789, "014,.3f"));
+      // an explicit '>' keeps the plain zero fill of the whole field, like CPython
+      assertEquals("00001e-320", formatValue(1e-320, ">010,"));
+    }
+
+    @Test
+    public void hugeWidthWithGroupingFailsEagerly() {
+      // regression: the zero-fill + '=' + grouping fast path used to loop forever
+      // (int overflow) and allocated without any size check
+      assertThrows(UnimplementedFeatureError.class, () -> formatValue(5L, "0=4294967296,d"));
+      assertThrows(UnimplementedFeatureError.class, () -> formatValue(1.5d, "0=4294967296,.2f"));
+      assertThrows(UnimplementedFeatureError.class, () -> formatValue(5L, "0=2147483649,d"));
     }
 
     @Test

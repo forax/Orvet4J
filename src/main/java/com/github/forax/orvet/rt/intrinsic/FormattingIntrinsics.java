@@ -20,6 +20,7 @@ import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.isInt;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.normalize;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toBigInteger;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toDouble;
+import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.typeName;
 
 public final class FormattingIntrinsics {
   private FormattingIntrinsics() {
@@ -66,6 +67,7 @@ public final class FormattingIntrinsics {
 
       var keyed = false;
       if (index < length && format.charAt(index) == '(') {
+        cursor.requireMapping();  // like CPython, the mapping is checked before the key is parsed
         // like CPython, a key may contain parentheses: count them to find the matching one
         var keyStart = ++index;
         var depth = 1;
@@ -110,6 +112,9 @@ public final class FormattingIntrinsics {
         if (width < 0) {
           leftAlign = true;
           width = -width;
+          if (width < 0) {  // Long.MIN_VALUE cannot be negated
+            throw new PyOverflowError("width too big");
+          }
         }
       } else {
         while (index < length && isDigit(format.charAt(index))) {
@@ -122,7 +127,8 @@ public final class FormattingIntrinsics {
         index++;
         if (index < length && format.charAt(index) == '*') {
           index++;
-          precision = Math.max(0L, sizeArg(cursor.next()));  // CPython clamps a negative precision to zero
+          // CPython converts to a C int and clamps a negative precision to zero
+          precision = Math.max(0L, sizeIntArg(cursor.next()));
         } else {
           precision = 0;
           while (index < length && isDigit(format.charAt(index))) {
@@ -190,22 +196,40 @@ public final class FormattingIntrinsics {
     return value * 10 + digit;
   }
 
-  /// The integer argument of a `*` width or precision.
+  /// The integer argument of a `*` width (CPython converts it to a C ssize_t).
+  /// Long.MIN_VALUE is valid here: the "width too big" error only happens later,
+  /// when the negative width cannot be negated.
   private static long sizeArg(Object value) {
     if (!isInt(value)) {
       throw new PyTypeError("* wants int");
     }
     var big = toBigInteger(value);
-    if (big.bitLength() > 63 || big.longValue() == Long.MIN_VALUE) {
+    if (big.bitLength() > 63) {
       throw new PyOverflowError("Python int too large to convert to C ssize_t");
     }
     return big.longValue();
   }
 
-  /// Message and index follow CPython: `%R` of the character, index in code points.
+  /// The integer argument of a `*` precision (CPython converts it to a C int).
+  private static long sizeIntArg(Object value) {
+    if (!isInt(value)) {
+      throw new PyTypeError("* wants int");
+    }
+    var big = toBigInteger(value);
+    if (big.bitLength() > 31) {
+      throw new PyOverflowError("Python int too large to convert to C int");
+    }
+    return big.intValueExact();
+  }
+
+  /// Message and index follow CPython: the character is shown raw when it is printable
+  /// ASCII, as '?' otherwise; the index is in code points.
   private static PyValueError unsupportedFormat(String format, int conversionIndex, int codePoint) {
+    var displayed = codePoint > 0x1f && codePoint < 0x7f
+        ? "'" + (char) codePoint + "'"
+        : "'?'";
     return new PyValueError("unsupported format character "
-        + StringIntrinsics.$repr$(new String(Character.toChars(codePoint)))
+        + displayed
         + " (0x" + Integer.toHexString(codePoint) + ") at index "
         + format.codePointCount(0, conversionIndex));
   }
@@ -312,12 +336,13 @@ public final class FormattingIntrinsics {
       case Boolean b -> charFromCodePoint(b ? 1L : 0L);
       case BigInteger b -> charFromCodePoint(b);
       case String s -> {
-        if (s.codePointCount(0, s.length()) != 1) {
-          throw new PyTypeError("%c requires int or char");
+        var count = s.codePointCount(0, s.length());
+        if (count != 1) {
+          throw new PyTypeError("%c requires an int or a unicode character, not a string of length " + count);
         }
         yield s;
       }
-      default -> throw new PyTypeError("%c requires int or char");
+      default -> throw new PyTypeError("%c requires an int or a unicode character, not " + typeName(value));
     };
     appendString(out, spec, text);
   }
@@ -558,10 +583,16 @@ public final class FormattingIntrinsics {
       return single;
     }
 
-    void selectKey(String key) {
+    /// Like CPython, the mapping is checked before the key is parsed
+    /// ('%(unfinished' % 42 raises TypeError, not ValueError "incomplete format key").
+    void requireMapping() {
       if (dict == null) {
         throw new PyTypeError("format requires a mapping");
       }
+    }
+
+    void selectKey(String key) {
+      requireMapping();
       single = DictIntrinsics.$get$(dict, key);  // KeyError with the repr of the key
       tuple = null;
       singleUsed = false;
@@ -1041,12 +1072,9 @@ public final class FormattingIntrinsics {
     if (grouping != '\0') {
       if (align == '=' && p.fill() == '0') {
         // fold the zero padding into the digits so the groups stay aligned
+        checkSize(p.width());  // fail eagerly instead of looping/allocating (like padField)
         var target = p.width() - prefix.length();
-        var pad = 0;
-        while (groupedLength(digits.length() + pad, groupSize) < target) {
-          pad++;
-        }
-        digits = "0".repeat(pad) + digits;
+        digits = "0".repeat(zeroPadForGrouping(digits.length(), groupSize, target)) + digits;
       }
       body = groupDigits(digits, grouping, groupSize);
     }
@@ -1135,24 +1163,53 @@ public final class FormattingIntrinsics {
     return true;
   }
 
-  /// Groups the integer digits of a fixed-notation float; exponent/inf/nan bodies are left alone.
+  /// Groups the integer digits of a float body; inf/nan bodies are left alone.
+  /// Like CPython, the mantissa of an exponent body ("1e-320") is still grouped and,
+  /// with '=' alignment, receives the zero padding.
   private static String groupFloatBody(String body, Pyspec p, char align, int prefixLength, String suffix) {
     var point = body.indexOf('.');
-    var intEnd = point == -1 ? body.length() : point;
+    var intEnd = point != -1 ? point : exponentStart(body);
     if (!isDigits(body, 0, intEnd)) {
       return body;
     }
     var intPart = body.substring(0, intEnd);
     var rest = body.substring(intEnd);
     if (align == '=' && p.fill() == '0') {
+      checkSize(p.width());  // fail eagerly instead of looping/allocating (like padField)
       var target = p.width() - prefixLength - rest.length() - suffix.length();
-      var pad = 0;
-      while (groupedLength(intPart.length() + pad, 3) < target) {
-        pad++;
-      }
-      intPart = "0".repeat(pad) + intPart;
+      intPart = "0".repeat(zeroPadForGrouping(intPart.length(), 3, target)) + intPart;
     }
     return groupDigits(intPart, p.grouping(), 3) + rest;
+  }
+
+  /// Start of the exponent part of a scientific body ("1e-320"), or the body length if none.
+  private static int exponentStart(String body) {
+    for (var i = 1; i < body.length(); i++) {
+      var c = body.charAt(i);
+      if (c == 'e' || c == 'E') {
+        return i;
+      }
+    }
+    return body.length();
+  }
+
+  /// Smallest pad >= 0 such that groupedLength(digits + pad, groupSize) >= target.
+  /// The caller caps the target with checkSize, so the result fits in an int.
+  private static int zeroPadForGrouping(int digits, int groupSize, long target) {
+    if (target <= digits) {
+      return 0;
+    }
+    var lo = 0L;
+    var hi = target - digits;  // groupedLength(target, groupSize) >= target
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (groupedLength(digits + mid, groupSize) < target) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return (int) lo;
   }
 
   private static boolean isDigits(String s, int from, int to) {
@@ -1223,6 +1280,10 @@ public final class FormattingIntrinsics {
 
   private static String charForCodePoint(Object value) {
     var code = toBigInteger(value);
+    if (code.bitLength() > 63) {
+      // unlike the % operator, the format-spec path converts through a C long first
+      throw new PyOverflowError("Python int too large to convert to C long");
+    }
     if (code.signum() < 0 || code.compareTo(BigInteger.valueOf(0x110000)) >= 0) {  // FIX: 0x10FFFF is valid
       throw new PyOverflowError("%c arg not in range(0x110000)");
     }
