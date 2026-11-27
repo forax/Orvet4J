@@ -431,7 +431,7 @@ public final class FormattingIntrinsics {
         yield decimals == 0 && altForm ? text + '.' : text;
       }
       case 'e', 'E' -> formatScientific(value, decimals, false, altForm);
-      default -> formatGeneral(value, decimals, altForm);  // g/G
+      default -> formatGeneral(value, decimals, altForm, false);  // g/G
     };
   }
 
@@ -447,19 +447,23 @@ public final class FormattingIntrinsics {
     return text;
   }
 
-  private static String formatGeneral(BigDecimal value, long significantDigits, boolean altForm) {
+  private static String formatGeneral(BigDecimal value, long significantDigits, boolean altForm, boolean addDotZero) {
     var sig = significantDigits == 0 ? 1 : significantDigits;
     if (value.signum() == 0) {
-      return altForm ? "0." + zeros(sig - 1) : "0";
+      if (addDotZero && sig == 1) {
+        return formatScientific(value, 0, true, altForm);   // format(0.0, '.0') == '0e+00'
+      }
+      return altForm ? "0." + zeros(sig - 1) : (addDotZero ? "0.0" : "0");
     }
     var sci = value.round(roundingContext(sig));
     var exp = sci.precision() - sci.scale() - 1;
-    if (exp >= -4 && exp < sig) {
-      var text = fixed(value, sig - 1 - exp, altForm);  // zeros would be stripped otherwise
+    if (exp >= -4 && exp < (addDotZero ? sig - 1 : sig)) {
+      var text = fixed(value, sig - 1 - exp, altForm);
       if (altForm) {
         return text.indexOf('.') == -1 ? text + '.' : text;
       }
-      return stripFractionZeros(text);
+      text = stripFractionZeros(text);
+      return addDotZero && text.indexOf('.') == -1 ? text + ".0" : text;
     }
     return formatScientific(value, sig - 1, !altForm, altForm);
   }
@@ -579,28 +583,13 @@ public final class FormattingIntrinsics {
 
   // -- format-spec mini-language (str.format fields and the format() builtin)
 
-  /// Python `str.format(*args)`: replacement fields with automatic numbering (`{}`),
-  /// explicit indices (`{0}`) and `!r`/`!s`/`!a` conversions. `{{` and `}}` escape
-  /// braces, a `[...]` item access selects a value inside the argument, and the
-  /// format spec of a field may itself contain replacement fields (one level deep).
-  /// Two limits come from the rest of the runtime: method calls cannot pass
-  /// keyword arguments yet, so `{name}` fields raise `PyKeyError`, and attribute
-  /// access (`{0.name}`) is rejected with `UnimplementedFeatureError`.
-  public static Object format(String self, Object[] args) {
-    try {
-      var out = new StringBuilder(self.length() + 16);
-      var cursor = new FieldCursor(args);
-      formatFields(self, out, cursor, 0);
-      return out.toString();
-    } catch (OutOfMemoryError e) {
-      // The runtime does not translate JVM allocation limits into MemoryError yet.
-      throw new UnimplementedFeatureError("formatted string too large for the JVM", e);
-    }
+  public static Object format(String self, Object... args) {
+    var out = new StringBuilder(self.length() + 16);
+    formatFields(self, out, new FieldCursor(args), 0);
+    return out.toString();
   }
 
-  /// Renders a format string, appending the result to `out`. Depth 0 is the
-  /// template itself, depth 1 a format spec nested inside a field; a nested
-  /// field at depth 1 or more exceeds the recursion CPython allows.
+  /// Depth 0 is the template itself, depth 1 a format spec nested inside a field.
   private static void formatFields(String template, StringBuilder out, FieldCursor cursor, int depth) {
     var length = template.length();
     var index = 0;
@@ -630,14 +619,11 @@ public final class FormattingIntrinsics {
     }
   }
 
-  /// Parses and renders one replacement field starting just after its `{`.
-  /// Returns the offset just after the closing `}`.
+  /// Renders one replacement field starting just after its `{`; returns the offset after its `}`.
   private static int formatField(String template, int index, StringBuilder out, FieldCursor cursor, int depth) {
     var length = template.length();
-    // -- field name: arg_name ('.' attribute | '[' item ']')*
     var end = scanFieldName(template, index);
     if (end == length) {
-      // like CPython, an empty field name at the end of the string is a lone '{'
       throw new PyValueError(end == index
           ? "Single '{' encountered in format string"
           : "expected '}' before end of string");
@@ -706,7 +692,7 @@ public final class FormattingIntrinsics {
       }
     }
     // -- format spec, which may itself contain replacement fields
-    String spec = "";
+    var spec = "";
     if (end < length && template.charAt(end) == ':') {
       var specStart = ++end;
       var braces = 0;
@@ -729,19 +715,18 @@ public final class FormattingIntrinsics {
       }
       if (!found) {
         if (braces == 0) {
-          // a malformed spec content (a missing precision for example) is reported
-          // before the unmatched error, like CPython
+          // a malformed spec is reported before the unmatched error, like CPython
           FormattingIntrinsics.parseSpec(template.substring(specStart, end));
         }
         throw new PyValueError("unmatched '{' in format spec");
       }
       spec = template.substring(specStart, end);
     }
-    if (end < length) {
-      end++;  // the closing '}'
-    } else if (conversion == '\0') {
+    if (end >= length) {                       // FIX: was only checked when there was no conversion
       throw new PyValueError("expected '}' before end of string");
     }
+    end++;  // the closing '}'
+
     // -- resolve the argument, then its items, then render
     var value = cursor.resolve(argName);
     if (hasAttribute) {
@@ -765,9 +750,6 @@ public final class FormattingIntrinsics {
     return end;
   }
 
-  /// Scans a field-name part (the argument name or an attribute) until a field
-  /// separator; a `{` inside the name is an error. Returns the template length
-  /// at the end of the template, which the caller reports like CPython does.
   private static int scanFieldName(String template, int index) {
     var length = template.length();
     while (index < length) {
@@ -783,13 +765,8 @@ public final class FormattingIntrinsics {
     return length;
   }
 
-  /// A `[...]` item access in a field name: digits select an integer index,
-  /// anything else is a string key (like CPython).
   private static Object itemValue(String item) {
-    if (isDecimalDigits(item)) {
-      return normalize(new BigInteger(item));
-    }
-    return item;
+    return isDecimalDigits(item) ? normalize(new BigInteger(item)) : item;
   }
 
   private static boolean isDecimalDigits(String s) {
@@ -805,10 +782,8 @@ public final class FormattingIntrinsics {
     return true;
   }
 
-  /// Resolves field names against the positional arguments of `str.format`,
-  /// implementing CPython's rule that automatic (`{}`) and manual (`{0}`)
-  /// numbering cannot be mixed. Keyword names raise KeyError: method calls
-  /// cannot pass keyword arguments yet.
+  /// Resolves field names against the positional arguments; automatic (`{}`) and manual (`{0}`)
+  /// numbering cannot be mixed. Keyword names raise KeyError.
   private static final class FieldCursor {
     private final Object[] args;
     private int autoIndex;
@@ -849,19 +824,9 @@ public final class FormattingIntrinsics {
   }
 
 
-
-  /// Python `format(value, spec)` (PEP 3101): applies the format spec mini-language
-  /// to a canonical runtime value, like CPython's `PyObject_Format`. Only `str`,
-  /// `int`, `bool` and `float` accept a non-empty spec; every other value supports
-  /// only the empty spec and behaves like `str(value)`.
-  ///
-  /// Known divergences from CPython: type `n` formats like `d`/`g` with the C
-  /// locale (there is no locale support), a width or precision that does not fit
-  /// an int64 raises `PyValueError("Too many decimal digits in format string")`
-  /// (the format-spec message, not the printf-style `<what> too big` of
-  /// {@link #accumulate}), and a width that the JVM could not allocate fails
-  /// eagerly with `UnimplementedFeatureError` through {@code checkSize} where
-  /// CPython dies with a catchable MemoryError.
+  /// Python `format(value, spec)`. Only str, int, bool and float accept a non-empty spec.
+  /// Known divergence: type `n` behaves like `d`/`g` in the C locale. A width beyond the
+  /// JVM string limit raises UnimplementedFeatureError.
   public static Object formatValue(Object value, String spec) {
     if (spec.isEmpty()) {
       return switch (value) {
@@ -878,40 +843,29 @@ public final class FormattingIntrinsics {
     };
   }
 
-  /// A parsed format spec: `[[fill]align][sign][z][#][0][width][,|_][.precision][type]`.
-  /// `align` is '\\0' when the spec does not provide one, `type` is '\\0' when the
-  /// spec has no presentation type, and `trailingJunk` is set when characters
-  /// remain after the common part that cannot be a single presentation type.
-  private record Pyspec(
-      char fill,
-      char align,
-      char sign,
-      boolean z,
-      boolean alt,
-      boolean zero,
-      char grouping,
-      long width,
-      long precision,
-      char type,
-      boolean trailingJunk) {
+  /// `[[fill]align][sign][z][#][0][width][,|_][.precision][type]`
+  /// align/type are '\0' when absent; trailingJunk is set when more than one char follows.
+  record Pyspec(int fill, char align, char sign, boolean z, boolean alt, boolean zero,
+                char grouping, long width, long precision, char type, boolean trailingJunk) {
   }
 
-  /// Parses a format spec; the parse errors (a missing precision, a duplicated
-  /// grouping separator, an int64 overflow) are shared by all value types and are
-  /// reported before the per-type validations. Package-private because the
-  /// `str.format` parser needs those errors to fire even on an unterminated spec.
   static Pyspec parseSpec(String spec) {
     var index = 0;
     var length = spec.length();
-    var fill = ' ';
+    int fill = ' ';
+    var fillGiven = false;
     char align = '\0';
-    if (length - index >= 2 && isAlign(spec.charAt(index + 1))) {
-      fill = spec.charAt(index);
-      align = spec.charAt(index + 1);
-      index += 2;
-    } else if (index < length && isAlign(spec.charAt(index))) {
-      align = spec.charAt(index);
-      index++;
+    if (length > 0) {
+      var firstWidth = Character.charCount(spec.codePointAt(0));   // the fill may be a supplementary char
+      if (length > firstWidth && isAlign(spec.charAt(firstWidth))) {
+        fill = spec.codePointAt(0);
+        fillGiven = true;
+        align = spec.charAt(firstWidth);
+        index = firstWidth + 1;
+      } else if (isAlign(spec.charAt(0))) {
+        align = spec.charAt(0);
+        index = 1;
+      }
     }
     char sign = '\0';
     if (index < length) {
@@ -934,68 +888,56 @@ public final class FormattingIntrinsics {
     var zero = false;
     if (index < length && spec.charAt(index) == '0') {
       zero = true;
-      if (fill == ' ') {  // the 0 flag defaults the fill, like an explicit '0' fill
+      if (!fillGiven) {
         fill = '0';
       }
       index++;
     }
-    var width = -1L;
+    long width = -1;
     if (index < length && isDigit(spec.charAt(index))) {
-      var parsed = parseDigits(spec, index, "width");
+      var parsed = parseDigits(spec, index);
       index = parsed.end();
       width = parsed.value();
     }
     char grouping = '\0';
-    if (index < length) {
-      var c = spec.charAt(index);
-      if (c == ',' || c == '_') {
-        grouping = c;
-        index++;
-        if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
-          throw new PyValueError("Cannot specify both ',' and '_'.");
-        }
+    if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
+      grouping = spec.charAt(index++);
+      if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
+        throw new PyValueError("Cannot specify both ',' and '_'.");
       }
     }
-    var precision = -1L;
+    long precision = -1;
     if (index < length && spec.charAt(index) == '.') {
       index++;
       if (index >= length || !isDigit(spec.charAt(index))) {
         throw new PyValueError("Format specifier missing precision");
       }
-      var parsed = parseDigits(spec, index, "precision");
+      var parsed = parseDigits(spec, index);
       index = parsed.end();
       precision = parsed.value();
     }
-    var trailingJunk = false;
     char type = '\0';
+    var trailingJunk = false;
     var remaining = length - index;
     if (remaining == 1) {
       type = spec.charAt(index);
     } else if (remaining > 1) {
-      trailingJunk = true;  // the presentation type must be the last character
+      trailingJunk = true;
     }
     return new Pyspec(fill, align, sign, z, alt, zero, grouping, width, precision, type, trailingJunk);
   }
 
   private record ParsedDigits(long value, int end) {}
 
-  /// Parses the decimal digits of a width or precision starting at `index`. The
-  /// digits must fit an int64; for the format-spec mini-language CPython reports
-  /// the overflow as `Too many decimal digits in format string`, not with the
-  /// printf-style `<what> too big` message of {@link #accumulate}, so the error
-  /// is translated here.
-  private static ParsedDigits parseDigits(String spec, int index, String what) {
-    var start = index;
-    while (index < spec.length() && isDigit(spec.charAt(index))) {
-      index++;
-    }
+  private static ParsedDigits parseDigits(String spec, int index) {
     var value = 0L;
-    try {
-      for (var i = start; i < index; i++) {
-        value = accumulate(value, spec.charAt(i) - '0', what);
+    while (index < spec.length() && isDigit(spec.charAt(index))) {
+      var digit = spec.charAt(index) - '0';
+      if (value > (Long.MAX_VALUE - digit) / 10) {
+        throw new PyValueError("Too many decimal digits in format string");
       }
-    } catch (PyValueError _) {
-      throw new PyValueError("Too many decimal digits in format string");
+      value = value * 10 + digit;
+      index++;
     }
     return new ParsedDigits(value, index);
   }
@@ -1035,16 +977,15 @@ public final class FormattingIntrinsics {
     if (p.align() == '=') {
       throw new PyValueError("'=' alignment not allowed in string format specifier");
     }
-    var body = truncate(s, p.precision());
     var align = p.align() == '\0' ? '<' : p.align();
-    return padField("", body, p.fill(), align, p.width());
+    return padField("", truncate(s, p.precision()), p.fill(), align, p.width());
   }
 
   private static String formatIntValue(Object value, String spec) {
     var p = parseSpec(spec);
     var typeName = IntrinsicSupport.typeName(value);
-    // like CPython, float presentation types format an int as a float
     var type = p.type();
+    // like CPython, float presentation types format an int as a float
     if (type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G' || type == '%') {
       return formatFloatBody(IntrinsicSupport.toDouble(value), p, spec, typeName);
     }
@@ -1058,8 +999,10 @@ public final class FormattingIntrinsics {
     if (p.z()) {
       throw new PyValueError("Negative zero coercion (z) not allowed in integer format specifier");
     }
-    if (p.grouping() != '\0' && type != 'd' && type != '\0') {
-      throw new PyValueError("Cannot specify '" + p.grouping() + "' with '" + type + "'.");
+    var grouping = p.grouping();
+    var groupSize = type == 'b' || type == 'o' || type == 'x' || type == 'X' ? 4 : 3;
+    if (grouping != '\0' && (type == 'n' || type == 'c' || (grouping == ',' && groupSize == 4))) {
+      throw new PyValueError("Cannot specify '" + grouping + "' with '" + type + "'.");
     }
     if (p.precision() != -1) {
       throw new PyValueError("Precision not allowed in integer format specifier");
@@ -1072,7 +1015,7 @@ public final class FormattingIntrinsics {
       if (p.alt()) {
         throw new PyValueError("Alternate form (#) not allowed with integer format specifier 'c'");
       }
-      return padField("", charFromCodePoint(toBigInteger(value)), p.fill(), align, p.width());
+      return padField("", charForCodePoint(value), p.fill(), align, p.width());
     }
     var number = toBigInteger(value);
     var digits = switch (type) {
@@ -1095,13 +1038,17 @@ public final class FormattingIntrinsics {
       };
     }
     var body = digits;
-    if (p.grouping() != '\0') {
+    if (grouping != '\0') {
       if (align == '=' && p.fill() == '0') {
-        // fold the zero padding into the digits themselves so the groups stay aligned
-        var pad = leadingZerosForGroupedLength(digits.length(), p.width() - prefix.length());
-        digits = zeros(pad) + digits;
+        // fold the zero padding into the digits so the groups stay aligned
+        var target = p.width() - prefix.length();
+        var pad = 0;
+        while (groupedLength(digits.length() + pad, groupSize) < target) {
+          pad++;
+        }
+        digits = "0".repeat(pad) + digits;
       }
-      body = groupDigits(digits, p.grouping());
+      body = groupDigits(digits, grouping, groupSize);
     }
     return padField(prefix, body, p.fill(), align, p.width());
   }
@@ -1123,17 +1070,22 @@ public final class FormattingIntrinsics {
       throw new PyValueError("Cannot specify '" + p.grouping() + "' with 'n'.");
     }
     var align = p.align() == '\0' ? (p.zero() ? '=' : '>') : p.align();
-    // the z option coerces a negative zero to a positive zero
-    if (p.z() && value == 0.0 && Double.doubleToRawLongBits(value) < 0) {
-      value = 0.0;
-    }
+
     if (type == '\0' && p.precision() == -1) {
-      // a spec without type or precision renders the float like repr()
+      // no type and no precision: rendered like repr()
       var signed = StringIntrinsics.floatString(value);
-      var body = signed.startsWith("-") ? signed.substring(1) : signed;
-      var prefix = signed.startsWith("-") ? "-" : signFor(false, p);
+      var negative = signed.startsWith("-");
+      var body = negative ? signed.substring(1) : signed;
+      if (negative && p.z() && value == 0.0) {
+        negative = false;
+      }
+      var prefix = signFor(negative, p);
+      if (p.grouping() != '\0') {
+        body = groupFloatBody(body, p, align, prefix.length(), "");
+      }
       return padField(prefix, body, p.fill(), align, p.width());
     }
+
     var conversion = switch (type) {
       case '\0', 'n' -> 'g';  // without locale support, 'n' formats like 'g'
       case '%' -> 'f';
@@ -1151,21 +1103,40 @@ public final class FormattingIntrinsics {
       prefix = signFor(scaled < 0, p);
       body = upper ? "INF" : "inf";
     } else {
-      prefix = signFor(Double.doubleToRawLongBits(scaled) < 0, p);
-      body = formatDouble(new BigDecimal(Math.abs(scaled)), p.precision(), conversion, p.alt());
+      var negative = Double.doubleToRawLongBits(scaled) < 0;
+      var abs = new BigDecimal(Math.abs(scaled));
+      body = type == '\0'
+          ? formatGeneral(abs, p.precision(), p.alt(), true)  // precision but no type: 'g' that keeps a ".0"
+          : formatDouble(abs, p.precision(), conversion, p.alt());
       if (upper) {
         body = body.toUpperCase(Locale.ROOT);
       }
+      if (negative && p.z() && isAllZeros(body)) {          // z also applies to values that round to zero
+        negative = false;
+      }
+      prefix = signFor(negative, p);
     }
     if (p.grouping() != '\0') {
-      body = groupFloatBody(body, p, suffix);
+      body = groupFloatBody(body, p, align, prefix.length(), suffix);
     }
     return padField(prefix, body + suffix, p.fill(), align, p.width());
   }
 
-  /// Applies the thousands separator to the digits left of the decimal point of a
-  /// fixed-notation float; the exponent notation of `g`/`e` is left alone.
-  private static String groupFloatBody(String body, Pyspec p, String suffix) {
+  private static boolean isAllZeros(String body) {
+    for (var i = 0; i < body.length(); i++) {
+      var c = body.charAt(i);
+      if (c >= '1' && c <= '9') {
+        return false;
+      }
+      if (c == 'e' || c == 'E') {
+        break;
+      }
+    }
+    return true;
+  }
+
+  /// Groups the integer digits of a fixed-notation float; exponent/inf/nan bodies are left alone.
+  private static String groupFloatBody(String body, Pyspec p, char align, int prefixLength, String suffix) {
     var point = body.indexOf('.');
     var intEnd = point == -1 ? body.length() : point;
     if (!isDigits(body, 0, intEnd)) {
@@ -1173,32 +1144,15 @@ public final class FormattingIntrinsics {
     }
     var intPart = body.substring(0, intEnd);
     var rest = body.substring(intEnd);
-    if (p.fill() == '0' && (p.align() == '=' || p.align() == '\0')) {
-      // fold the zero padding into the integer digits so the groups stay aligned
-      var pad = leadingZerosForGroupedLength(intPart.length(), p.width() - rest.length() - suffix.length());
-      intPart = zeros(pad) + intPart;
+    if (align == '=' && p.fill() == '0') {
+      var target = p.width() - prefixLength - rest.length() - suffix.length();
+      var pad = 0;
+      while (groupedLength(intPart.length() + pad, 3) < target) {
+        pad++;
+      }
+      intPart = "0".repeat(pad) + intPart;
     }
-    return groupDigits(intPart, p.grouping()) + rest;
-  }
-
-  /// Smallest count of leading zeros so that `digitCount + zeros` digits, once
-  /// grouped (one separator per 3 digits), reach `target` characters; the grouped
-  /// length is allowed to overshoot, like CPython. Solved in closed form because
-  /// the target can be huge.
-  private static long leadingZerosForGroupedLength(long digitCount, long target) {
-    if (target <= 1) {
-      return 0L;
-    }
-    // want the smallest m >= 1 with m + (m-1)/3 >= target, i.e. the smallest k = m-1
-    // with k + k/3 >= target - 1
-    var k = Math.max(0L, 3 * (target - 1) / 4 - 1);
-    while (k + k / 3 < target - 1) {
-      k++;
-    }
-    while (k > 0 && k - 1 + (k - 1) / 3 >= target - 1) {
-      k--;
-    }
-    return Math.max(0L, k + 1 - digitCount);
+    return groupDigits(intPart, p.grouping(), 3) + rest;
   }
 
   private static boolean isDigits(String s, int from, int to) {
@@ -1213,53 +1167,47 @@ public final class FormattingIntrinsics {
     return true;
   }
 
-  private static String groupDigits(String digits, char separator) {
+  private static long groupedLength(long digits, int size) {
+    return digits + (digits - 1) / size;
+  }
+
+  private static String groupDigits(String digits, char separator, int size) {
     var length = digits.length();
-    var groups = (length - 1) / 3;
+    var groups = (length - 1) / size;
     if (groups == 0) {
       return digits;
     }
     var builder = new StringBuilder(length + groups);
-    var head = length - groups * 3;
+    var head = length - groups * size;
     builder.append(digits, 0, head);
-    for (var index = head; index < length; index += 3) {
-      builder.append(separator).append(digits, index, index + 3);
+    for (var index = head; index < length; index += size) {
+      builder.append(separator).append(digits, index, index + size);
     }
     return builder.toString();
   }
 
-  /// Places `prefix + body` in a field of `width` characters padded with `fill`.
-  /// With '=' the padding goes between the prefix and the body (after the sign).
-  private static String padField(String prefix, String body, char fill, char align, long width) {
-    var total = (long) prefix.length() + body.length();
+  /// Places `prefix + body` in a field of `width` code points. With '=' the padding goes
+  /// between the prefix and the body.
+  private static String padField(String prefix, String body, int fill, char align, long width) {
+    var total = (long) prefix.codePointCount(0, prefix.length()) + body.codePointCount(0, body.length());
     if (width <= total) {
       return prefix + body;
     }
     var padding = width - total;
-    // do not pre-size for a padding that checkSize is going to reject anyway
-    var out = new StringBuilder((int) Math.min(total + padding, Math.max(total, 64)) + 16);
-    switch (align) {
-      case '<' -> {
-        out.append(prefix).append(body);
-        appendRepeated(out, fill, padding);
-      }
-      case '>' -> {
-        appendRepeated(out, fill, padding);
-        out.append(prefix).append(body);
-      }
-      case '=' -> {
-        out.append(prefix);
-        appendRepeated(out, fill, padding);
-        out.append(body);
-      }
-      default -> {  // '^', the extra character goes on the right
-        var left = padding / 2;
-        appendRepeated(out, fill, left);
-        out.append(prefix).append(body);
-        appendRepeated(out, fill, padding - left);
-      }
+    if (padding > MAX_STRING_LENGTH) {
+      throw tooLarge();
     }
-    return out.toString();
+    var fillText = new String(Character.toChars(fill));
+    checkSize((long) prefix.length() + body.length() + padding * fillText.length());
+    return switch (align) {
+      case '<' -> prefix + body + fillText.repeat((int) padding);
+      case '>' -> fillText.repeat((int) padding) + prefix + body;
+      case '=' -> prefix + fillText.repeat((int) padding) + body;
+      default -> {  // '^': the extra character goes on the right
+        var left = (int) (padding / 2);
+        yield fillText.repeat(left) + prefix + body + fillText.repeat((int) padding - left);
+      }
+    };
   }
 
   private static String signFor(boolean negative, Pyspec p) {
@@ -1272,4 +1220,14 @@ public final class FormattingIntrinsics {
       default -> "";
     };
   }
+
+  private static String charForCodePoint(Object value) {
+    var code = toBigInteger(value);
+    if (code.signum() < 0 || code.compareTo(BigInteger.valueOf(0x110000)) >= 0) {  // FIX: 0x10FFFF is valid
+      throw new PyOverflowError("%c arg not in range(0x110000)");
+    }
+    return String.valueOf(Character.toChars(code.intValueExact()));
+  }
+
+
 }

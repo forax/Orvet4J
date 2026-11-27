@@ -555,19 +555,12 @@ final class Builtins {
 
   @SuppressWarnings("unused")
   public static Object _format_(Object... args) {
-    if (args.length == 0) {
-      throw new PyTypeError("format expected at least 1 argument, got 0");
-    }
-    if (args.length > 2) {
-      throw new PyTypeError("format expected at most 2 arguments, got " + args.length);
-    }
+    requireCount("format", args.length, 1, 2);
     var spec = args.length == 2 ? args[1] : "";
-    if (!(spec instanceof String string)) {
-      // like CPython, None is spelled 'None' here, not 'NoneType'
-      var specName = spec == PyNone.INSTANCE ? "None" : typeName(spec);
-      throw new PyTypeError("format() argument 2 must be str, not " + specName);
+    if (!(spec instanceof String s)) {
+      throw new PyTypeError("format() argument 2 must be str, not " + typeName(spec));
     }
-    return FormattingIntrinsics.formatValue(args[0], string);
+    return FormattingIntrinsics.formatValue(args[0], s);
   }
 
   @SuppressWarnings("unused")

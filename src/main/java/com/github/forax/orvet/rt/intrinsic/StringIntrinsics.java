@@ -787,17 +787,10 @@ public final class StringIntrinsics {
   }
 
 
-  // -- str.format
-
-  /// The zero-argument form links through the exact-signature lookup; the
-  /// varargs fallback below only adapts for one or more arguments.
-  public static Object _format_(String self) {
-    return _format_(self, new Object[0]);
-  }
-
-  public static Object _format_(String self, Object[] args) {
+  public static Object _format_(String self, Object... args) {
     return FormattingIntrinsics.format(self, args);
   }
+
 
   public static Object _isascii_(String s) {
     if (!isLatin1(s)) {
