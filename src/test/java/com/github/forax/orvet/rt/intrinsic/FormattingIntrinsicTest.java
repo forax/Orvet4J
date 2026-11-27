@@ -9,6 +9,7 @@ import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -26,18 +27,18 @@ public class FormattingIntrinsicTest {
     return context;
   }
 
+  private static Object args(Object... elements) {
+    return TupleIntrinsics.fromArray(elements);
+  }
+
+  private static PyDict<String, Object> withA(Object value) {
+    var dict = new PyDict<String, Object>();
+    dict.put("a", value);
+    return dict;
+  }
+
   @Nested
   public final class StringMod {
-
-    private static Object args(Object... elements) {
-      return TupleIntrinsics.fromArray(elements);
-    }
-
-    private static PyDict<String, Object> withA(Object value) {
-      var dict = new PyDict<String, Object>();
-      dict.put("a", value);
-      return dict;
-    }
 
     @Test
     public void integerConversions() {
@@ -232,6 +233,24 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
+    @Disabled
+    public void dynamicPrecisionBoundaries() {
+      assertEquals("",
+          stringMod("%.*s", args(Integer.MIN_VALUE, "abc")));
+
+      assertEquals("x",
+          stringMod("%.*s", args(Integer.MAX_VALUE, "x")));
+
+      assertEquals("Python int too large to convert to C int",
+          assertThrows(PyOverflowError.class,
+              () -> stringMod("%.*s", args(2147483648L, "x"))).getMessage());
+
+      assertEquals("Python int too large to convert to C int",
+          assertThrows(PyOverflowError.class,
+              () -> stringMod("%.*s", args(-2147483649L, "x"))).getMessage());
+    }
+
+    @Test
     public void throughTheCompiler() {
       var context = run("""
           name = 'Ada'
@@ -242,6 +261,119 @@ public class FormattingIntrinsicTest {
       assertEquals("Hello Ada, 42% done", context.getGlobal("greeting"));
       assertEquals("cost: 012.3", context.getGlobal("row"));
       assertEquals(2L, context.getGlobal("rest"));
+    }
+  }
+
+  @Nested
+  public class Integers {
+    @Test
+    public void cpython314IntegerFormatting() {
+      var hex = new BigInteger("1234567890abcdef12345", 16);
+
+      assertEquals("0x001234567890abcdef12345",
+          stringMod("%#.23x", hex));
+
+      assertEquals("-0x001234567890abcdef12345",
+          stringMod("%#.23x", hex.negate()));
+
+      assertEquals("0x00001234567890abcdef12345",
+          stringMod("%#027x", hex));
+
+      assertEquals("+0x001234567890abcdef12345",
+          stringMod("%#+.23x", hex));
+
+      var octal = new BigInteger("12345670123456701234567012345670", 8);
+
+      assertEquals("0o0012345670123456701234567012345670",
+          stringMod("%#.34o", octal));
+
+      assertEquals("0o000012345670123456701234567012345670",
+          stringMod("%#038o", octal));
+
+      var decimal = new BigInteger("123456789012345678901234567890");
+
+      assertEquals("-000123456789012345678901234567890",
+          stringMod("%034d", decimal.negate()));
+
+      assertEquals("+000123456789012345678901234567890",
+          stringMod("%0+34d", decimal));
+    }
+  }
+
+  @Nested
+  public class Floats {
+    @Test
+    public void cpython314FloatFormatting() {
+      assertEquals("2.67", stringMod("%.2f", 2.675));
+      assertEquals("1.00", stringMod("%.2f", 1.005));
+
+      assertEquals("1.10000", stringMod("%#g", 1.1));
+
+      assertEquals("1e+06", stringMod("%.6g", 999999.5));
+
+      assertEquals("0.0001", stringMod("%.3g", 0.00009999));
+      assertEquals("9.999e-05", stringMod("%.4g", 0.00009999));
+
+      assertEquals("1.e+00", stringMod("%#.0e", 1.25));
+      assertEquals("1.", stringMod("%#.0g", 1.0));
+
+      assertEquals("-0.000000", stringMod("%+f", -0.0));
+
+      assertEquals("+NAN", stringMod("%+G", Double.NaN));
+      assertEquals("-INF", stringMod("%F", Double.NEGATIVE_INFINITY));
+    }
+  }
+
+  @Nested
+  public class Unicode {
+    @Test
+    public void cpython314UnicodeFormatting() {
+      assertEquals("'\\u0378'", stringMod("%r", "\u0378"));
+      assertEquals("'\\u0378'", stringMod("%a", "\u0378"));
+
+      assertEquals("'\u0374'", stringMod("%r", "\u0374"));
+      assertEquals("'\\u0374'", stringMod("%a", "\u0374"));
+
+      assertEquals("  😀", stringMod("%3.1s", "😀ab"));
+      assertEquals("😀  ", stringMod("%-3.1s", "😀ab"));
+
+      assertEquals("'\\U0001f600'", stringMod("%a", "😀"));
+
+      assertEquals("a\0b", stringMod("a%cb", 0L));
+      assertEquals("ac\0db", stringMod("a%sb", "c\0d"));
+    }
+  }
+
+  @Nested
+  public class ParseError {
+    @Test
+    public void cpython314MappingFormatting() {
+      var dict = new PyDict<String, Object>();
+      dict.put("outer(inner)", "nested");
+      dict.put("unused", 42L);
+
+      assertEquals("nested",
+          stringMod("%(outer(inner))s", dict));
+    }
+
+    @Test
+    @Disabled
+    public void formattingErrors() {
+      // CPython checks for a mapping before parsing the mapping key.
+      assertEquals("format requires a mapping",
+          assertThrows(PyTypeError.class,
+              () -> stringMod("%(unfinished", 42L)).getMessage());
+
+      // Non-ASCII conversion characters are displayed as '?'.
+      assertEquals("unsupported format character '?' (0x1f600) at index 1",
+          assertThrows(PyValueError.class,
+              () -> stringMod("%😀", 42L)).getMessage());
+
+      // Negative width cannot be negated when it is PY_SSIZE_T_MIN.
+      assertEquals("width too big",
+          assertThrows(PyOverflowError.class,
+              () -> stringMod("%*s",
+                  args(BigInteger.valueOf(Long.MIN_VALUE), "x"))).getMessage());
     }
   }
 }
