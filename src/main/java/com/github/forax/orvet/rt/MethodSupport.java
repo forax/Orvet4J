@@ -125,9 +125,16 @@ final class MethodSupport {
       if (mh != null) {
         return mh;
       }
-      // try with a varargs signature
-      return lookup(intrinsic, name, MethodType.methodType(methodType.returnType(),
+      // try with a varargs signature, packing the call site arguments into the array
+      var varargs = lookup(intrinsic, name, MethodType.methodType(methodType.returnType(),
           methodType.parameterType(0), Object[].class));
+      if (varargs == null) {
+        return null;
+      }
+      var count = methodType.parameterCount() - 1;
+      return count == 0 ?
+          MethodHandles.insertArguments(varargs.asFixedArity(), 1, (Object) new Object[0]) :
+          varargs.asFixedArity().asCollector(Object[].class, count);
     }
 
     static CallSite methodCall(String name, MethodType type, int positionalCount, String... keywordNames) {

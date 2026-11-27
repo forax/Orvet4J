@@ -1165,4 +1165,27 @@ public final class BuiltinsTest {
       assertRaises(PyTypeError.class, "type(1, 2)");
     }
   }
+
+
+  @Nested
+  public final class Format {
+    @Test
+    public void formatAppliesTheFormatSpec() throws IOException {
+      assertEquals("00042", strOf("format(42, '05d')"));
+      assertEquals("  a  ", strOf("format('a', '^5')"));
+      assertEquals("42", strOf("format(42)"));
+      assertEquals("True", strOf("format(True)"));
+      assertEquals("1.5", strOf("format(1.5)"));
+      assertEquals("[1, 2]", strOf("format([1, 2])"));
+    }
+
+    @Test
+    public void formatRejectsBadArityAndSpecs() {
+      assertRaises(PyTypeError.class, "format()");
+      assertRaises(PyTypeError.class, "format(1, 2, 3)");
+      assertRaises(PyTypeError.class, "format(1, None)");
+      assertRaises(PyValueError.class, "format('a', '=')");
+      assertRaises(PyTypeError.class, "format(None, '10')");
+    }
+  }
 }

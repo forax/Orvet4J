@@ -13,6 +13,7 @@ import com.github.forax.orvet.rt.PyTuple.PyTuple2;
 import com.github.forax.orvet.rt.PyTuple.PyTupleN;
 import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyIndexError;
+import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -35,6 +36,7 @@ import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._casefold_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._count_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._endswith_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._find_;
+import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._format_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._index_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._isalnum_;
 import static com.github.forax.orvet.rt.intrinsic.StringIntrinsics._isalpha_;
@@ -3809,6 +3811,281 @@ public final class StringIntrinsicsTest {
       assertThrows(PyValueError.class, () -> run("'abc'.rindex('z')"));
       assertThrows(PyTypeError.class, () -> run("'abc'.find(1)"));
       assertThrows(PyValueError.class, () -> run("'a,b'.partition('')"));
+    }
+  }
+
+  @Nested
+  public final class Format {
+
+    private static String format(String template, Object... args) {
+      return (String) _format_(template, args);
+    }
+
+    private static Throwable failure(Executable executable) {
+      return assertThrows(Throwable.class, executable);
+    }
+
+    @Test
+    public void positionalFieldsAndEscapes() {
+      assertEquals("x", format("x"));
+      assertEquals("1 a", format("{} {}", 1L, "a"));
+      assertEquals("x-y", format("{0}-{1}", "x", "y"));
+      assertEquals("abab", format("{0}{0}", "ab"));
+      assertEquals("1", format("{}", 1L, 2L));
+      assertEquals("plain", format("plain", 1L));
+      assertEquals("a{b1c}d", format("a{{b{0}c}}d", 1L));
+      assertEquals("{}", format("{{}}"));
+      assertEquals("{", format("{{"));
+      assertEquals("}", format("}}"));
+    }
+
+    @Test
+    public void integerSpecs() {
+      assertEquals("   42", format("{:5}", 42L));
+      assertEquals("42   ", format("{:<5}", 42L));
+      assertEquals(" 42  ", format("{:^5}", 42L));
+      assertEquals("00042", format("{:05}", 42L));
+      assertEquals("-0042", format("{:05}", -42L));
+      assertEquals("+0042", format("{:+05}", 42L));
+      assertEquals("-**42", format("{:*=5}", -42L));
+      assertEquals("-  42", format("{:=5}", -42L));
+      assertEquals("+42", format("{:+d}", 42L));
+      assertEquals(" 42", format("{: d}", 42L));
+      assertEquals("3.000000", format("{:f}", 3L));  // float presentation types format an int
+      assertEquals("000000ff", format("{:08x}", 255L));
+    }
+
+    @Test
+    public void integerAlternateFormsAndRadixes() {
+      assertEquals("0xff", format("{:#x}", 255L));
+      assertEquals("0XFF", format("{:#X}", 255L));
+      assertEquals("0o10", format("{:#o}", 8L));
+      assertEquals("0b101", format("{:#b}", 5L));
+      assertEquals("0x0000ff", format("{:#08x}", 255L));
+      assertEquals("42", format("{:#d}", 42L));
+      assertEquals("A", format("{:c}", 65L));
+      assertEquals("\u0001", format("{:c}", true));
+      assertEquals("4000000000000000", format("{:x}", BigInteger.TWO.pow(62)));
+    }
+
+    @Test
+    public void integerGrouping() {
+      assertEquals("1,234,567", format("{:,}", 1234567L));
+      assertEquals("1_234_567", format("{:_}", 1234567L));
+      assertEquals("00,001,234", format("{:010,}", 1234L));
+      assertEquals("-0,001,234", format("{:010,}", -1234L));
+      assertEquals("-1,234,567", format("{:,}", -1234567L));
+      assertEquals("100,000,000,000,000,000,000", format("{:,}", BigInteger.TEN.pow(20)));
+    }
+
+    @Test
+    public void booleanFields() {
+      assertEquals("True", format("{}", true));
+      assertEquals("    1", format("{:5}", true));   // non-empty spec formats a bool as an int
+      assertEquals("1", format("{:d}", true));
+      assertEquals("True", format("True", true));
+    }
+
+    @Test
+    public void floatSpecs() {
+      assertEquals("1.5", format("{}", 1.5));
+      assertEquals("0.30000000000000004", format("{}", 0.1 + 0.2));
+      assertEquals("0.30000000000000004", format("{:}", 0.1 + 0.2));  // no type/precision: repr
+      assertEquals("0.3", format("{:.10}", 0.1 + 0.2));               // precision only: 'g'
+      assertEquals("       1.5", format("{:10}", 1.5));
+      assertEquals("3.141590", format("{:f}", 3.14159));
+      assertEquals("3.14", format("{:.2f}", 3.14159));
+      assertEquals("    3.14", format("{:8.2f}", 3.14159));
+      assertEquals("-0003.14", format("{:08.2f}", -3.14159));
+      assertEquals("3.", format("{:#.0f}", 3.0));
+      assertEquals("1.234568e+04", format("{:e}", 12345.6789));
+      assertEquals("1.235e+04", format("{:.3e}", 12345.6789));
+      assertEquals("1.23457e+08", format("{:g}", 123456789.0));
+      assertEquals("1E+20", format("{:G}", 1e20));
+      assertEquals("25.000000%", format("{:%}", 0.25));
+      assertEquals("25.0%", format("{:.1%}", 0.25));
+      assertEquals("100000000000000000000.000000", format("{:f}", BigInteger.TEN.pow(20)));
+    }
+
+    @Test
+    public void floatSpecialValuesAndZeroCoercion() {
+      assertEquals("nan", format("{:f}", Double.NaN));
+      assertEquals("NAN", format("{:F}", Double.NaN));
+      assertEquals("+nan", format("{:+f}", Double.NaN));
+      assertEquals("inf", format("{:f}", Double.POSITIVE_INFINITY));
+      assertEquals("-inf", format("{:f}", Double.NEGATIVE_INFINITY));
+      assertEquals("0000000nan", format("{:010f}", Double.NaN));
+      assertEquals("-0.0", format("{}", -0.0));
+      assertEquals("0.0", format("{:z}", -0.0));
+      assertEquals("+0.0", format("{:+z}", -0.0));
+      assertEquals("0.000000", format("{:zf}", -0.0));
+      assertEquals("0.0", format("{:z}", 0.0));
+    }
+
+    @Test
+    public void floatGrouping() {
+      assertEquals("1,234,567.89", format("{:,.2f}", 1234567.891));
+      assertEquals("1.23457e+06", format("{:,g}", 1234567.0));  // exponent form is not grouped
+      assertEquals("1.234500e+03", format("{:,e}", 1234.5));
+      assertEquals("001,234.50", format("{:010,.2f}", 1234.5));
+      assertEquals("01,234,567.5", format("{:012,.1f}", 1234567.5));
+    }
+
+    @Test
+    public void stringSpecs() {
+      assertEquals("**ab***", format("{:*^7}", "ab"));
+      assertEquals("a    ", format("{:<5}", "a"));
+      assertEquals("    a", format("{:>5}", "a"));
+      assertEquals("ab    ", format("{:6.2}", "abcdef"));
+      assertEquals("ab", format("{:.2}", "abc"));
+      assertEquals("x", format("{:s}", "x"));
+      assertEquals("a0000", format("{:05}", "a"));   // '0' only defaults the fill for strings
+      assertEquals("00a00", format("{:0^5}", "a"));
+      assertEquals("☆☆☆☆a", format("{:☆>5}", "a"));
+    }
+
+    @Test
+    public void conversions() {
+      assertEquals("'x'", format("{!r}", "x"));
+      assertEquals("x", format("{!s}", "x"));
+      assertEquals("'\\xe9'", format("{!a}", "é"));
+      assertEquals("     'x'", format("{!r:>8}", "x"));
+      assertEquals("   1", format("{!s:>4}", 1L));
+    }
+
+    @Test
+    public void itemAccessInFieldNames() {
+      assertEquals("20", format("{0[1]}", new PyList<>(10L, 20L)));
+      assertEquals("b", format("{0[1]}", "abc"));
+      var dict = new PyDict<String, Object>();
+      dict.put("name", "x");
+      assertEquals("x", format("{0[name]}", dict));
+      var intDict = new PyDict<Object, Object>();
+      intDict.put(1L, "x");
+      assertEquals("x", format("{0[1]}", intDict));
+      assertEquals("b", format("{0[1][0]}", new PyList<>("a", new PyList<>("b"))));
+    }
+
+    @Test
+    public void nestedSpecFields() {
+      assertEquals("    42", format("{0:{1}}", 42L, "6d"));
+      assertEquals("a    ", format("{:{}}", "a", 5L));
+      assertEquals("    42", format("{0:{1}}", 42L, 6L));
+      assertEquals("ab  ", format("{}{:{}}", "a", "b", 3L));  // one shared auto-numbering cursor
+      assertEquals("a    ", format("{0!s:{1}}", "a", 5L));
+      assertEquals("    2", format("{0[1]:>{1}}", new PyList<>(1L, 2L), 5L));
+      // the trailing f is outside the field here: the spec is just ".{}"
+      assertEquals("2.72f", format("{:.{}}f", 2.71828, 3L));
+      assertEquals("2.718", format("{:.{}f}", 2.71828, 3L));
+    }
+
+    @Test
+    public void argumentResolutionErrors() {
+      assertEquals("Replacement index 0 out of range for positional args tuple",
+          failure(() -> format("{}")).getMessage());
+      assertEquals("Replacement index 1 out of range for positional args tuple",
+          failure(() -> format("{}{}", 1L)).getMessage());
+      assertEquals("Replacement index 2 out of range for positional args tuple",
+          failure(() -> format("{2}", 1L)).getMessage());
+      assertEquals("Too many decimal digits in format string",
+          failure(() -> format("{99999999999999999999}")).getMessage());
+      assertEquals("'name'", assertThrows(PyKeyError.class, () -> format("{name}")).getMessage());
+      assertEquals("'a b'", assertThrows(PyKeyError.class, () -> format("{a b}")).getMessage());
+    }
+
+    @Test
+    public void numberingModesCannotBeMixed() {
+      assertEquals("cannot switch from automatic field numbering to manual field specification",
+          failure(() -> format("{}{0}", 1L)).getMessage());
+      assertEquals("cannot switch from manual field specification to automatic field numbering",
+          failure(() -> format("{0}{}", 1L)).getMessage());
+      assertEquals("cannot switch from automatic field numbering to manual field specification",
+          failure(() -> format("{:.{1}f}", 3.14159, 2L)).getMessage());
+      assertEquals("cannot switch from manual field specification to automatic field numbering",
+          failure(() -> format("{0:{}}", 1L, 2L)).getMessage());
+    }
+
+    @Test
+    public void malformedTemplateErrors() {
+      assertEquals("Single '{' encountered in format string", failure(() -> format("{")).getMessage());
+      assertEquals("Single '}' encountered in format string", failure(() -> format("}")).getMessage());
+      assertEquals("expected '}' before end of string", failure(() -> format("{0")).getMessage());
+      assertEquals("expected '}' before end of string", failure(() -> format("{x")).getMessage());
+      assertEquals("unmatched '{' in format spec", failure(() -> format("{0:s")).getMessage());
+      assertEquals("unexpected '{' in field name", failure(() -> format("{a{b}")).getMessage());
+      assertEquals("end of string while looking for conversion specifier",
+          failure(() -> format("{0!")).getMessage());
+      assertEquals("Unknown conversion specifier x", failure(() -> format("{!x}", 1L)).getMessage());
+      assertEquals("expected ':' after conversion specifier",
+          failure(() -> format("{!s!r}", 1L)).getMessage());
+      assertEquals("unmatched '{' in format spec", failure(() -> format("{0!}", 1L)).getMessage());
+      assertEquals("Empty attribute in format string", failure(() -> format("{a.}", 1L)).getMessage());
+      assertEquals("expected '}' before end of string", failure(() -> format("{a[x}")).getMessage());
+      assertEquals("Only '.' or '[' may follow ']' in format field specifier",
+          failure(() -> format("{0[1]s}", new PyList<>(10L, 20L))).getMessage());
+      assertEquals("Empty attribute in format string", failure(() -> format("{0[]}", new PyList<>(1L))).getMessage());
+    }
+
+    @Test
+    public void specErrors() {
+      assertEquals("Invalid format specifier 'dd' for object of type 'int'",
+          failure(() -> format("{:dd}", 1L)).getMessage());
+      assertEquals("Invalid format specifier 'd5' for object of type 'int'",
+          failure(() -> format("{:d5}", 1L)).getMessage());
+      assertEquals("Format specifier missing precision", failure(() -> format("{:.}", 1L)).getMessage());
+      assertEquals("unmatched '{' in format spec", failure(() -> format("{0:")).getMessage());
+      assertEquals("Too many decimal digits in format string",
+          failure(() -> format("{:99999999999999999999d}", 1L)).getMessage());
+      assertEquals("Max string recursion exceeded",
+          failure(() -> format("{0:{1:{2}}}", 42L, "5", "d")).getMessage());
+    }
+
+    @Test
+    public void perTypeSpecErrors() {
+      assertEquals("'=' alignment not allowed in string format specifier",
+          failure(() -> format("{:=5}", "a")).getMessage());
+      assertEquals("Sign not allowed in string format specifier",
+          failure(() -> format("{:+}", "a")).getMessage());
+      assertEquals("Alternate form (#) not allowed in string format specifier",
+          failure(() -> format("{:#}", "a")).getMessage());
+      assertEquals("Negative zero coercion (z) not allowed in string format specifier",
+          failure(() -> format("{:z}", "a")).getMessage());
+      assertEquals("Cannot specify ',' with 's'.", failure(() -> format("{:,}", "a")).getMessage());
+      assertEquals("Unknown format code 'd' for object of type 'str'",
+          failure(() -> format("{:d}", "a")).getMessage());
+      assertEquals("Invalid format specifier 's5' for object of type 'str'",
+          failure(() -> format("{:s5}", "ab")).getMessage());
+      assertEquals("Negative zero coercion (z) not allowed in integer format specifier",
+          failure(() -> format("{:z}", 42L)).getMessage());
+      assertEquals("Precision not allowed in integer format specifier",
+          failure(() -> format("{:.2d}", 1L)).getMessage());
+      assertEquals("Cannot specify ',' with 'x'.", failure(() -> format("{:,x}", 255L)).getMessage());
+      assertEquals("Cannot specify both ',' and '_'.", failure(() -> format("{:,_}", 1234L)).getMessage());
+      assertEquals("Sign not allowed with integer format specifier 'c'",
+          failure(() -> format("{:+c}", 65L)).getMessage());
+      assertEquals("Alternate form (#) not allowed with integer format specifier 'c'",
+          failure(() -> format("{:#c}", 65L)).getMessage());
+      assertEquals("%c arg not in range(0x110000)",
+          assertThrows(PyOverflowError.class, () -> format("{:c}", -1L)).getMessage());
+      assertEquals("Unknown format code 's' for object of type 'int'",
+          failure(() -> format("{:s}", 3L)).getMessage());
+      assertEquals("Unknown format code 's' for object of type 'bool'",
+          failure(() -> format("{:s}", true)).getMessage());
+      assertEquals("Unknown format code 'd' for object of type 'float'",
+          failure(() -> format("{:d}", 3.5)).getMessage());
+      assertEquals("Invalid format specifier 'fq' for object of type 'float'",
+          failure(() -> format("{:fq}", 1.0)).getMessage());
+      assertEquals("Cannot specify ',' with 'n'.", failure(() -> format("{:,n}", 1234.5)).getMessage());
+    }
+
+    @Test
+    public void unsupportedTypesAndAttributeAccess() {
+      assertEquals("unsupported format string passed to NoneType.__format__",
+          failure(() -> format("{:10}", PyNone.INSTANCE)).getMessage());
+      assertEquals("unsupported format string passed to list.__format__",
+          failure(() -> format("{:10}", new PyList<>(1L))).getMessage());
+      assertEquals("attribute access in format fields is not supported yet",
+          assertThrows(UnimplementedFeatureError.class, () -> format("{0.real}", 1L)).getMessage());
     }
   }
 }

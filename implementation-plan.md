@@ -289,7 +289,7 @@ shadows that initial builtin value. There is no separate per-read builtin fallba
 
 The implemented builtin operations currently include:
 
-- plain functions: `abs`, `all`, `any`, `ascii`, `bin`, `callable`, `chr`, `divmod`, `hash`,
+- plain functions: `abs`, `all`, `any`, `ascii`, `bin`, `callable`, `chr`, `divmod`, `format`, `hash`,
   `hex`, `id`, `len`, `max`, `min`, `oct`, `ord`, `pow`, `print`, `repr`, `round`, and `sum`;
 - type objects usable as constructors: `bool`, `dict`, `float`, `int`, `list`, `range`,
   `slice`, `str`, `tuple`, and `type`.
@@ -321,7 +321,7 @@ This list describes implemented entry points, not full CPython argument/keyword 
 The registry also contains names for builtins that are not implemented. Explicit placeholder
 entries include the iterator/introspection/IO builtins (`aiter`, `anext`, `enumerate`, `filter`,
 `iter`, `map`, `next`, `reversed`, `zip`, `delattr`, `dir`, `getattr`, `globals`, `hasattr`,
-`locals`, `setattr`, `vars`, `breakpoint`, `compile`, `eval`, `exec`, `format`, `help`,
+`locals`, `setattr`, `vars`, `breakpoint`, `compile`, `eval`, `exec`, `help`,
 `input`, `open`, `__import__`) and type/value placeholders (`bytearray`, `bytes`, `complex`,
 `frozenset`, `frozendict`, `memoryview`, `object`, `set`, `classmethod`, `property`,
 `staticmethod`, `super`). `isinstance` and `issubclass` are registered with the implemented
@@ -337,7 +337,7 @@ narrow intrinsic-backed method dispatch path.
 
 Current receiver/method coverage is:
 
-- `str`: `lower`, `upper`, `swapcase`, `capitalize`, `title`, `casefold`, `find`, `rfind`,
+- `str`: `lower`, `upper`, `swapcase`, `capitalize`, `title`, `casefold`, `find`, `format`, `rfind`,
   `index`, `rindex`, `partition`, `rpartition`, `split`, `rsplit`, `splitlines`, `join`,
   `strip`, `lstrip`, `rstrip`, `replace`, `count`, `startswith`, `endswith`, `removeprefix`,
   `removesuffix`, `zfill`, `isascii`, `isalpha`, `isdecimal`, `isdigit`, `isalnum`, `isspace`,
@@ -349,11 +349,28 @@ Current receiver/method coverage is:
 
 Method lookup resolves a `_<name>_` static helper in the receiver's intrinsic class, trying the
 exact signature first and a varargs fallback second; the result is cached per receiver intrinsic
-class and method signature (failed lookups are not cached). `lower` implements CPython's
+class and method signature (failed lookups are not cached). The varargs fallback packs the
+call-site arguments into the `Object[]` with `asCollector` (and binds an empty array for zero
+arguments); `str.format` is the first user of it, declaring `_format_(String, Object[])` plus a
+fixed-arity `_format_(String)`. `lower` implements CPython's
 Final_Sigma casing rule, and `startswith`/`endswith` accept a tuple of prefixes/suffixes like
 CPython. Method calls with keyword arguments are rejected at the bootstrap with
 `UnimplementedFeatureError`. Ordinary attribute reads/writes and the rest of each type's method
 surface remain unsupported.
+
+`str.format` follows CPython's replacement-field grammar: automatic (`{}`) and manual (`{0}`)
+numbering that cannot be mixed, `!r`/`!s`/`!a` conversions, `[...]` item access on the argument,
+`{{`/`}}` escapes, and format specs that may themselves contain replacement fields one level deep
+(with a shared auto/manual cursor). Because keyword arguments cannot reach methods yet, `{name}`
+fields raise `PyKeyError`; attribute access (`{0.name}`) raises `UnimplementedFeatureError`. Each
+value is rendered by `FormattingIntrinsics.formatValue`, the PEP 3101 format-spec mini-language
+(shared with the `format` builtin): `[[fill]align][sign][z][#][0][width][,|_][.precision][type]`
+with CPython-compatible errors, zero-padding folded into the grouped digits, and ints accepting
+float presentation types. Known divergences: type `n` formats like `d`/`g` with the C locale,
+a width or precision that does not fit an int64 raises `PyValueError("Too many decimal digits in
+format string")` (the format-spec message, not the printf-style `<what> too big` of the shared
+`accumulate`), and a width the JVM could not allocate fails eagerly with `UnimplementedFeatureError`
+through `checkSize` where CPython dies with a catchable MemoryError.
 
 ## 6. Language subset
 
@@ -413,7 +430,8 @@ string encoding (`isLatin1`): Latin-1 strings index in constant time, and `strip
 fast paths; non-Latin-1 indexing walks code points. String slicing has a dedicated `$slice$`
 implementation that returns the original string for full-range slices and uses `substring` for
 contiguous slices. `lower` implements CPython's Final_Sigma rule instead of the JDK default
-casing. `%` formatting and the remaining string methods are not implemented. The `repr`
+casing. `%` formatting (§6.1), `str.format` with the PEP 3101 spec mini-language (§5.4) and the
+`format` builtin are implemented; the remaining string methods are not implemented. The `repr`
 printability decision uses JDK Unicode tables rather than a separately pinned CPython Unicode
 database.
 
@@ -688,7 +706,12 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 - `MethodSupportTest` covers method-call bootstrap linking, arity-based overload selection,
   call-site sharing across receiver classes, identity-guarded `PyType` receivers
   (`dict.fromkeys`), missing-method/unsupported-receiver `PyAttributeError`s, and
-  keyword-argument rejection.
+  keyword-argument rejection, plus the varargs-signature fallback that `str.format` uses for
+  every call arity.
+- `StringIntrinsicsTest.Format`, `FormattingIntrinsicTest.FormatValue` and `BuiltinsTest.Format`
+  cover `str.format`, the format-spec mini-language and the `format` builtin with
+  CPython-compatible error messages; the `beginner/string_format.py` conformance pair compares
+  the compiled output against CPython.
 - `IntrinsicShapeTest` checks representative switch shapes for hashing, tuple, list,
   containment, iterator, truthiness, comparison, arithmetic and string intrinsics.
 - JMH benchmark classes exist: `IsLatin1Benchmark`, `LookupBenchmark`,
@@ -742,6 +765,7 @@ There is no dedicated `IteratorIntrinsicsTest`; iterator behavior is covered by
 | D9 | [PARTIAL] | Slicing a `PyRange` with more than `2**63 - 1` elements raises UFE because slice resolution is currently limited to a signed-long sequence length. |
 | D10 | [KNOWN DIVERGENCE] | Non-canonical values can raise `NotCanonicalException`, a Java runtime exception separate from both Python exceptions and `UnimplementedFeatureError`. |
 | D11 | [KNOWN DIVERGENCE] | `hash(nan)` is derived from the raw double bit pattern; CPython 3.10+ hashes NaN by object identity, so hash stability across NaN objects differs. NaN equality remains false and dict lookup stays identity-or-equality. |
+| D12 | [KNOWN DIVERGENCE] | `str.format`/`format()`: type `n` formats like `d`/`g` with the C locale (no locale support); a width or precision that does not fit an int64 raises `PyValueError("Too many decimal digits in format string")` (the format-spec message, not the printf-style `<what> too big`), and a width the JVM could not allocate raises `UnimplementedFeatureError` through `checkSize` instead of trying to allocate (CPython attempts the allocation and dies with a catchable MemoryError for allocatable-but-huge widths); `{name}` fields always raise `PyKeyError` because method calls cannot pass keyword arguments yet, and attribute access in fields raises `UnimplementedFeatureError`. |
 
 ## 15. Work remaining / decisions
 
@@ -791,7 +815,7 @@ Prioritize correctness and testability before adding a large new language surfac
     lifetime/uniqueness guarantees, or document `id()` as a deliberately approximate builtin.
 15. **Continue the parameter-surface work.** Defaults and a trailing `**kwargs` are implemented;
     named keyword-only parameters (bare `*`), positional-only `/`, and `**` call-site unpacking
-    are still rejected. Decide whether to extend the kwargs work in that direction, and whether
-    method calls should gain keyword support (`MethodSupport` already carries the bootstrap
-    plumbing and a varargs-signature fallback prepared for `str.format`).
+    are still rejected. The varargs-signature fallback in `MethodSupport` now works and
+    `str.format` uses it for every arity (§5.4); the remaining decision is whether method calls
+    should gain keyword arguments so `{name}` fields can be supplied.
 

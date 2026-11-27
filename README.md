@@ -78,7 +78,7 @@ Some implementation details are worth noting:
 
 The current implementation includes the following builtins:
 
-`abs`, `all`, `any`, `ascii`, `bin`, `bool`, `callable`, `chr`, `dict`, `divmod`, `float`, `hex`,
+`abs`, `all`, `any`, `ascii`, `bin`, `bool`, `callable`, `chr`, `dict`, `divmod`, `float`, `format`, `hex`,
 `id`, `int`, `len`, `list`, `max`, `min`, `oct`, `ord`, `pow`, `print`, `range`, `repr`, `round`,
 `slice`, `str`, `sum`, `tuple` and `type`.
 
@@ -104,7 +104,7 @@ The following Python features are currently outside the supported subset:
 Method calls use a limited dispatch path.
 The following methods are supported:
 
-- `str`: `capitalize`, `find`, `index`, `isalpha`, `isascii`, `isdecimal`, `join`, `lower`,
+- `str`: `capitalize`, `find`, `format`, `index`, `isalpha`, `isascii`, `isdecimal`, `join`, `lower`,
   `partition`, `removeprefix`, `removesuffix`, `rfind`, `rindex`, `rpartition`, `swapcase`,
   `upper` and `zfill`.
 - `list`: `clear`, `copy`, `count`, `extend`, `index`, `pop`, `remove` and `sort`.

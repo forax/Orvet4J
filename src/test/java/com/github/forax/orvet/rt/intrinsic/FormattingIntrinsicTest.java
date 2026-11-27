@@ -9,12 +9,14 @@ import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 
+import static com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics.formatValue;
 import static com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics.stringMod;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -374,6 +376,58 @@ public class FormattingIntrinsicTest {
           assertThrows(PyOverflowError.class,
               () -> stringMod("%*s",
                   args(BigInteger.valueOf(Long.MIN_VALUE), "x"))).getMessage());
+    }
+  }
+
+  @Nested
+  public final class FormatValue {
+
+    private static String formatValue(Object value, String spec) {
+      return (String) FormattingIntrinsics.formatValue(value, spec);
+    }
+
+    @Test
+    public void emptySpecBehavesLikeStr() {
+      assertEquals("x", formatValue("x", ""));
+      assertEquals("42", formatValue(42L, ""));
+      assertEquals("True", formatValue(true, ""));
+      assertEquals("1.5", formatValue(1.5, ""));
+      assertEquals("None", formatValue(PyNone.INSTANCE, ""));
+    }
+
+    @Test
+    public void specAppliesToNumbersAndStrings() {
+      assertEquals("00042", formatValue(42L, "05d"));
+      assertEquals("  a  ", formatValue("a", "^5"));
+      assertEquals("3.14", formatValue(3.14159, ".2f"));
+      assertEquals("1.000000", formatValue(1L, "f"));      // float presentation types format an int
+      assertEquals("0.3", formatValue(0.1 + 0.2, ".10"));  // precision without type: 'g'
+      assertEquals("ff", formatValue(255L, "x"));
+      assertEquals("00,001,234", formatValue(1234L, "010,"));
+    }
+
+    @Test
+    public void nonEmptySpecRejectsUnsupportedTypes() {
+      assertEquals("unsupported format string passed to NoneType.__format__",
+          assertThrows(PyTypeError.class, () -> formatValue(PyNone.INSTANCE, "10")).getMessage());
+      assertEquals("unsupported format string passed to dict.__format__",
+          assertThrows(PyTypeError.class, () -> formatValue(new PyDict<Object, Object>(), "10")).getMessage());
+    }
+
+    @Test
+    public void widthOverflowUsesTheFormatSpecMessage() {
+      // unlike the printf-style % operator ("width too big"), the format-spec
+      // mini-language reports the int64 overflow like CPython's PyObject_Format
+      assertEquals("Too many decimal digits in format string",
+          assertThrows(PyValueError.class, () -> formatValue(1L, "9999999999999999999d")).getMessage());
+      assertEquals("Too many decimal digits in format string",
+          assertThrows(PyValueError.class, () -> formatValue(1L, ".9999999999999999999f")).getMessage());
+    }
+
+    @Test
+    public void hugeWidthFailsEagerlyInsteadOfAllocating() {
+      // unlike CPython, which would try to allocate the padding
+      assertThrows(UnimplementedFeatureError.class, () -> formatValue(1L, "9999999999d"));
     }
   }
 }

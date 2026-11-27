@@ -9,6 +9,7 @@ import com.github.forax.orvet.rt.PySlice;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.PyType;
 import com.github.forax.orvet.rt.error.PyIndexError;
+import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
@@ -282,7 +283,7 @@ public final class StringIntrinsics {
 
   // -- helpers
 
-  private static String intString(BigInteger value) {
+  static String intString(BigInteger value) {
     if (value.bitLength() > MAX_INT_STR_BIT_LENGTH) {
       if (value.bitLength() == MAX_INT_STR_BIT_LENGTH + 1) {
         // To emulate CPython behavior, we still need to check the number of digits
@@ -302,7 +303,7 @@ public final class StringIntrinsics {
     return value.toString();
   }
 
-  private static String floatString(double value) {
+  static String floatString(double value) {
     if (Double.isNaN(value)) {
       return "nan";
     }
@@ -785,6 +786,18 @@ public final class StringIntrinsics {
     return zeros + s;
   }
 
+
+  // -- str.format
+
+  /// The zero-argument form links through the exact-signature lookup; the
+  /// varargs fallback below only adapts for one or more arguments.
+  public static Object _format_(String self) {
+    return _format_(self, new Object[0]);
+  }
+
+  public static Object _format_(String self, Object[] args) {
+    return FormattingIntrinsics.format(self, args);
+  }
 
   public static Object _isascii_(String s) {
     if (!isLatin1(s)) {

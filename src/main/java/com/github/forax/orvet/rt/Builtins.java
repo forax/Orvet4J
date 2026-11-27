@@ -8,6 +8,7 @@ import com.github.forax.orvet.rt.error.PyZeroDivisionError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 import com.github.forax.orvet.rt.intrinsic.ArithmeticIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.ComparisonIntrinsics;
+import com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.HashingIntrinsics;
 import com.github.forax.orvet.rt.intrinsic.IntrinsicSupport;
 import com.github.forax.orvet.rt.intrinsic.ItemIntrinsics;
@@ -72,6 +73,7 @@ final class Builtins {
           fixed("callable", "object"),
           fixed("chr", "i"),
           fixed("divmod", "a", "b"),
+          variadic("format"),
           specialized("hash", HashingIntrinsics.class, long.class, "object"),
           fixed("hex", "x"),
           fixed("id", "object"),
@@ -134,7 +136,6 @@ final class Builtins {
           variadic("compile"),
           variadic("eval"),
           variadic("exec"),
-          variadic("format"),
           variadic("help"),
           variadic("input"),
           variadic("open"),
@@ -550,6 +551,23 @@ final class Builtins {
     }
 
     return total;
+  }
+
+  @SuppressWarnings("unused")
+  public static Object _format_(Object... args) {
+    if (args.length == 0) {
+      throw new PyTypeError("format expected at least 1 argument, got 0");
+    }
+    if (args.length > 2) {
+      throw new PyTypeError("format expected at most 2 arguments, got " + args.length);
+    }
+    var spec = args.length == 2 ? args[1] : "";
+    if (!(spec instanceof String string)) {
+      // like CPython, None is spelled 'None' here, not 'NoneType'
+      var specName = spec == PyNone.INSTANCE ? "None" : typeName(spec);
+      throw new PyTypeError("format() argument 2 must be str, not " + specName);
+    }
+    return FormattingIntrinsics.formatValue(args[0], string);
   }
 
   @SuppressWarnings("unused")

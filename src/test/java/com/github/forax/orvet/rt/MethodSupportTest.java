@@ -65,6 +65,22 @@ public final class MethodSupportTest {
   }
 
   @Test
+  public void aVarargsSignatureServesEveryCallSiteArity() {
+    // `str.format` only declares (String) and (String, Object[]); every call site
+    // arity resolves through the varargs fallback, zero arguments included.
+    assertEquals("x", invoke(methodCallSite("format", 1), "x"));
+    assertEquals("a1", invoke(methodCallSite("format", 2), "a{}", 1L));
+    assertEquals("a12", invoke(methodCallSite("format", 3), "a{0}{1}", 1L, 2L));
+    assertEquals("1,2,3", invoke(methodCallSite("format", 4), "{},{},{}", 1L, 2L, 3L));
+  }
+
+  @Test
+  public void aVarargsSignatureDoesNotShadowTheExactSignaturesOfOtherMethods() {
+    // `find` has fixed-arity overloads; the varargs fallback must not be selected for them
+    assertEquals(1L, invoke(methodCallSite("find", 2), "banana", "a"));
+  }
+
+  @Test
   public void listAndDictionaryIntrinsicsCanShareOneCallSite() {
     var copy = methodCallSite("copy", 1);
 
