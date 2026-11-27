@@ -5,6 +5,7 @@ import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
+import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -21,29 +22,45 @@ public final class FormattingIntrinsics {
     throw new UnsupportedOperationException();
   }
 
+  /// Largest string the JVM can allocate; anything bigger is rejected before allocating.
+  private static final int MAX_STRING_LENGTH = Integer.MAX_VALUE - 8;
+
+  /// The exact decimal expansion of a double has at most 1074 fractional digits
+  /// and at most 767 significant digits, so asking for more only adds zeros.
+  private static final int MAX_EXACT_FRACTION_DIGITS = 1074;
+  private static final int MAX_EXACT_SIGNIFICANT_DIGITS = 800;
+
   // -- printf-style string formatting ('%' operator)
 
-  /// Above that width/precision, the padding itself would not be allocatable,
-  /// so fail early instead of dying with an out-of-memory error.
-  private static final int MAX_FORMAT_WIDTH = Integer.MAX_VALUE - 8;
-
   /// Python's printf-style string formatting (the `%` operator applied to a string).
-  /// Follows CPython (`PyUnicode_Format`): a format containing `%(key)` requires a
-  /// dict argument (mapping mode), otherwise a tuple argument provides the values
-  /// in order and any other value is a single argument. Conversions `s r a c d i u
-  /// f F e E g G x X o %%` with flags `-+ 0#`, a width, a precision and `*` args.
-  static Object stringMod(String format, Object arg) {
+  /// Follows CPython (`PyUnicode_Format`): a tuple argument provides the values in order,
+  /// any other value is a single argument, and a dict argument additionally enables `%(key)`
+  /// conversions. Conversions `s r a c d i u f F e E g G x X o %%` with flags `-+ 0#`,
+  /// a width, a precision and `*` args.
+  static String stringMod(String format, Object arg) {
+    try {
+      return render(format, arg);
+    } catch (OutOfMemoryError e) {
+      // The runtime does not translate JVM allocation limits into MemoryError yet.
+      throw new UnimplementedFeatureError("formatted string too large for the JVM", e);
+    }
+  }
+
+  private static String render(String format, Object arg) {
     var out = new StringBuilder(format.length() + 16);
-    var cursor = new ArgCursor(format, arg);
+    var cursor = new ArgCursor(arg);
     var length = format.length();
     var index = 0;
     while (index < length) {
-      if (format.charAt(index) != '%') {
-        out.append(format.charAt(index++));
-        continue;
+      var percent = format.indexOf('%', index);
+      if (percent < 0) {
+        out.append(format, index, length);
+        break;
       }
-      index++;
-      Object mappedValue = null;  // argument of a `%(key)` conversion, null otherwise
+      out.append(format, index, percent);
+      index = percent + 1;
+
+      var keyed = false;
       if (index < length && format.charAt(index) == '(') {
         // like CPython, a key may contain parentheses: count them to find the matching one
         var keyStart = ++index;
@@ -59,14 +76,16 @@ public final class FormattingIntrinsics {
         if (depth != 0) {
           throw new PyValueError("incomplete format key");
         }
-        mappedValue = cursor.key(format.substring(keyStart, index - 1));
+        cursor.selectKey(format.substring(keyStart, index - 1));
+        keyed = true;
       }
+
       var leftAlign = false;
       var plusSign = false;
       var spaceSign = false;
       var zeroPad = false;
       var altForm = false;
-      flags: for(;;) {
+      flags: for (;;) {
         if (index == length) {
           throw new PyValueError("incomplete format");
         }
@@ -79,57 +98,63 @@ public final class FormattingIntrinsics {
           default -> { break flags; }
         }
       }
-      int width = -1;
+
+      long width = -1;
       if (index < length && format.charAt(index) == '*') {
         index++;
-        width = widthArg(cursor.next());
+        width = sizeArg(cursor.next());
         if (width < 0) {
           leftAlign = true;
           width = -width;
         }
       } else {
         while (index < length && isDigit(format.charAt(index))) {
-          width = accumulate(width < 0 ? 0 : width, format.charAt(index++) - '0');
+          width = accumulate(width < 0 ? 0 : width, format.charAt(index++) - '0', "width");
         }
       }
-      int precision = -1;
+
+      long precision = -1;
       if (index < length && format.charAt(index) == '.') {
         index++;
         if (index < length && format.charAt(index) == '*') {
           index++;
-          precision = widthArg(cursor.next());
-          if (precision < 0) {
-            precision = 0;  // CPython clamps a negative star precision to zero
-          }
+          precision = Math.max(0L, sizeArg(cursor.next()));  // CPython clamps a negative precision to zero
         } else {
           precision = 0;
           while (index < length && isDigit(format.charAt(index))) {
-            precision = accumulate(precision, format.charAt(index++) - '0');
+            precision = accumulate(precision, format.charAt(index++) - '0', "precision");
           }
         }
       }
-      // C length modifiers, parsed but ignored
-      while (index < length && (format.charAt(index) == 'l' || format.charAt(index) == 'h')) {
-        index++;
+
+      // CPython skips at most one C length modifier ("%hd", "%ld", "%Ld")
+      if (index < length) {
+        var c = format.charAt(index);
+        if (c == 'h' || c == 'l' || c == 'L') {
+          index++;
+        }
       }
       if (index == length) {
         throw new PyValueError("incomplete format");
       }
+
       var conversionIndex = index;
-      var conversion = format.charAt(index++);
+      var conversion = format.codePointAt(index);
+      index += Character.charCount(conversion);
       var spec = new FormatSpec(width, precision, leftAlign, plusSign, spaceSign, zeroPad, altForm);
       switch (conversion) {
         case '%' -> {
-          // A literal percent sign: CPython only accepts it without flags, width or
-          // precision, and still consumes an argument before rejecting the conversion.
-          if (leftAlign || plusSign || spaceSign || zeroPad || altForm || width != -1 || precision != -1 || mappedValue != null) {
+          // A literal percent sign: only accepted without flags, width, precision or key.
+          // An argument is still consumed before the conversion is rejected.
+          if (leftAlign || plusSign || spaceSign || zeroPad || altForm
+              || width != -1 || precision != -1 || keyed) {
             cursor.next();
-            throw new PyValueError("unsupported format character '%' (0x25) at index " + conversionIndex);
+            throw unsupportedFormat(format, conversionIndex, conversion);
           }
           out.append('%');
         }
         case 's', 'r', 'a' -> {
-          var value = mappedValue != null ? mappedValue : cursor.next();
+          var value = cursor.next();
           var text = switch (conversion) {
             case 's' -> StringIntrinsics.$str$(value);
             case 'r' -> StringIntrinsics.$repr$(value);
@@ -137,14 +162,12 @@ public final class FormattingIntrinsics {
           };
           appendString(out, spec, truncate(text, precision));
         }
-        case 'c' -> appendChar(out, spec, mappedValue != null ? mappedValue : cursor.next());
-        case 'd', 'i', 'u' -> appendInteger(out, spec, mappedValue != null ? mappedValue : cursor.next(), 'd', 10, false);
-        case 'x', 'X', 'o' -> appendInteger(out, spec, mappedValue != null ? mappedValue : cursor.next(),
-            conversion, conversion == 'o' ? 8 : 16, conversion == 'X');
-        case 'e', 'E', 'f', 'F', 'g', 'G' -> appendFloat(out, spec, mappedValue != null ? mappedValue : cursor.next(), conversion);
-        default -> throw new PyValueError(
-            "unsupported format character '" + conversion + "' (0x"
-                + Integer.toHexString(conversion) + ") at index " + conversionIndex);
+        case 'c' -> appendChar(out, spec, cursor.next());
+        case 'd', 'i', 'u' -> appendInteger(out, spec, cursor.next(), (char) conversion, 10, false);
+        case 'x', 'X', 'o' -> appendInteger(out, spec, cursor.next(), (char) conversion,
+            conversion == 'o' ? 8 : 16, conversion == 'X');
+        case 'e', 'E', 'f', 'F', 'g', 'G' -> appendFloat(out, spec, cursor.next(), (char) conversion);
+        default -> throw unsupportedFormat(format, conversionIndex, conversion);
       }
     }
     cursor.checkAllConsumed();
@@ -155,42 +178,66 @@ public final class FormattingIntrinsics {
     return c >= '0' && c <= '9';
   }
 
-  private static int accumulate(long value, int digit) {
-    var result = value * 10 + digit;
-    if (result > MAX_FORMAT_WIDTH) {
-      throw new PyOverflowError("width or precision too large");
+  /// Digits of a literal width or precision (CPython: ValueError "width too big").
+  private static long accumulate(long value, int digit, String what) {
+    if (value > (Long.MAX_VALUE - 9) / 10) {
+      throw new PyValueError(what + " too big");
     }
-    return (int) result;
+    return value * 10 + digit;
   }
 
   /// The integer argument of a `*` width or precision.
-  private static int widthArg(Object value) {
+  private static long sizeArg(Object value) {
     if (!isInt(value)) {
       throw new PyTypeError("* wants int");
     }
     var big = toBigInteger(value);
-    if (big.bitLength() > 31) {
-      throw new PyOverflowError("width or precision too large");
+    if (big.bitLength() > 63 || big.longValue() == Long.MIN_VALUE) {
+      throw new PyOverflowError("Python int too large to convert to C ssize_t");
     }
-    return big.intValue();
+    return big.longValue();
   }
 
-  /// A `%(key)` conversion: find a parenthesized mapping key, skipping `%%` escapes.
-  private static boolean hasMappingKey(String format) {
-    for (var index = format.indexOf('%'); index != -1 && index + 1 < format.length(); index = format.indexOf('%', index + 1)) {
-      var next = format.charAt(index + 1);
-      if (next == '%') {
-        index++;
-      } else if (next == '(') {
-        return true;
-      }
-    }
-    return false;
+  /// Message and index follow CPython: `%R` of the character, index in code points.
+  private static PyValueError unsupportedFormat(String format, int conversionIndex, int codePoint) {
+    return new PyValueError("unsupported format character "
+        + StringIntrinsics.$repr$(new String(Character.toChars(codePoint)))
+        + " (0x" + Integer.toHexString(codePoint) + ") at index "
+        + format.codePointCount(0, conversionIndex));
   }
+
+  // -- size guards
+
+  private static UnimplementedFeatureError tooLarge() {
+    return new UnimplementedFeatureError("formatted string larger than the maximum Java string size");
+  }
+
+  private static void checkSize(long size) {
+    if (size > MAX_STRING_LENGTH) {
+      throw tooLarge();
+    }
+  }
+
+  private static void appendRepeated(StringBuilder out, char c, long count) {
+    if (count > 0) {
+      checkSize((long) out.length() + count);
+      out.repeat(c, (int) count);
+    }
+  }
+
+  private static String zeros(long count) {
+    if (count <= 0) {
+      return "";
+    }
+    checkSize(count);
+    return "0".repeat((int) count);
+  }
+
+  // -- conversion specification
 
   private record FormatSpec(
-      int width,
-      int precision,
+      long width,
+      long precision,
       boolean leftAlign,
       boolean plusSign,
       boolean spaceSign,
@@ -211,37 +258,48 @@ public final class FormattingIntrinsics {
     return "";
   }
 
-  private static void appendNumber(StringBuilder out, FormatSpec spec, String prefix, String body) {
-    var total = prefix.length() + body.length();
-    if (spec.width() <= total) {
-      out.append(prefix).append(body);
-      return;
-    }
-    if (spec.zeroPad() && !spec.leftAlign()) {
-      out.append(prefix).append("0".repeat(spec.width() - total)).append(body);
-    } else if (spec.leftAlign()) {
-      out.append(prefix).append(body).append(" ".repeat(spec.width() - total));
+  /// Layout of a number: prefix (sign, radix), `precisionZeros` extra zeros, then the body,
+  /// padded to the width with spaces (left or right) or with zeros after the prefix.
+  private static void appendNumber(StringBuilder out, FormatSpec spec, String prefix,
+                                   long precisionZeros, String body) {
+    var total = (long) prefix.length() + precisionZeros + body.length();
+    var padding = Math.max(0L, spec.width() - total);
+    checkSize((long) out.length() + total + padding);
+    if (spec.leftAlign()) {
+      out.append(prefix);
+      appendRepeated(out, '0', precisionZeros);
+      out.append(body);
+      appendRepeated(out, ' ', padding);
+    } else if (spec.zeroPad()) {
+      out.append(prefix);
+      appendRepeated(out, '0', precisionZeros + padding);
+      out.append(body);
     } else {
-      out.append(" ".repeat(spec.width() - total)).append(prefix).append(body);
+      appendRepeated(out, ' ', padding);
+      out.append(prefix);
+      appendRepeated(out, '0', precisionZeros);
+      out.append(body);
     }
   }
 
   private static void appendString(StringBuilder out, FormatSpec spec, String text) {
     var count = text.codePointCount(0, text.length());
-    if (spec.width() <= count) {
+    var padding = Math.max(0L, spec.width() - count);
+    checkSize((long) out.length() + text.length() + padding);
+    if (spec.leftAlign()) {
       out.append(text);
-    } else if (spec.leftAlign()) {
-      out.append(text).append(" ".repeat(spec.width() - count));
+      appendRepeated(out, ' ', padding);
     } else {
-      out.append(" ".repeat(spec.width() - count)).append(text);
+      appendRepeated(out, ' ', padding);
+      out.append(text);
     }
   }
 
-  private static String truncate(String text, int precision) {
+  private static String truncate(String text, long precision) {
     if (precision == -1 || text.codePointCount(0, text.length()) <= precision) {
       return text;
     }
-    return text.substring(0, text.offsetByCodePoints(0, precision));
+    return text.substring(0, text.offsetByCodePoints(0, (int) precision));  // precision < code point count
   }
 
   private static void appendChar(StringBuilder out, FormatSpec spec, Object value) {
@@ -274,17 +332,18 @@ public final class FormattingIntrinsics {
     return String.valueOf(Character.toChars(code.intValueExact()));
   }
 
-  private static void appendInteger(StringBuilder out, FormatSpec spec, Object value, char conversion, int radix, boolean uppercase) {
-    var number = conversion == 'd'
+  // -- integers
+
+  private static void appendInteger(StringBuilder out, FormatSpec spec, Object value,
+                                    char conversion, int radix, boolean uppercase) {
+    var number = radix == 10
         ? toIntegerArg(value, conversion)
         : toExactIntegerArg(value, conversion);
     var digits = number.abs().toString(radix);
     if (uppercase) {
       digits = digits.toUpperCase(Locale.ROOT);
     }
-    if (digits.length() < spec.precision()) {
-      digits = "0".repeat(spec.precision() - digits.length()) + digits;
-    }
+    var precisionZeros = Math.max(0L, spec.precision() - digits.length());
     var prefix = sign(number.signum() < 0, spec);
     if (spec.altForm()) {
       if (radix == 16) {
@@ -293,7 +352,7 @@ public final class FormattingIntrinsics {
         prefix += "0o";
       }
     }
-    appendNumber(out, spec, prefix, digits);
+    appendNumber(out, spec, prefix, precisionZeros, digits);
   }
 
   /// Integer conversion for `%d`, `%i`, `%u`: floats are truncated towards zero.
@@ -327,6 +386,8 @@ public final class FormattingIntrinsics {
     };
   }
 
+  // -- floats
+
   private static void appendFloat(StringBuilder out, FormatSpec spec, Object value, char conversion) {
     var d = toDoubleArg(value);
     var upper = conversion == 'E' || conversion == 'F' || conversion == 'G';
@@ -345,7 +406,7 @@ public final class FormattingIntrinsics {
         body = body.toUpperCase(Locale.ROOT);
       }
     }
-    appendNumber(out, spec, prefix, body);
+    appendNumber(out, spec, prefix, 0, body);
   }
 
   private static double toDoubleArg(Object value) {
@@ -358,45 +419,63 @@ public final class FormattingIntrinsics {
     };
   }
 
-  private static String formatDouble(BigDecimal value, int precision, char conversion, boolean altForm) {
+  private static String formatDouble(BigDecimal value, long precision, char conversion, boolean altForm) {
     var decimals = precision == -1 ? 6 : precision;
     return switch (conversion) {
       case 'f', 'F' -> {
-        var fixed = value.setScale(decimals, RoundingMode.HALF_EVEN).toPlainString();
-        yield decimals == 0 && altForm ? fixed + '.' : fixed;
+        var text = fixed(value, decimals, true);
+        yield decimals == 0 && altForm ? text + '.' : text;
       }
       case 'e', 'E' -> formatScientific(value, decimals, false, altForm);
       default -> formatGeneral(value, decimals, altForm);  // g/G
     };
   }
 
-  /// Fixed notation with `digits` decimals, rounded half-to-even like CPython.
-  private static String formatGeneral(BigDecimal value, int significantDigits, boolean altForm) {
+  /// Fixed notation with `decimals` decimals, rounded half-to-even like CPython.
+  /// Digits beyond the exact expansion of the double are zeros: they are appended
+  /// (when `padZeros`) instead of being asked from BigDecimal.
+  private static String fixed(BigDecimal value, long decimals, boolean padZeros) {
+    var scale = (int) Math.min(decimals, MAX_EXACT_FRACTION_DIGITS);
+    var text = value.setScale(scale, RoundingMode.HALF_EVEN).toPlainString();
+    if (padZeros && decimals > scale) {
+      text += zeros(decimals - scale);
+    }
+    return text;
+  }
+
+  private static String formatGeneral(BigDecimal value, long significantDigits, boolean altForm) {
     var sig = significantDigits == 0 ? 1 : significantDigits;
     if (value.signum() == 0) {
-      return altForm ? "0." + "0".repeat(sig - 1) : "0";
+      return altForm ? "0." + zeros(sig - 1) : "0";
     }
-    var sci = value.round(new MathContext(sig, RoundingMode.HALF_EVEN));
+    var sci = value.round(roundingContext(sig));
     var exp = sci.precision() - sci.scale() - 1;
     if (exp >= -4 && exp < sig) {
-      var fixed = value.setScale(sig - 1 - exp, RoundingMode.HALF_EVEN).toPlainString();
+      var text = fixed(value, sig - 1 - exp, altForm);  // zeros would be stripped otherwise
       if (altForm) {
-        return fixed.indexOf('.') == -1 ? fixed + '.' : fixed;
+        return text.indexOf('.') == -1 ? text + '.' : text;
       }
-      return stripFractionZeros(fixed);
+      return stripFractionZeros(text);
     }
     return formatScientific(value, sig - 1, !altForm, altForm);
   }
 
   /// Scientific notation with `decimals` digits after the point, exponent with at
   /// least two digits, trailing zeros stripped when requested (`%g`).
-  private static String formatScientific(BigDecimal value, int decimals, boolean stripZeros, boolean altForm) {
+  private static String formatScientific(BigDecimal value, long decimals, boolean stripZeros, boolean altForm) {
     var sig = decimals + 1;
-    var sci = value.round(new MathContext(sig, RoundingMode.HALF_EVEN));
-    var exp = sci.precision() - sci.scale() - 1;
-    var digits = sci.unscaledValue().toString();
-    if (digits.length() < sig) {
-      digits += "0".repeat(sig - digits.length());
+    int exp;
+    String digits;
+    if (value.signum() == 0) {
+      exp = 0;
+      digits = "0";
+    } else {
+      var sci = value.round(roundingContext(sig));
+      exp = sci.precision() - sci.scale() - 1;
+      digits = sci.unscaledValue().toString();
+    }
+    if (!stripZeros && digits.length() < sig) {
+      digits += zeros(sig - digits.length());
     }
     var end = digits.length();
     if (stripZeros) {
@@ -419,6 +498,11 @@ public final class FormattingIntrinsics {
         .toString();
   }
 
+  private static MathContext roundingContext(long significantDigits) {
+    return new MathContext((int) Math.min(significantDigits, MAX_EXACT_SIGNIFICANT_DIGITS),
+        RoundingMode.HALF_EVEN);
+  }
+
   private static String stripFractionZeros(String value) {
     var point = value.indexOf('.');
     if (point == -1) {
@@ -434,52 +518,58 @@ public final class FormattingIntrinsics {
     return value.substring(0, end);
   }
 
-  /// Sequential access to the values of a `%` format: a dict for `%(key)` formats,
-  /// otherwise a tuple or a single value.
+  /// The arguments of a `%` format, with the state machine of CPython's `PyUnicode_Format`:
+  /// a tuple provides one value per conversion, any other value is a single argument,
+  /// and a dict argument additionally allows `%(key)` conversions. A key replaces the
+  /// current argument by the looked-up value, which is then a single argument,
+  /// even if it is a tuple.
   private static final class ArgCursor {
-    private final PyDict<?, ?> dict;
-    private final PyTuple tuple;
-    private final Object single;
+    private final PyDict<?, ?> dict;  // non-null only if the argument itself is a dict
+    private PyTuple tuple;            // non-null while values come from the argument tuple
+    private Object single;            // the current single value when tuple == null
     private int index;
     private boolean singleUsed;
 
-    ArgCursor(String format, Object arg) {
-      var mapping = hasMappingKey(format);
-      this.dict = mapping && arg instanceof PyDict<?,?> d ? d : null;
-      this.tuple = !mapping && arg instanceof PyTuple t ? t : null;
-      this.single = !mapping && this.tuple == null ? arg : null;
+    ArgCursor(Object arg) {
+      this.dict = arg instanceof PyDict<?, ?> d ? d : null;
+      this.tuple = arg instanceof PyTuple t ? t : null;
+      this.single = arg;
     }
 
     Object next() {
-      if (dict != null) {
-        // a mapping only supports `%(key)` conversions
-        throw new PyTypeError("not enough arguments for format string");
-      }
       if (tuple != null) {
         if (index >= tuple.size()) {
-          throw new PyTypeError("not enough arguments for format string");
+          throw notEnoughArguments();
         }
         return TupleIntrinsics.$get$(tuple, index++);
       }
       if (singleUsed) {
-        throw new PyTypeError("not enough arguments for format string");
+        throw notEnoughArguments();
       }
       singleUsed = true;
       return single;
     }
 
-    Object key(String key) {
+    void selectKey(String key) {
       if (dict == null) {
         throw new PyTypeError("format requires a mapping");
       }
-      return DictIntrinsics.$get$(dict, key);
+      single = DictIntrinsics.$get$(dict, key);  // KeyError with the repr of the key
+      tuple = null;
+      singleUsed = false;
     }
 
     void checkAllConsumed() {
-      if (tuple != null && index < tuple.size()
-          || tuple == null && dict == null && !singleUsed) {
+      if (dict != null) {
+        return;  // like CPython, a mapping never reports unused arguments
+      }
+      if (tuple != null ? index < tuple.size() : !singleUsed) {
         throw new PyTypeError("not all arguments converted during string formatting");
       }
+    }
+
+    private static PyTypeError notEnoughArguments() {
+      return new PyTypeError("not enough arguments for format string");
     }
   }
 }
