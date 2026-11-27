@@ -34,9 +34,8 @@ public final class ConformanceTestIT {
   private static final List<String> CONFORMANCE_FOLDERS =
       List.of("micropython/basics", "micropython/float", "beginner");
   private static final Set<String> WELL_KNOWN_FAILURES = Set.of(
-      "dict_del.py", "int_big_cmp.py", "string_upperlow.py", "dict_fromkeys.py",
-      "dict_iterator.py", "dict_specialmeth.py", "string_repr.py", "tuple_count.py",
-      "float_format_ints.py", "float_format_ints_power10.py"
+      "string_upperlow.py", "dict_fromkeys.py",
+      "dict_iterator.py", "dict_specialmeth.py", "tuple_count.py"
   );
 
   private static Path toGolden(Path pyFile) {
