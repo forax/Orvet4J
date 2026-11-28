@@ -12,9 +12,10 @@ import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
 import com.github.forax.orvet.rt.error.PyValueError;
 import com.github.forax.orvet.rt.error.UnimplementedFeatureError;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.math.BigInteger;
 
@@ -23,6 +24,7 @@ import static com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics.stringMod
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FormattingIntrinsicTest {
 
@@ -44,10 +46,6 @@ public class FormattingIntrinsicTest {
 
   private static String fmt(String template, Object... args) {
     return FormattingIntrinsics.format(template, args);
-  }
-
-  private static String fmtValue(Object value, String spec) {
-    return FormattingIntrinsics.formatValue(value, spec);
   }
 
   @Nested
@@ -454,10 +452,6 @@ public class FormattingIntrinsicTest {
   @Nested
   public final class FormatValue {
 
-    private static String formatValue(Object value, String spec) {
-      return (String) FormattingIntrinsics.formatValue(value, spec);
-    }
-
     @Test
     public void emptySpecBehavesLikeStr() {
       assertEquals("x", formatValue("x", ""));
@@ -506,7 +500,7 @@ public class FormattingIntrinsicTest {
       assertEquals("unsupported format string passed to NoneType.__format__",
           assertThrows(PyTypeError.class, () -> formatValue(PyNone.INSTANCE, "10")).getMessage());
       assertEquals("unsupported format string passed to dict.__format__",
-          assertThrows(PyTypeError.class, () -> formatValue(new PyDict<Object, Object>(), "10")).getMessage());
+          assertThrows(PyTypeError.class, () -> formatValue(new PyDict<>(), "10")).getMessage());
     }
 
     @Test
@@ -532,11 +526,11 @@ public class FormattingIntrinsicTest {
     public void commaWithTypeSIsRejectedAtParseTimeForAnyReceiver() {
       // the check is done by the spec parser, before the type dispatch
       assertEquals("Cannot specify ',' with 's'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",s")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",s")).getMessage());
       assertEquals("Cannot specify ',' with 's'.",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", ",s")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", ",s")).getMessage());
       assertEquals("Cannot specify '_' with 's'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "_s")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "_s")).getMessage());
     }
 
     @Test
@@ -544,69 +538,69 @@ public class FormattingIntrinsicTest {
       // CPython consumes ',' then '_' then ',' again: a same-char repeat is left in
       // place and parsed as the type, so it is not the "both" error
       assertEquals("Cannot specify ',' with ','.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",,")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",,")).getMessage());
       assertEquals("Cannot specify '_' with '_'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "__")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "__")).getMessage());
       assertEquals("Cannot specify ',' with ','.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "3,,")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "3,,")).getMessage());
     }
 
     @Test
     public void mixedGroupingCharsReportTheBothError() {
       assertEquals("Cannot specify both ',' and '_'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",_")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",_")).getMessage());
       assertEquals("Cannot specify both ',' and '_'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "_,")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "_,")).getMessage());
     }
 
     @Test
     public void trailingJunkWinsOverTheGroupingTypeCheck() {
       assertEquals("Invalid format specifier ',,x' for object of type 'int'",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",,x")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",,x")).getMessage());
     }
 
     @Test
     public void groupingIsCheckedBeforeDispatchEvenForFloatAndStrReceivers() {
       assertEquals("Cannot specify ',' with 'x'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",x")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",x")).getMessage());
       assertEquals("Cannot specify ',' with 'x'.",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", ",x")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", ",x")).getMessage());
       assertEquals("Cannot specify ',' with 'c'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1.5, ",c")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ",c")).getMessage());
       assertEquals("Cannot specify ',' with 'n'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",n")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",n")).getMessage());
       assertEquals("Cannot specify ',' with 'b'.",
-          assertThrows(PyValueError.class, () -> fmtValue(255L, ",b")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(255L, ",b")).getMessage());
       // non-printable type characters use the \x form
       assertEquals("Cannot specify ',' with '\\xb2'.",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, ",²")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, ",²")).getMessage());
     }
 
     @Test
     public void strReceiverDefaultsItsTypeToS() {
       // str passes default_type='s' into the parser, so bare grouping is an error for str
       assertEquals("Cannot specify ',' with 's'.",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", ",")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", ",")).getMessage());
       assertEquals("Cannot specify '_' with 's'.",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", "_")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", "_")).getMessage());
       // ... while int/float keep their (allowed) empty default type
-      assertEquals("1", fmtValue(1L, ","));
-      assertEquals("1.5", fmtValue(1.5, ","));
+      assertEquals("1", formatValue(1L, ","));
+      assertEquals("1.5", formatValue(1.5, ","));
     }
 
     @Test
     public void validGroupingSpecsStillWork() {
-      assertEquals("1", fmtValue(1L, "_"));
-      assertEquals("1", fmtValue(1L, ","));
-      assertEquals("  1", fmtValue(1L, "3,"));
-      assertEquals("1", fmtValue(1L, ",d"));
-      assertEquals("1111_1111", fmtValue(255L, "_b"));
-      assertEquals("00,001,234", fmtValue(1234L, "010,"));
+      assertEquals("1", formatValue(1L, "_"));
+      assertEquals("1", formatValue(1L, ","));
+      assertEquals("  1", formatValue(1L, "3,"));
+      assertEquals("1", formatValue(1L, ",d"));
+      assertEquals("1111_1111", formatValue(255L, "_b"));
+      assertEquals("00,001,234", formatValue(1234L, "010,"));
       // dispatch-level unknown codes are unchanged
       assertEquals("Unknown format code 's' for object of type 'int'",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "s")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "s")).getMessage());
       assertEquals("Unknown format code 'd' for object of type 'str'",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", ",d")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", ",d")).getMessage());
     }
   }
 
@@ -615,30 +609,30 @@ public class FormattingIntrinsicTest {
 
     @Test
     public void widthAcceptsAnyUnicodeDecimalDigit() {
-      assertEquals("  5", fmtValue(5L, "٣"));       // U+0663 ARABIC-INDIC DIGIT THREE
-      assertEquals("5", fmtValue(5L, "１"));         // U+FF11 FULLWIDTH DIGIT ONE
-      assertEquals("  5", fmtValue(5L, "٣d"));
-      assertEquals("    5", fmtValue(5L, "𝟝"));      // U+1D7DD, supplementary plane: code-point iteration
-      assertEquals("1", fmtValue(1L, "٠"));          // U+0660: width 0, not the ASCII zero-padding flag
-      assertEquals("٣٣5", fmtValue(5L, "٣>٣d"));     // the first ٣ is the fill, the second the width
+      assertEquals("  5", formatValue(5L, "٣"));       // U+0663 ARABIC-INDIC DIGIT THREE
+      assertEquals("5", formatValue(5L, "１"));         // U+FF11 FULLWIDTH DIGIT ONE
+      assertEquals("  5", formatValue(5L, "٣d"));
+      assertEquals("    5", formatValue(5L, "𝟝"));      // U+1D7DD, supplementary plane: code-point iteration
+      assertEquals("1", formatValue(1L, "٠"));          // U+0660: width 0, not the ASCII zero-padding flag
+      assertEquals("٣٣5", formatValue(5L, "٣>٣d"));     // the first ٣ is the fill, the second the width
     }
 
     @Test
     public void precisionAcceptsAnyUnicodeDecimalDigit() {
-      assertEquals("0.333", fmtValue(1.0 / 3, ".٣f"));
+      assertEquals("0.333", formatValue(1.0 / 3, ".٣f"));
     }
 
     @Test
     public void nonDecimalDigitsFallThroughToTheTypeChar() {
       // U+00B2 SUPERSCRIPT TWO is not a decimal digit (Py_UNICODE_TODECIMAL fails)
       assertEquals("Unknown format code '\\xb2' for object of type 'int'",
-          assertThrows(PyValueError.class, () -> fmtValue(5L, "²")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(5L, "²")).getMessage());
     }
 
     @Test
     public void overflowStillReportsTheFormatSpecMessage() {
       assertEquals("Too many decimal digits in format string",
-          assertThrows(PyValueError.class, () -> fmtValue(1L, "٩".repeat(20))).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue(1L, "٩".repeat(20))).getMessage());
     }
   }
 
@@ -649,9 +643,9 @@ public class FormattingIntrinsicTest {
     @Test
     public void spaceSignHasItsOwnMessage() {
       assertEquals("Space not allowed in string format specifier",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", " s")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", " s")).getMessage());
       assertEquals("Space not allowed in string format specifier",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", " ")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", " ")).getMessage());
       assertEquals("Space not allowed in string format specifier",
           assertThrows(PyValueError.class, () -> fmt("{: s}", "abc")).getMessage());
     }
@@ -659,9 +653,9 @@ public class FormattingIntrinsicTest {
     @Test
     public void plusAndMinusKeepTheSignMessage() {
       assertEquals("Sign not allowed in string format specifier",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", "+")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", "+")).getMessage());
       assertEquals("Sign not allowed in string format specifier",
-          assertThrows(PyValueError.class, () -> fmtValue("abc", "-")).getMessage());
+          assertThrows(PyValueError.class, () -> formatValue("abc", "-")).getMessage());
     }
   }
 
@@ -671,32 +665,38 @@ public class FormattingIntrinsicTest {
 
     @Test
     public void alternateFormAddsTheDotBeforeTheExponent() {
-      assertEquals("1.e+16", fmtValue(1e16, "#"));
-      assertEquals("-1.e+16", fmtValue(-1e16, "#"));
-      assertEquals("1.e+100", fmtValue(1e100, "#"));
-      assertEquals("1.e-05", fmtValue(1e-5, "#"));
+      assertEquals("1.e+16", formatValue(1e16, "#"));
+      assertEquals("-1.e+16", formatValue(-1e16, "#"));
+      assertEquals("1.e+100", formatValue(1e100, "#"));
+      assertEquals("1.e-05", formatValue(1e-5, "#"));
     }
 
     @Test
     public void reprsThatAlreadyHaveADotAreUnchanged() {
-      assertEquals("1.0", fmtValue(1.0, "#"));
-      assertEquals("123456.0", fmtValue(123456.0, "#"));
-      assertEquals("1.5e-07", fmtValue(1.5e-7, "#"));
-      assertEquals("9007199254740992.0", fmtValue(9007199254740992.0, "#"));
-      assertEquals("0.0", fmtValue(0.0, "#"));
+      assertEquals("1.0", formatValue(1.0, "#"));
+      assertEquals("123456.0", formatValue(123456.0, "#"));
+      assertEquals("1.5e-07", formatValue(1.5e-7, "#"));
+      assertEquals("9007199254740992.0", formatValue(9007199254740992.0, "#"));
+      assertEquals("0.0", formatValue(0.0, "#"));
     }
 
     @Test
     public void specialFloatsAndMissingAlternateAreUnchanged() {
-      assertEquals("inf", fmtValue(Double.POSITIVE_INFINITY, "#"));
-      assertEquals("nan", fmtValue(Double.NaN, "#"));
-      assertEquals("1e+16", fmtValue(1e16, ""));
+      assertEquals("inf", formatValue(Double.POSITIVE_INFINITY, "#"));
+      assertEquals("nan", formatValue(Double.NaN, "#"));
+      assertEquals("1e+16", formatValue(1e16, ""));
     }
 
     @Test
     public void alternateFormWithAPrecisionGoesThroughGeneral() {
-      assertEquals("1.e+16", fmtValue(1e16, "#.0"));
-      assertEquals("1e+16", fmtValue(1e16, ".2"));
+      assertEquals("1.e+16", formatValue(1e16, "#.0"));
+      assertEquals("1e+16", formatValue(1e16, ".2"));
+    }
+
+    @Test
+    public void hugeScientificPrecisionFailsEagerly() {
+      assertThrows(PyValueError.class,
+          () -> formatValue(1.0, ".9223372036854775807e"));
     }
   }
 
@@ -768,6 +768,198 @@ public class FormattingIntrinsicTest {
       // CPython parses width 2**63-1 fine and fails while allocating; Java fails eagerly
       // on the JVM string limit instead (like CPython, the parse itself succeeds)
       assertThrows(UnimplementedFeatureError.class, () -> stringMod("%9223372036854775807d", 1L));
+    }
+  }
+
+
+  @Nested
+  public final class FractionGrouping {
+    // Python 3.14 allows a ',' or '_' separator after the precision; it groups
+    // the digits of the fraction part, forward from the decimal point.
+
+    @Test
+    public void fractionDigitsAreGroupedForwardFromTheDecimalPoint() {
+      assertEquals("1234.57", formatValue(1234.5678, ".2,f"));
+      assertEquals("1234.567_8", formatValue(1234.5678, ".4_f"));
+      // 4 fraction digits pin the direction: grouped from the decimal point
+      assertEquals("1,234.567,8", formatValue(1234.5678, "10,.4,f"));
+      assertEquals("1234.567,8", formatValue(1234.5678, ".,"));
+      assertEquals("1234.567,800", formatValue(1234.5678, ".,f"));
+      assertEquals("1.23e+03", formatValue(1234.5678, ".2,e"));
+      assertEquals("123456750.000,000%", formatValue(1234567.5, ".,%"));
+      assertEquals("nan", formatValue(Double.NaN, ".,f"));
+    }
+
+    @Test
+    public void fractionGroupingInteractsWithWidthAndZeroPadding() {
+      assertEquals("001,234.57", formatValue(1234.5678, "010,.2,f"));
+      assertEquals("001.23e+03", formatValue(1234.5678, "010,.2,e"));
+      assertEquals("001,234.50", formatValue(1234.5, "0=10,.2,f"));
+      assertEquals("-01,234.50", formatValue(-1234.5, "z010,.2,f"));
+      assertEquals("1_234.57", formatValue(1234.5678, "_.2,f"));
+      assertEquals("1_234_567.00", formatValue(1234567.0, "_.2,f"));
+      assertEquals("   1.2e+03", formatValue(1234.5678, "10,.2_"));
+    }
+
+    @Test
+    public void aDotWithoutDigitsLeavesThePrecisionUnspecified() {
+      // CPython: '.' followed by a separator resets the precision to 'unspecified'
+      assertEquals("1.5", formatValue(1.5, ".2_"));
+      assertEquals("1.2e+03", formatValue(1234.5678, ".2_"));
+      assertEquals("1.5", formatValue(1.5, "._"));
+    }
+
+    @Test
+    public void mixingFractionSeparatorsIsTheBothError() {
+      assertEquals("Cannot specify both ',' and '_'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2,_")).getMessage());
+      assertEquals("Cannot specify both ',' and '_'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2_,f")).getMessage());
+      assertEquals("Cannot specify both ',' and '_'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2_,_")).getMessage());
+      assertEquals("Cannot specify both ',' and '_'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, "._,_")).getMessage());
+      // the integer separator counts too: '_' after ',' is rejected by the same check
+      assertEquals("Cannot specify both ',' and '_'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, "_,.2f")).getMessage());
+    }
+
+    @Test
+    public void aSecondSeparatorCharBecomesTheTypeChar() {
+      // like CPython, only one separator char is consumed; the rest is the type
+      assertEquals("Unknown format code '_' for object of type 'float'",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2__")).getMessage());
+      assertEquals("Unknown format code ',' for object of type 'float'",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2,,")).getMessage());
+      assertEquals("Invalid format specifier '.2__,f' for object of type 'float'",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2__,f")).getMessage());
+    }
+
+    @Test
+    public void theFractionSeparatorIsRejectedWithN() {
+      assertEquals("Cannot specify ',' with 'n'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".2,n")).getMessage());
+      assertEquals("Cannot specify ',' with 'n'.",
+          assertThrows(PyValueError.class, () -> formatValue(1234.5678, ".,n")).getMessage());
+    }
+
+    @Test
+    public void receiversWithoutAFractionPartIgnoreOrRejectIt() {
+      assertEquals("ab", formatValue("ab", ".2,s"));
+      assertEquals("ab", formatValue("ab", ".,s"));
+      assertEquals("Unknown format code 'd' for object of type 'str'",
+          assertThrows(PyValueError.class, () -> formatValue("ab", ".2,d")).getMessage());
+      // integers reject the precision before anything else
+      assertEquals("Precision not allowed in integer format specifier",
+          assertThrows(PyValueError.class, () -> formatValue(42L, ".2,")).getMessage());
+      assertEquals("Unknown format code '.' for object of type 'int'",
+          assertThrows(PyValueError.class, () -> formatValue(42L, ".2,.")).getMessage());
+    }
+  }
+
+  @Nested
+  public final class FloatPrecisionTooBig {
+    // CPython format_float_internal rejects precision > INT_MAX and
+    // PyOS_double_to_string rejects precision > INT_MAX - 1024, both with
+    // ValueError "precision too big". 2**63-1 fits a Py_ssize_t, so the parse
+    // succeeds and the float conversion must reject it.
+
+    @Test
+    public void precisionBeyondTheCIntRangeIsAValueError() {
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ".9223372036854775807e")).getMessage());
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ".9223372036854775807f")).getMessage());
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ".9223372036854775807")).getMessage());
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ".2147483648f")).getMessage());
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(1.5, ".2147483647e")).getMessage());
+    }
+
+    @Test
+    public void intReceiversAreConvertedBeforeThePrecisionIsChecked() {
+      // an int receiver goes through PyNumber_Float first (CPython: conversion
+      // errors win over the precision check)
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> formatValue(42L, ".9223372036854775807e")).getMessage());
+      assertEquals("int too large to convert to float",
+          assertThrows(PyOverflowError.class,
+              () -> formatValue(BigInteger.TEN.pow(5000), ".9999999999999f")).getMessage());
+    }
+
+    @Test
+    public void thePrintfStyleOperatorChecksTheSameCap() {
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> stringMod("%.2147483647f", 1.5)).getMessage());
+      assertEquals("precision too big",
+          assertThrows(PyValueError.class, () -> stringMod("%.*f", args(2147483647L, 3.5))).getMessage());
+      // the '*' precision argument itself is still a C int
+      assertEquals("Python int too large to convert to C int",
+          assertThrows(PyOverflowError.class,
+              () -> stringMod("%.*f", args(2147483648L, 3.5))).getMessage());
+    }
+  }
+
+  @Nested
+  public final class ZeroCoercionErrorOrder {
+    // CPython format_long_internal checks the precision before the 'z' flag,
+    // so a spec with both reports the precision error.
+
+    @Test
+    public void thePrecisionCheckRunsBeforeTheNegativeZeroCoercionCheck() {
+      assertEquals("Precision not allowed in integer format specifier",
+          assertThrows(PyValueError.class, () -> formatValue(1L, "z.2d")).getMessage());
+      assertEquals("Precision not allowed in integer format specifier",
+          assertThrows(PyValueError.class, () -> formatValue(1L, "z.2b")).getMessage());
+      assertEquals("Precision not allowed in integer format specifier",
+          assertThrows(PyValueError.class, () -> formatValue(1L, "z.2c")).getMessage());
+      // without a precision, the 'z' error is unchanged
+      assertEquals("Negative zero coercion (z) not allowed in integer format specifier",
+          assertThrows(PyValueError.class, () -> formatValue(1L, "zd")).getMessage());
+    }
+  }
+
+  @Nested
+  public final class StringModPrecisionTooLarge {
+    // CPython _PyUnicode_FormatLong: prec > INT_MAX - 3 is an OverflowError
+    // ("precision too large"), not an allocation failure.
+
+    @Test
+    public void integerPrecisionBeyondIntMaxMinusThreeIsAnOverflowError() {
+      assertEquals("precision too large",
+          assertThrows(PyOverflowError.class, () -> stringMod("%.2147483645d", 42L)).getMessage());
+      assertEquals("precision too large",
+          assertThrows(PyOverflowError.class, () -> stringMod("%.2147483646d", 42L)).getMessage());
+      assertEquals("precision too large",
+          assertThrows(PyOverflowError.class, () -> stringMod("%.2147483647d", 42L)).getMessage());
+    }
+  }
+
+  @Nested
+  public final class AggregateFieldSize {
+    // CPython 3.14 returns a 2,147,483,640-character string for this template
+    // (or MemoryError when RAM is short). The JVM cannot represent strings
+    // beyond 2**31 - 2 chars, so the runtime must refuse the *aggregate* of the
+    // fields; before the fix, only each field was checked individually and the
+    // second field crashed with a raw OutOfMemoryError ("Requested array size
+    // exceeds VM limit") even with a large heap. The accepted error depends on
+    // the JVM heap: UnimplementedFeatureError when the two 1 GiB fields can be
+    // materialized, OutOfMemoryError otherwise. Both stand in for the CPython
+    // MemoryError boundary.
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "CI", matches = "true")
+    public void theSumOfAllFieldsMustStayWithinTheJvmStringLimit() {
+      var thrown = assertThrows(Throwable.class, () -> fmt("{0:1073741820d}{0:1073741820d}", 1L));
+      assertTrue(thrown instanceof UnimplementedFeatureError || thrown instanceof OutOfMemoryError,
+          "expected UnimplementedFeatureError or OutOfMemoryError, got " + thrown);
+    }
+
+    @Test
+    public void smallFieldsStillAccumulateNormally() {
+      assertEquals(200, fmt("{0:100d}{0:100d}", 1L).length());
     }
   }
 }

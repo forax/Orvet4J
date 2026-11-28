@@ -36,6 +36,11 @@ public final class FormattingIntrinsics {
   private static final int MAX_EXACT_FRACTION_DIGITS = 1074;
   private static final int MAX_EXACT_SIGNIFICANT_DIGITS = 800;
 
+  /// CPython rejects a float precision above the C int range (format_float_internal)
+  /// and above INT_MAX - 1024 (PyOS_double_to_string) with the same message,
+  /// so the effective limit is INT_MAX - 1024.
+  private static final long MAX_FLOAT_PRECISION = Integer.MAX_VALUE - 1024L;
+
   // -- printf-style string formatting ('%' operator)
 
   /// Python's printf-style string formatting (the `%` operator applied to a string).
@@ -369,6 +374,9 @@ public final class FormattingIntrinsics {
     var number = radix == 10
         ? toIntegerArg(value, conversion)
         : toExactIntegerArg(value, conversion);
+    if (spec.precision() > Integer.MAX_VALUE - 3L) {
+      throw new PyOverflowError("precision too large");
+    }
     var magnitude = number.abs();
     var digits = radix == 10
         ? StringIntrinsics.intString(magnitude)
@@ -423,6 +431,9 @@ public final class FormattingIntrinsics {
 
   private static void appendFloat(StringBuilder out, FormatSpec spec, Object value, char conversion) {
     var d = toDoubleArg(value);
+    if (spec.precision() > MAX_FLOAT_PRECISION) {
+      throw new PyValueError("precision too big");
+    }
     var upper = conversion == 'E' || conversion == 'F' || conversion == 'G';
     String prefix;
     String body;
@@ -784,7 +795,12 @@ public final class FormattingIntrinsics {
       formatFields(spec, specOut, cursor, depth + 1);
       spec = specOut.toString();
     }
-    out.append(FormattingIntrinsics.formatValue(value, spec));
+    var rendered = FormattingIntrinsics.formatValue(value, spec);
+    // each field is individually guarded by padField, but the sum of all the
+    // fields must also stay below the JVM string limit (CPython only fails here
+    // on MemoryError)
+    checkSize((long) out.length() + rendered.length());
+    out.append(rendered);
     return end;
   }
 
@@ -888,7 +904,7 @@ public final class FormattingIntrinsics {
   /// `[[fill]align][sign][z][#][0][width][,|_][.precision][type]`
   /// align/type are '\0' when absent; trailingJunk is set when more than one char follows.
   record Pyspec(int fill, char align, char sign, boolean z, boolean alt, boolean zero,
-                char grouping, long width, long precision, char type, boolean trailingJunk) {
+                char grouping, char fracGrouping, long width, long precision, char type, boolean trailingJunk) {
   }
 
   static Pyspec parseSpec(String spec) {
@@ -960,14 +976,33 @@ public final class FormattingIntrinsics {
       // a repeated ',' is left in place: it becomes the type char, like CPython
     }
     var precision = -1L;
+    var fracGrouping = '\0';
     if (index < length && spec.charAt(index) == '.') {
       index++;
-      if (index >= length || Character.digit(spec.codePointAt(index), 10) < 0) {
-        throw new PyValueError("Format specifier missing precision");
-      }
       var parsed = parseDigits(spec, index);
       index = parsed.end();
-      precision = parsed.value();
+      var consumed = parsed.count();
+      // like CPython 3.14, a ',' or '_' after the precision groups the fraction
+      // digits; with no digits at all, the precision stays unspecified
+      if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
+        precision = consumed == 0 ? -1 : parsed.value();
+        fracGrouping = spec.charAt(index);
+        index++;
+        if (fracGrouping == ',' && index < length && spec.charAt(index) == '_') {
+          // CPython checks for '_' right after the ',' of the fraction separator
+          throw new PyValueError("Cannot specify both ',' and '_'.");
+        }
+      } else {
+        if (consumed == 0) {
+          throw new PyValueError("Format specifier missing precision");
+        }
+        precision = parsed.value();
+      }
+      if (fracGrouping == '_' && index < length && spec.charAt(index) == ',') {
+        // CPython checks for ',' right after the '_' of the fraction separator;
+        // a second '_' is left in place and becomes the presentation type
+        throw new PyValueError("Cannot specify both ',' and '_'.");
+      }
     }
     var type = '\0';
     var trailingJunk = false;
@@ -977,7 +1012,7 @@ public final class FormattingIntrinsics {
     } else if (remaining > 1) {
       trailingJunk = true;
     }
-    return new Pyspec(fill, align, sign, z, alt, zero, grouping, width, precision, type, trailingJunk);
+    return new Pyspec(fill, align, sign, z, alt, zero, grouping, fracGrouping, width, precision, type, trailingJunk);
   }
 
   private record ParsedDigits(long value, int end, int count) {}
@@ -1024,6 +1059,10 @@ public final class FormattingIntrinsics {
   /// receiver's default presentation type ('s' for str, 'd' for int, none for float).
   private static void checkGroupingType(Pyspec p, char defaultType) {
     if (p.grouping() == '\0') {
+      if (p.type() == 'n' && p.fracGrouping() != '\0') {
+        // the fraction separator is checked against 'n' even without an integer separator
+        throw cannotSpecifyGrouping(p.fracGrouping(), 'n');
+      }
       return;
     }
     var type = p.type() == '\0' ? defaultType : p.type();
@@ -1035,6 +1074,9 @@ public final class FormattingIntrinsics {
         }
       }
       default -> throw cannotSpecifyGrouping(p.grouping(), type);
+    }
+    if (p.type() == 'n' && p.fracGrouping() != '\0') {
+      throw cannotSpecifyGrouping(p.fracGrouping(), 'n');
     }
   }
 
@@ -1089,13 +1131,14 @@ public final class FormattingIntrinsics {
       case '\0', 'd', 'n', 'b', 'o', 'x', 'X', 'c' -> { }
       default -> throw unknownCode(type, typeName);
     }
+    // like CPython, the precision check runs before the negative zero coercion check
+    if (pyspec.precision() != -1) {
+      throw new PyValueError("Precision not allowed in integer format specifier");
+    }
     if (pyspec.z()) {
       throw new PyValueError("Negative zero coercion (z) not allowed in integer format specifier");
     }
     var groupSize = type == 'b' || type == 'o' || type == 'x' || type == 'X' ? 4 : 3;
-    if (pyspec.precision() != -1) {
-      throw new PyValueError("Precision not allowed in integer format specifier");
-    }
     var align = pyspec.align() == '\0' ? (pyspec.zero() ? '=' : '>') : pyspec.align();
     if (type == 'c') {
       if (pyspec.sign() != '\0') {
@@ -1154,6 +1197,9 @@ public final class FormattingIntrinsics {
       case '\0', 'e', 'E', 'f', 'F', 'g', 'G', 'n', '%' -> { }
       default -> throw unknownCode(type, typeName);
     }
+    if (pyspec.precision() > MAX_FLOAT_PRECISION) {
+      throw new PyValueError("precision too big");
+    }
     var align = pyspec.align() == '\0' ? (pyspec.zero() ? '=' : '>') : pyspec.align();
 
     if (type == '\0' && pyspec.precision() == -1) {
@@ -1172,6 +1218,9 @@ public final class FormattingIntrinsics {
         negative = false;
       }
       var prefix = signFor(negative, pyspec);
+      if (pyspec.fracGrouping() != '\0') {
+        body = groupFraction(body, pyspec.fracGrouping());
+      }
       if (pyspec.grouping() != '\0') {
         body = groupFloatBody(body, pyspec, align, prefix.length(), "");
       }
@@ -1207,6 +1256,9 @@ public final class FormattingIntrinsics {
         negative = false;
       }
       prefix = signFor(negative, pyspec);
+    }
+    if (pyspec.fracGrouping() != '\0') {
+      body = groupFraction(body, pyspec.fracGrouping());
     }
     if (pyspec.grouping() != '\0') {
       body = groupFloatBody(body, pyspec, align, prefix.length(), suffix);
@@ -1255,6 +1307,33 @@ public final class FormattingIntrinsics {
       }
     }
     return body.length();
+  }
+
+  /// Python 3.14 groups the fraction digits forward, from the decimal point
+  /// (formatter_unicode.c: _PyUnicode_InsertThousandsGrouping with forward=1),
+  /// unlike the integer digits which are grouped from the right. Bodies without
+  /// a fraction ('inf', 'nan', "1e+03") are returned unchanged.
+  private static String groupFraction(String body, char separator) {
+    var point = body.indexOf('.');
+    if (point == -1) {
+      return body;
+    }
+    var end = point + 1;
+    while (end < body.length() && isDigit(body.charAt(end))) {
+      end++;
+    }
+    if (end - point <= 3) {   // fewer than 4 fraction digits need no separator
+      return body;
+    }
+    var grouped = new StringBuilder(body.length() + (end - point - 2) / 3);
+    grouped.append(body, 0, point + 1);
+    for (var i = point + 1; i < end; i++) {
+      if (i > point + 1 && (i - point - 1) % 3 == 0) {
+        grouped.append(separator);
+      }
+      grouped.append(body.charAt(i));
+    }
+    return grouped.append(body, end, body.length()).toString();
   }
 
   /// Smallest pad >= 0 such that groupedLength(digits + pad, groupSize) >= target.
