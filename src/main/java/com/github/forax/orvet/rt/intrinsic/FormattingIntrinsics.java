@@ -1,6 +1,8 @@
 package com.github.forax.orvet.rt.intrinsic;
 
 import com.github.forax.orvet.rt.PyDict;
+import com.github.forax.orvet.rt.PyList;
+import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.PyTuple;
 import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyKeyError;
@@ -554,22 +556,45 @@ public final class FormattingIntrinsics {
     return value.substring(0, end);
   }
 
-  /// The arguments of a `%` format, with the state machine of CPython's `PyUnicode_Format`:
-  /// a tuple provides one value per conversion, any other value is a single argument,
-  /// and a dict argument additionally allows `%(key)` conversions. A key replaces the
-  /// current argument by the looked-up value, which is then a single argument,
-  /// even if it is a tuple.
   private static final class ArgCursor {
-    private final PyDict<?, ?> dict;  // non-null only if the argument itself is a dict
-    private PyTuple tuple;            // non-null while values come from the argument tuple
-    private Object single;            // the current single value when tuple == null
+    private final Object mapping;   // non-null if the argument is a mapping (not a tuple, not a str)
+    private PyTuple tuple;
+    private Object single;
     private int index;
     private boolean singleUsed;
 
     ArgCursor(Object arg) {
-      this.dict = arg instanceof PyDict<?, ?> d ? d : null;
+      this.mapping = isMapping(arg) ? arg : null;
       this.tuple = arg instanceof PyTuple t ? t : null;
       this.single = arg;
+      super();
+    }
+
+    /// PyMapping_Check: list and range have __getitem__, so they count (tuple and str are excluded by CPython).
+    private static boolean isMapping(Object arg) {
+      return arg instanceof PyDict<?, ?> || arg instanceof PyList<?> || arg instanceof PyRange;
+    }
+
+    void requireMapping() {
+      if (mapping == null) {
+        throw new PyTypeError("format requires a mapping");
+      }
+    }
+
+    void selectKey(String key) {
+      requireMapping();
+      single = ItemIntrinsics.$getItem$(mapping, key);   // KeyError for dict, TypeError for list/range
+      tuple = null;
+      singleUsed = false;
+    }
+
+    void checkAllConsumed() {
+      if (mapping != null) {
+        return;
+      }
+      if (tuple != null ? index < tuple.size() : !singleUsed) {
+        throw new PyTypeError("not all arguments converted during string formatting");
+      }
     }
 
     Object next() {
@@ -584,30 +609,6 @@ public final class FormattingIntrinsics {
       }
       singleUsed = true;
       return single;
-    }
-
-    /// Like CPython, the mapping is checked before the key is parsed
-    /// ('%(unfinished' % 42 raises TypeError, not ValueError "incomplete format key").
-    void requireMapping() {
-      if (dict == null) {
-        throw new PyTypeError("format requires a mapping");
-      }
-    }
-
-    void selectKey(String key) {
-      requireMapping();
-      single = DictIntrinsics.$get$(dict, key);  // KeyError with the repr of the key
-      tuple = null;
-      singleUsed = false;
-    }
-
-    void checkAllConsumed() {
-      if (dict != null) {
-        return;  // like CPython, a mapping never reports unused arguments
-      }
-      if (tuple != null ? index < tuple.size() : !singleUsed) {
-        throw new PyTypeError("not all arguments converted during string formatting");
-      }
     }
 
     private static PyTypeError notEnoughArguments() {

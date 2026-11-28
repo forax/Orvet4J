@@ -5,6 +5,7 @@ import com.github.forax.orvet.rt.ModuleContext;
 import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
+import com.github.forax.orvet.rt.PyRange;
 import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
@@ -18,6 +19,7 @@ import java.math.BigInteger;
 import static com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics.formatValue;
 import static com.github.forax.orvet.rt.intrinsic.FormattingIntrinsics.stringMod;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FormattingIntrinsicTest {
@@ -199,6 +201,17 @@ public class FormattingIntrinsicTest {
           assertThrows(PyTypeError.class, () -> stringMod("%(a)s", 1L)).getMessage());
       assertEquals("not enough arguments for format string",
           assertThrows(PyTypeError.class, () -> stringMod("%(a)s %s", withA(1L))).getMessage());
+    }
+
+    @Test
+    public void percentTreatsListAndRangeAsMappings() {
+      assertEquals("abc", stringMod("abc", new PyList<>(1L)));
+      assertEquals("abc", stringMod("abc", PyRange.of(0L, 3L, 1L)));
+      assertEquals("[1, 2]", stringMod("%s", new PyList<>(1L, 2L)));
+      var e = assertThrows(PyTypeError.class, () -> stringMod("%(a)s", new PyList<>(1L)));
+      assertNotEquals("format requires a mapping", e.getMessage());
+      assertEquals("format requires a mapping",
+          assertThrows(PyTypeError.class, () -> stringMod("%(a)s", "text")).getMessage());
     }
 
     @Test
