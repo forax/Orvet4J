@@ -123,7 +123,7 @@ public final class FormattingIntrinsics {
         }
       }
 
-      long precision = -1;
+      var precision = -1L;
       if (index < length && format.charAt(index) == '.') {
         index++;
         if (index < length && format.charAt(index) == '*') {
@@ -810,9 +810,9 @@ public final class FormattingIntrinsics {
   private static long parseIndex(String digits) {
     var value = 0L;
     for (var i = 0; i < digits.length(); ) {
-      var cp = digits.codePointAt(i);
-      i += Character.charCount(cp);
-      var digit = Character.digit(cp, 10);
+      var codePoint = digits.codePointAt(i);
+      i += Character.charCount(codePoint);
+      var digit = Character.digit(codePoint, 10);
       if (value > (Long.MAX_VALUE - digit) / 10) {
         throw new PyValueError("Too many decimal digits in format string");
       }
@@ -888,7 +888,7 @@ public final class FormattingIntrinsics {
   static Pyspec parseSpec(String spec) {
     var index = 0;
     var length = spec.length();
-    int fill = ' ';
+    var fill = (int) ' ';
     var fillGiven = false;
     char align = '\0';
     if (length > 0) {
@@ -903,7 +903,7 @@ public final class FormattingIntrinsics {
         index = 1;
       }
     }
-    char sign = '\0';
+    var sign = '\0';
     if (index < length) {
       var c = spec.charAt(index);
       if (c == '+' || c == '-' || c == ' ') {
@@ -929,20 +929,20 @@ public final class FormattingIntrinsics {
       }
       index++;
     }
-    long width = -1;
+    var width = -1L;
     if (index < length && isDigit(spec.charAt(index))) {
       var parsed = parseDigits(spec, index);
       index = parsed.end();
       width = parsed.value();
     }
-    char grouping = '\0';
+    var grouping = '\0';
     if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
       grouping = spec.charAt(index++);
       if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
         throw new PyValueError("Cannot specify both ',' and '_'.");
       }
     }
-    long precision = -1;
+    var precision = -1L;
     if (index < length && spec.charAt(index) == '.') {
       index++;
       if (index >= length || !isDigit(spec.charAt(index))) {
@@ -952,7 +952,7 @@ public final class FormattingIntrinsics {
       index = parsed.end();
       precision = parsed.value();
     }
-    char type = '\0';
+    var type = '\0';
     var trailingJunk = false;
     var remaining = length - index;
     if (remaining == 1) {
@@ -991,67 +991,67 @@ public final class FormattingIntrinsics {
   }
 
   private static String formatStrValue(String s, String spec) {
-    var p = parseSpec(spec);
-    if (p.trailingJunk()) {
+    var pyspec = parseSpec(spec);
+    if (pyspec.trailingJunk()) {
       throw invalidSpec(spec, "str");
     }
-    if (p.type() != '\0' && p.type() != 's') {
-      throw unknownCode(p.type(), "str");
+    if (pyspec.type() != '\0' && pyspec.type() != 's') {
+      throw unknownCode(pyspec.type(), "str");
     }
-    if (p.sign() != '\0') {
+    if (pyspec.sign() != '\0') {
       throw new PyValueError("Sign not allowed in string format specifier");
     }
-    if (p.z()) {
+    if (pyspec.z()) {
       throw new PyValueError("Negative zero coercion (z) not allowed in string format specifier");
     }
-    if (p.alt()) {
+    if (pyspec.alt()) {
       throw new PyValueError("Alternate form (#) not allowed in string format specifier");
     }
-    if (p.grouping() != '\0') {
-      throw new PyValueError("Cannot specify '" + p.grouping() + "' with 's'.");
+    if (pyspec.grouping() != '\0') {
+      throw new PyValueError("Cannot specify '" + pyspec.grouping() + "' with 's'.");
     }
-    if (p.align() == '=') {
+    if (pyspec.align() == '=') {
       throw new PyValueError("'=' alignment not allowed in string format specifier");
     }
-    var align = p.align() == '\0' ? '<' : p.align();
-    return padField("", truncate(s, p.precision()), p.fill(), align, p.width());
+    var align = pyspec.align() == '\0' ? '<' : pyspec.align();
+    return padField("", truncate(s, pyspec.precision()), pyspec.fill(), align, pyspec.width());
   }
 
   private static String formatIntValue(Object value, String spec) {
-    var p = parseSpec(spec);
+    var pyspec = parseSpec(spec);
     var typeName = IntrinsicSupport.typeName(value);
-    var type = p.type();
+    var type = pyspec.type();
     // like CPython, float presentation types format an int as a float
     if (type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G' || type == '%') {
-      return formatFloatBody(IntrinsicSupport.toDouble(value), p, spec, typeName);
+      return formatFloatBody(IntrinsicSupport.toDouble(value), pyspec, spec, typeName);
     }
-    if (p.trailingJunk()) {
+    if (pyspec.trailingJunk()) {
       throw invalidSpec(spec, typeName);
     }
     switch (type) {
       case '\0', 'd', 'n', 'b', 'o', 'x', 'X', 'c' -> { }
       default -> throw unknownCode(type, typeName);
     }
-    if (p.z()) {
+    if (pyspec.z()) {
       throw new PyValueError("Negative zero coercion (z) not allowed in integer format specifier");
     }
-    var grouping = p.grouping();
+    var grouping = pyspec.grouping();
     var groupSize = type == 'b' || type == 'o' || type == 'x' || type == 'X' ? 4 : 3;
     if (grouping != '\0' && (type == 'n' || type == 'c' || (grouping == ',' && groupSize == 4))) {
       throw new PyValueError("Cannot specify '" + grouping + "' with '" + type + "'.");
     }
-    if (p.precision() != -1) {
+    if (pyspec.precision() != -1) {
       throw new PyValueError("Precision not allowed in integer format specifier");
     }
-    var align = p.align() == '\0' ? (p.zero() ? '=' : '>') : p.align();
+    var align = pyspec.align() == '\0' ? (pyspec.zero() ? '=' : '>') : pyspec.align();
     if (type == 'c') {
-      if (p.sign() != '\0') {
+      if (pyspec.sign() != '\0') {
         throw new PyValueError("Sign not allowed with integer format specifier 'c'");
       }
-      if (p.alt()) {
+      if (pyspec.alt()) {
         throw new PyValueError("Alternate form (#) not allowed with integer format specifier 'c'");
       }
-      return padField("", charForCodePoint(value), p.fill(), align, p.width());
+      return padField("", charForCodePoint(value), pyspec.fill(), align, pyspec.width());
     }
     var number = toBigInteger(value);
     var digits = switch (type) {
@@ -1063,8 +1063,8 @@ public final class FormattingIntrinsics {
     if (type == 'X') {
       digits = digits.toUpperCase(Locale.ROOT);
     }
-    var prefix = signFor(number.signum() < 0, p);
-    if (p.alt()) {
+    var prefix = signFor(number.signum() < 0, pyspec);
+    if (pyspec.alt()) {
       prefix += switch (type) {
         case 'x' -> "0x";
         case 'X' -> "0X";
@@ -1075,48 +1075,48 @@ public final class FormattingIntrinsics {
     }
     var body = digits;
     if (grouping != '\0') {
-      if (align == '=' && p.fill() == '0') {
+      if (align == '=' && pyspec.fill() == '0') {
         // fold the zero padding into the digits so the groups stay aligned
-        checkSize(p.width());  // fail eagerly instead of looping/allocating (like padField)
-        var target = p.width() - prefix.length();
+        checkSize(pyspec.width());  // fail eagerly instead of looping/allocating (like padField)
+        var target = pyspec.width() - prefix.length();
         digits = "0".repeat(zeroPadForGrouping(digits.length(), groupSize, target)) + digits;
       }
       body = groupDigits(digits, grouping, groupSize);
     }
-    return padField(prefix, body, p.fill(), align, p.width());
+    return padField(prefix, body, pyspec.fill(), align, pyspec.width());
   }
 
   private static String formatFloatValue(double value, String spec) {
     return formatFloatBody(value, parseSpec(spec), spec, "float");
   }
 
-  private static String formatFloatBody(double value, Pyspec p, String spec, String typeName) {
-    if (p.trailingJunk()) {
+  private static String formatFloatBody(double value, Pyspec pyspec, String spec, String typeName) {
+    if (pyspec.trailingJunk()) {
       throw invalidSpec(spec, typeName);
     }
-    var type = p.type();
+    var type = pyspec.type();
     switch (type) {
       case '\0', 'e', 'E', 'f', 'F', 'g', 'G', 'n', '%' -> { }
       default -> throw unknownCode(type, typeName);
     }
-    if (p.grouping() != '\0' && type == 'n') {
-      throw new PyValueError("Cannot specify '" + p.grouping() + "' with 'n'.");
+    if (pyspec.grouping() != '\0' && type == 'n') {
+      throw new PyValueError("Cannot specify '" + pyspec.grouping() + "' with 'n'.");
     }
-    var align = p.align() == '\0' ? (p.zero() ? '=' : '>') : p.align();
+    var align = pyspec.align() == '\0' ? (pyspec.zero() ? '=' : '>') : pyspec.align();
 
-    if (type == '\0' && p.precision() == -1) {
+    if (type == '\0' && pyspec.precision() == -1) {
       // no type and no precision: rendered like repr()
       var signed = StringIntrinsics.floatString(value);
       var negative = signed.startsWith("-");
       var body = negative ? signed.substring(1) : signed;
-      if (negative && p.z() && value == 0.0) {
+      if (negative && pyspec.z() && value == 0.0) {
         negative = false;
       }
-      var prefix = signFor(negative, p);
-      if (p.grouping() != '\0') {
-        body = groupFloatBody(body, p, align, prefix.length(), "");
+      var prefix = signFor(negative, pyspec);
+      if (pyspec.grouping() != '\0') {
+        body = groupFloatBody(body, pyspec, align, prefix.length(), "");
       }
-      return padField(prefix, body, p.fill(), align, p.width());
+      return padField(prefix, body, pyspec.fill(), align, pyspec.width());
     }
 
     var conversion = switch (type) {
@@ -1130,29 +1130,29 @@ public final class FormattingIntrinsics {
     String prefix;
     String body;
     if (Double.isNaN(scaled)) {
-      prefix = signFor(false, p);
+      prefix = signFor(false, pyspec);
       body = upper ? "NAN" : "nan";
     } else if (Double.isInfinite(scaled)) {
-      prefix = signFor(scaled < 0, p);
+      prefix = signFor(scaled < 0, pyspec);
       body = upper ? "INF" : "inf";
     } else {
       var negative = Double.doubleToRawLongBits(scaled) < 0;
       var abs = new BigDecimal(Math.abs(scaled));
       body = type == '\0'
-          ? formatGeneral(abs, p.precision(), p.alt(), true)  // precision but no type: 'g' that keeps a ".0"
-          : formatDouble(abs, p.precision(), conversion, p.alt());
+          ? formatGeneral(abs, pyspec.precision(), pyspec.alt(), true)  // precision but no type: 'g' that keeps a ".0"
+          : formatDouble(abs, pyspec.precision(), conversion, pyspec.alt());
       if (upper) {
         body = body.toUpperCase(Locale.ROOT);
       }
-      if (negative && p.z() && isAllZeros(body)) {          // z also applies to values that round to zero
+      if (negative && pyspec.z() && isAllZeros(body)) {          // z also applies to values that round to zero
         negative = false;
       }
-      prefix = signFor(negative, p);
+      prefix = signFor(negative, pyspec);
     }
-    if (p.grouping() != '\0') {
-      body = groupFloatBody(body, p, align, prefix.length(), suffix);
+    if (pyspec.grouping() != '\0') {
+      body = groupFloatBody(body, pyspec, align, prefix.length(), suffix);
     }
-    return padField(prefix, body + suffix, p.fill(), align, p.width());
+    return padField(prefix, body + suffix, pyspec.fill(), align, pyspec.width());
   }
 
   private static boolean isAllZeros(String body) {
@@ -1294,6 +1294,4 @@ public final class FormattingIntrinsics {
     }
     return String.valueOf(Character.toChars(code.intValueExact()));
   }
-
-
 }
