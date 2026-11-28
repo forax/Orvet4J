@@ -112,7 +112,7 @@ public final class FormattingIntrinsics {
       }
 
       long width = -1;
-      if (index < length && format.charAt(index) == '*') {
+      if (format.charAt(index) == '*') {
         index++;
         width = sizeArg(cursor.next());
         if (width < 0) {
@@ -1075,9 +1075,6 @@ public final class FormattingIntrinsics {
       }
       default -> throw cannotSpecifyGrouping(p.grouping(), type);
     }
-    if (p.type() == 'n' && p.fracGrouping() != '\0') {
-      throw cannotSpecifyGrouping(p.fracGrouping(), 'n');
-    }
   }
 
   private static PyValueError cannotSpecifyGrouping(char grouping, char type) {
@@ -1285,7 +1282,7 @@ public final class FormattingIntrinsics {
   private static String groupFloatBody(String body, Pyspec p, char align, int prefixLength, String suffix) {
     var point = body.indexOf('.');
     var intEnd = point != -1 ? point : exponentStart(body);
-    if (!isDigits(body, 0, intEnd)) {
+    if (!isDigits(body, intEnd)) {
       return body;
     }
     var intPart = body.substring(0, intEnd);
@@ -1355,11 +1352,8 @@ public final class FormattingIntrinsics {
     return (int) lo;
   }
 
-  private static boolean isDigits(String s, int from, int to) {
-    if (from >= to) {
-      return false;
-    }
-    for (var i = from; i < to; i++) {
+  private static boolean isDigits(String s, int to) {
+    for (var i = 0; i < to; i++) {
       if (!isDigit(s.charAt(i))) {
         return false;
       }
