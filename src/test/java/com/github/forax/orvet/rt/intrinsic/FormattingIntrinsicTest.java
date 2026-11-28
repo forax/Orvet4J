@@ -305,6 +305,19 @@ public class FormattingIntrinsicTest {
       assertEquals("+000123456789012345678901234567890",
           stringMod("%0+34d", decimal));
     }
+
+    @Test
+    public void percentDecimalHonorsTheIntMaxStrDigitsLimit() {
+      assertEquals(4_300, stringMod("%d", BigInteger.TEN.pow(4_299)).length());
+      var beyond = BigInteger.TEN.pow(4_300);
+      for (var conversion : new String[] {"%d", "%i", "%u", "%5d", "%+d", "%.2d"}) {
+        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond), conversion);
+        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond.negate()), conversion);
+      }
+      // power-of-two radixes are not limited
+      var huge = BigInteger.TEN.pow(5_000);
+      assertEquals(huge.toString(16), stringMod("%x", huge));
+    }
   }
 
   @Nested

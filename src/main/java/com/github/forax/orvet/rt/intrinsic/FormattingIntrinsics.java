@@ -368,7 +368,10 @@ public final class FormattingIntrinsics {
     var number = radix == 10
         ? toIntegerArg(value, conversion)
         : toExactIntegerArg(value, conversion);
-    var digits = number.abs().toString(radix);
+    var magnitude = number.abs();
+    var digits = radix == 10
+        ? StringIntrinsics.intString(magnitude)
+        : magnitude.toString(radix);
     if (uppercase) {
       digits = digits.toUpperCase(Locale.ROOT);
     }
