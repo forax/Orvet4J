@@ -863,7 +863,7 @@ public final class FormattingIntrinsics {
   /// Python `format(value, spec)`. Only str, int, bool and float accept a non-empty spec.
   /// Known divergence: type `n` behaves like `d`/`g` in the C locale. A width beyond the
   /// JVM string limit raises UnimplementedFeatureError.
-  public static Object formatValue(Object value, String spec) {
+  public static String formatValue(Object value, String spec) {
     if (spec.isEmpty()) {
       return switch (value) {
         case String s -> s;
