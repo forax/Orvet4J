@@ -529,7 +529,6 @@ public class FormattingIntrinsicTest {
   @Nested
   public final class Grouping {
     @Test
-    @Disabled
     public void commaWithTypeSIsRejectedAtParseTimeForAnyReceiver() {
       // the check is done by the spec parser, before the type dispatch
       assertEquals("Cannot specify ',' with 's'.",
@@ -541,7 +540,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void repeatedGroupingCharBecomesThePresentationType() {
       // CPython consumes ',' then '_' then ',' again: a same-char repeat is left in
       // place and parsed as the type, so it is not the "both" error
@@ -554,7 +552,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void mixedGroupingCharsReportTheBothError() {
       assertEquals("Cannot specify both ',' and '_'.",
           assertThrows(PyValueError.class, () -> fmtValue(1L, ",_")).getMessage());
@@ -563,14 +560,12 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void trailingJunkWinsOverTheGroupingTypeCheck() {
       assertEquals("Invalid format specifier ',,x' for object of type 'int'",
           assertThrows(PyValueError.class, () -> fmtValue(1L, ",,x")).getMessage());
     }
 
     @Test
-    @Disabled
     public void groupingIsCheckedBeforeDispatchEvenForFloatAndStrReceivers() {
       assertEquals("Cannot specify ',' with 'x'.",
           assertThrows(PyValueError.class, () -> fmtValue(1L, ",x")).getMessage());
@@ -588,7 +583,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void strReceiverDefaultsItsTypeToS() {
       // str passes default_type='s' into the parser, so bare grouping is an error for str
       assertEquals("Cannot specify ',' with 's'.",
@@ -601,7 +595,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void validGroupingSpecsStillWork() {
       assertEquals("1", fmtValue(1L, "_"));
       assertEquals("1", fmtValue(1L, ","));
@@ -621,7 +614,6 @@ public class FormattingIntrinsicTest {
   public final class UnicodeDigits {
 
     @Test
-    @Disabled
     public void widthAcceptsAnyUnicodeDecimalDigit() {
       assertEquals("  5", fmtValue(5L, "٣"));       // U+0663 ARABIC-INDIC DIGIT THREE
       assertEquals("5", fmtValue(5L, "１"));         // U+FF11 FULLWIDTH DIGIT ONE
@@ -632,13 +624,11 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void precisionAcceptsAnyUnicodeDecimalDigit() {
       assertEquals("0.333", fmtValue(1.0 / 3, ".٣f"));
     }
 
     @Test
-    @Disabled
     public void nonDecimalDigitsFallThroughToTheTypeChar() {
       // U+00B2 SUPERSCRIPT TWO is not a decimal digit (Py_UNICODE_TODECIMAL fails)
       assertEquals("Unknown format code '\\xb2' for object of type 'int'",
@@ -646,7 +636,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void overflowStillReportsTheFormatSpecMessage() {
       assertEquals("Too many decimal digits in format string",
           assertThrows(PyValueError.class, () -> fmtValue(1L, "٩".repeat(20))).getMessage());
@@ -658,7 +647,6 @@ public class FormattingIntrinsicTest {
   public final class StrSign {
 
     @Test
-    @Disabled
     public void spaceSignHasItsOwnMessage() {
       assertEquals("Space not allowed in string format specifier",
           assertThrows(PyValueError.class, () -> fmtValue("abc", " s")).getMessage());
@@ -682,7 +670,6 @@ public class FormattingIntrinsicTest {
   public final class Float {
 
     @Test
-    @Disabled
     public void alternateFormAddsTheDotBeforeTheExponent() {
       assertEquals("1.e+16", fmtValue(1e16, "#"));
       assertEquals("-1.e+16", fmtValue(-1e16, "#"));
@@ -691,7 +678,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void reprsThatAlreadyHaveADotAreUnchanged() {
       assertEquals("1.0", fmtValue(1.0, "#"));
       assertEquals("123456.0", fmtValue(123456.0, "#"));
@@ -701,7 +687,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void specialFloatsAndMissingAlternateAreUnchanged() {
       assertEquals("inf", fmtValue(Double.POSITIVE_INFINITY, "#"));
       assertEquals("nan", fmtValue(Double.NaN, "#"));
@@ -709,7 +694,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void alternateFormWithAPrecisionGoesThroughGeneral() {
       assertEquals("1.e+16", fmtValue(1e16, "#.0"));
       assertEquals("1e+16", fmtValue(1e16, ".2"));
@@ -721,7 +705,6 @@ public class FormattingIntrinsicTest {
   public final class FieldName {
 
     @Test
-    @Disabled
     public void strayClosingBracketIsPartOfTheKeywordName() {
       assertEquals("'a]'", assertThrows(PyKeyError.class, () -> fmt("{a]}", withA(1L))).getMessage());
       assertEquals("'a]b'", assertThrows(PyKeyError.class, () -> fmt("{a]b}", withA(1L))).getMessage());
@@ -771,7 +754,6 @@ public class FormattingIntrinsicTest {
   @Nested
   public final class StringModBoundaries {
     @Test
-    @Disabled
     public void literalWidthAndPrecisionOverflows() {
       // the % operator uses PY_SSIZE_T_MAX for the width and INT_MAX for the precision,
       // with the actual digit in the overflow guard
@@ -782,7 +764,6 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
-    @Disabled
     public void widthJustBelowLongMaxValueIsAcceptedAtParseTime() {
       // CPython parses width 2**63-1 fine and fails while allocating; Java fails eagerly
       // on the JVM string limit instead (like CPython, the parse itself succeeds)

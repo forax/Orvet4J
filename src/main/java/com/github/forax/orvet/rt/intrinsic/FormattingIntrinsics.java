@@ -119,7 +119,7 @@ public final class FormattingIntrinsics {
         }
       } else {
         while (index < length && isDigit(format.charAt(index))) {
-          width = accumulate(width < 0 ? 0 : width, format.charAt(index++) - '0', "width");
+          width = accumulate(width < 0 ? 0 : width, format.charAt(index++) - '0', "width", Long.MAX_VALUE);
         }
       }
 
@@ -133,7 +133,7 @@ public final class FormattingIntrinsics {
         } else {
           precision = 0;
           while (index < length && isDigit(format.charAt(index))) {
-            precision = accumulate(precision, format.charAt(index++) - '0', "precision");
+            precision = accumulate(precision, format.charAt(index++) - '0', "precision", Integer.MAX_VALUE);
           }
         }
       }
@@ -190,8 +190,8 @@ public final class FormattingIntrinsics {
   }
 
   /// Digits of a literal width or precision (CPython: ValueError "width too big").
-  private static long accumulate(long value, int digit, String what) {
-    if (value > (Long.MAX_VALUE - 9) / 10) {
+  private static long accumulate(long value, int digit, String what, long limit) {
+    if (value > (limit - digit) / 10) {
       throw new PyValueError(what + " too big");
     }
     return value * 10 + digit;
@@ -775,6 +775,11 @@ public final class FormattingIntrinsics {
           : "Unknown conversion specifier \\x" + Integer.toHexString(conversion));
     };
     if (spec.indexOf('{') != -1) {
+      if (depth != 0) {
+        // like CPython, the recursion limit is enforced when the spec is expanded,
+        // i.e. after the argument (and its items/conversion) have been resolved
+        throw new PyValueError("Max string recursion exceeded");
+      }
       var specOut = new StringBuilder(spec.length());
       formatFields(spec, specOut, cursor, depth + 1);
       spec = specOut.toString();
@@ -787,7 +792,8 @@ public final class FormattingIntrinsics {
     var length = template.length();
     while (index < length) {
       var c = template.charAt(index);
-      if (c == '.' || c == '[' || c == ']' || c == ':' || c == '!' || c == '}') {
+      // CPython: a ']' before any '[' is part of the base name ('{a]}' looks up the keyword 'a]')
+      if (c == '.' || c == '[' || c == ':' || c == '!' || c == '}') {
         return index;
       }
       if (c == '{') {
@@ -810,9 +816,9 @@ public final class FormattingIntrinsics {
   private static long parseIndex(String digits) {
     var value = 0L;
     for (var i = 0; i < digits.length(); ) {
-      var codePoint = digits.codePointAt(i);
-      i += Character.charCount(codePoint);
-      var digit = Character.digit(codePoint, 10);
+      var codepoint = digits.codePointAt(i);
+      i += Character.charCount(codepoint);
+      var digit = Character.digit(codepoint, 10);
       if (value > (Long.MAX_VALUE - digit) / 10) {
         throw new PyValueError("Too many decimal digits in format string");
       }
@@ -930,22 +936,33 @@ public final class FormattingIntrinsics {
       index++;
     }
     var width = -1L;
-    if (index < length && isDigit(spec.charAt(index))) {
-      var parsed = parseDigits(spec, index);
-      index = parsed.end();
-      width = parsed.value();
+    var widthParsed = parseDigits(spec, index);
+    if (widthParsed.count() != 0) {
+      index = widthParsed.end();
+      width = widthParsed.value();
     }
     var grouping = '\0';
-    if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
-      grouping = spec.charAt(index++);
-      if (index < length && (spec.charAt(index) == ',' || spec.charAt(index) == '_')) {
+    if (index < length && spec.charAt(index) == ',') {
+      grouping = ',';
+      index++;
+    }
+    if (index < length && spec.charAt(index) == '_') {
+      if (grouping != '\0') {
         throw new PyValueError("Cannot specify both ',' and '_'.");
       }
+      grouping = '_';
+      index++;
+    }
+    if (index < length && spec.charAt(index) == ',') {
+      if (grouping == '_') {
+        throw new PyValueError("Cannot specify both ',' and '_'.");
+      }
+      // a repeated ',' is left in place: it becomes the type char, like CPython
     }
     var precision = -1L;
     if (index < length && spec.charAt(index) == '.') {
       index++;
-      if (index >= length || !isDigit(spec.charAt(index))) {
+      if (index >= length || Character.digit(spec.codePointAt(index), 10) < 0) {
         throw new PyValueError("Format specifier missing precision");
       }
       var parsed = parseDigits(spec, index);
@@ -963,19 +980,28 @@ public final class FormattingIntrinsics {
     return new Pyspec(fill, align, sign, z, alt, zero, grouping, width, precision, type, trailingJunk);
   }
 
-  private record ParsedDigits(long value, int end) {}
+  private record ParsedDigits(long value, int end, int count) {}
 
+  /// CPython get_integer: any Unicode decimal digit (Py_UNICODE_TODECIMAL), leading zeros
+  /// allowed, overflow is a ValueError. Returns the consumed end offset, the value, and the
+  /// number of digits consumed (0 means nothing was consumed).
   private static ParsedDigits parseDigits(String spec, int index) {
     var value = 0L;
-    while (index < spec.length() && isDigit(spec.charAt(index))) {
-      var digit = spec.charAt(index) - '0';
+    var count = 0;
+    while (index < spec.length()) {
+      var cp = spec.codePointAt(index);
+      var digit = Character.digit(cp, 10);
+      if (digit < 0) {
+        break;
+      }
       if (value > (Long.MAX_VALUE - digit) / 10) {
         throw new PyValueError("Too many decimal digits in format string");
       }
       value = value * 10 + digit;
-      index++;
+      index += Character.charCount(cp);
+      count++;
     }
-    return new ParsedDigits(value, index);
+    return new ParsedDigits(value, index, count);
   }
 
   private static boolean isAlign(char c) {
@@ -987,7 +1013,35 @@ public final class FormattingIntrinsics {
   }
 
   private static PyValueError unknownCode(char type, String typeName) {
-    return new PyValueError("Unknown format code '" + type + "' for object of type '" + typeName + "'");
+    return new PyValueError(type > 32 && type < 128
+        ? "Unknown format code '" + type + "' for object of type '" + typeName + "'"
+        : "Unknown format code '\\x" + Integer.toHexString(type) + "' for object of type '" + typeName + "'");
+  }
+
+  /// CPython validates the (grouping, type) pair at parse time, independently of the object
+  /// being formatted (formatter_unicode.c): grouping is only valid with the decimal/float
+  /// presentation types, and with 'b'/'o'/'x'/'X' only as '_'. The type defaults to the
+  /// receiver's default presentation type ('s' for str, 'd' for int, none for float).
+  private static void checkGroupingType(Pyspec p, char defaultType) {
+    if (p.grouping() == '\0') {
+      return;
+    }
+    var type = p.type() == '\0' ? defaultType : p.type();
+    switch (type) {
+      case 'd', 'e', 'f', 'g', 'E', 'G', '%', 'F', '\0' -> { }
+      case 'b', 'o', 'x', 'X' -> {
+        if (p.grouping() != '_') {
+          throw cannotSpecifyGrouping(p.grouping(), type);
+        }
+      }
+      default -> throw cannotSpecifyGrouping(p.grouping(), type);
+    }
+  }
+
+  private static PyValueError cannotSpecifyGrouping(char grouping, char type) {
+    return new PyValueError(type > 32 && type < 128
+        ? "Cannot specify '" + grouping + "' with '" + type + "'."
+        : "Cannot specify '" + grouping + "' with '\\x" + Integer.toHexString(type) + "'.");
   }
 
   private static String formatStrValue(String s, String spec) {
@@ -995,8 +1049,12 @@ public final class FormattingIntrinsics {
     if (pyspec.trailingJunk()) {
       throw invalidSpec(spec, "str");
     }
+    checkGroupingType(pyspec, 's');
     if (pyspec.type() != '\0' && pyspec.type() != 's') {
       throw unknownCode(pyspec.type(), "str");
+    }
+    if (pyspec.sign() == ' ') {
+      throw new PyValueError("Space not allowed in string format specifier");
     }
     if (pyspec.sign() != '\0') {
       throw new PyValueError("Sign not allowed in string format specifier");
@@ -1006,9 +1064,6 @@ public final class FormattingIntrinsics {
     }
     if (pyspec.alt()) {
       throw new PyValueError("Alternate form (#) not allowed in string format specifier");
-    }
-    if (pyspec.grouping() != '\0') {
-      throw new PyValueError("Cannot specify '" + pyspec.grouping() + "' with 's'.");
     }
     if (pyspec.align() == '=') {
       throw new PyValueError("'=' alignment not allowed in string format specifier");
@@ -1021,12 +1076,14 @@ public final class FormattingIntrinsics {
     var pyspec = parseSpec(spec);
     var typeName = IntrinsicSupport.typeName(value);
     var type = pyspec.type();
+    if (pyspec.trailingJunk()) {
+      throw invalidSpec(spec, typeName);
+    }
+    // like CPython, the grouping/type pair is validated at parse time, before any dispatch
+    checkGroupingType(pyspec, 'd');
     // like CPython, float presentation types format an int as a float
     if (type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G' || type == '%') {
       return formatFloatBody(IntrinsicSupport.toDouble(value), pyspec, spec, typeName);
-    }
-    if (pyspec.trailingJunk()) {
-      throw invalidSpec(spec, typeName);
     }
     switch (type) {
       case '\0', 'd', 'n', 'b', 'o', 'x', 'X', 'c' -> { }
@@ -1035,11 +1092,7 @@ public final class FormattingIntrinsics {
     if (pyspec.z()) {
       throw new PyValueError("Negative zero coercion (z) not allowed in integer format specifier");
     }
-    var grouping = pyspec.grouping();
     var groupSize = type == 'b' || type == 'o' || type == 'x' || type == 'X' ? 4 : 3;
-    if (grouping != '\0' && (type == 'n' || type == 'c' || (grouping == ',' && groupSize == 4))) {
-      throw new PyValueError("Cannot specify '" + grouping + "' with '" + type + "'.");
-    }
     if (pyspec.precision() != -1) {
       throw new PyValueError("Precision not allowed in integer format specifier");
     }
@@ -1054,6 +1107,7 @@ public final class FormattingIntrinsics {
       return padField("", charForCodePoint(value), pyspec.fill(), align, pyspec.width());
     }
     var number = toBigInteger(value);
+    var grouping = pyspec.grouping();
     var digits = switch (type) {
       case 'b' -> number.abs().toString(2);
       case 'o' -> number.abs().toString(8);
@@ -1094,13 +1148,11 @@ public final class FormattingIntrinsics {
     if (pyspec.trailingJunk()) {
       throw invalidSpec(spec, typeName);
     }
+    checkGroupingType(pyspec, '\0');
     var type = pyspec.type();
     switch (type) {
       case '\0', 'e', 'E', 'f', 'F', 'g', 'G', 'n', '%' -> { }
       default -> throw unknownCode(type, typeName);
-    }
-    if (pyspec.grouping() != '\0' && type == 'n') {
-      throw new PyValueError("Cannot specify '" + pyspec.grouping() + "' with 'n'.");
     }
     var align = pyspec.align() == '\0' ? (pyspec.zero() ? '=' : '>') : pyspec.align();
 
@@ -1109,6 +1161,13 @@ public final class FormattingIntrinsics {
       var signed = StringIntrinsics.floatString(value);
       var negative = signed.startsWith("-");
       var body = negative ? signed.substring(1) : signed;
+      if (pyspec.alt()) {
+        // CPython: repr path with '#' (Py_DTSF_ALT) inserts a '.' before the exponent
+        var e = body.indexOf('e');
+        if (e != -1 && body.indexOf('.') == -1) {
+          body = body.substring(0, e) + '.' + body.substring(e);
+        }
+      }
       if (negative && pyspec.z() && value == 0.0) {
         negative = false;
       }
