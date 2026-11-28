@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.isInt;
-import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.normalize;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toBigInteger;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.toDouble;
 import static com.github.forax.orvet.rt.intrinsic.IntrinsicSupport.typeName;
@@ -618,7 +617,7 @@ public final class FormattingIntrinsics {
 
   // -- format-spec mini-language (str.format fields and the format() builtin)
 
-  public static Object format(String self, Object... args) {
+  public static String format(String self, Object... args) {
     var out = new StringBuilder(self.length() + 16);
     formatFields(self, out, new FieldCursor(args), 0);
     return out.toString();
@@ -705,25 +704,21 @@ public final class FormattingIntrinsics {
       }
     }
     // -- conversion
-    char conversion = '\0';
+    var conversion = 0;
     if (end < length && template.charAt(end) == '!') {
       end++;
       if (end >= length) {
         throw new PyValueError("end of string while looking for conversion specifier");
       }
-      conversion = template.charAt(end);
-      end++;
-      if (conversion == '}') {
+      conversion = template.codePointAt(end);
+      end += Character.charCount(conversion);
+      if (end >= length) {
+        // CPython falls through to the format-spec scan, which never finds the closing '}'
         throw new PyValueError("unmatched '{' in format spec");
       }
-      if (conversion != 'r' && conversion != 's' && conversion != 'a') {
-        throw new PyValueError("Unknown conversion specifier " + conversion);
-      }
-      if (end < length) {
-        var c = template.charAt(end);
-        if (c != ':' && c != '}') {
-          throw new PyValueError("expected ':' after conversion specifier");
-        }
+      var c = template.charAt(end);
+      if (c != ':' && c != '}') {
+        throw new PyValueError("expected ':' after conversion specifier");
       }
     }
     // -- format spec, which may itself contain replacement fields
@@ -771,10 +766,13 @@ public final class FormattingIntrinsics {
       value = ItemIntrinsics.$getItem$(value, itemValue(item));
     }
     value = switch (conversion) {
+      case 0 -> value;
       case 'r' -> StringIntrinsics.$repr$(value);
       case 'a' -> StringIntrinsics.ascii(value);
       case 's' -> StringIntrinsics.$str$(value);
-      default -> value;
+      default -> throw new PyValueError(conversion > 32 && conversion < 127
+          ? "Unknown conversion specifier " + (char) conversion
+          : "Unknown conversion specifier \\x" + Integer.toHexString(conversion));
     };
     if (spec.indexOf('{') != -1) {
       var specOut = new StringBuilder(spec.length());
@@ -801,20 +799,26 @@ public final class FormattingIntrinsics {
   }
 
   private static Object itemValue(String item) {
-    return isDecimalDigits(item) ? normalize(new BigInteger(item)) : item;
+    return isDecimalDigits(item) ? (Object) parseIndex(item) : item;
   }
 
   private static boolean isDecimalDigits(String s) {
-    if (s.isEmpty()) {
-      return false;
-    }
-    for (var i = 0; i < s.length(); i++) {
-      var c = s.charAt(i);
-      if (c < '0' || c > '9') {
-        return false;
+    return !s.isEmpty() && s.codePoints().allMatch(Character::isDigit);
+  }
+
+  /// CPython's get_integer: any Unicode decimal digit, leading zeros allowed, overflow is a ValueError.
+  private static long parseIndex(String digits) {
+    var value = 0L;
+    for (var i = 0; i < digits.length(); ) {
+      var cp = digits.codePointAt(i);
+      i += Character.charCount(cp);
+      var digit = Character.digit(cp, 10);
+      if (value > (Long.MAX_VALUE - digit) / 10) {
+        throw new PyValueError("Too many decimal digits in format string");
       }
+      value = value * 10 + digit;
     }
-    return true;
+    return value;
   }
 
   /// Resolves field names against the positional arguments; automatic (`{}`) and manual (`{0}`)
@@ -841,18 +845,15 @@ public final class FormattingIntrinsics {
         return args[autoIndex++];
       }
       if (isDecimalDigits(name)) {
+        var index = parseIndex(name);            // CPython parses the integer first
         if (automatic) {
           throw new PyValueError("cannot switch from automatic field numbering to manual field specification");
         }
         manual = true;
-        if (name.length() > 19) {
-          throw new PyValueError("Too many decimal digits in format string");
-        }
-        var index = new BigInteger(name);
-        if (index.bitLength() > 63 || index.longValue() >= args.length) {
+        if (index >= args.length) {
           throw new PyIndexError("Replacement index " + index + " out of range for positional args tuple");
         }
-        return args[index.intValue()];
+        return args[(int) index];
       }
       throw new PyKeyError(StringIntrinsics.$repr$(name));
     }

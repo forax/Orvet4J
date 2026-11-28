@@ -6,6 +6,7 @@ import com.github.forax.orvet.rt.PyDict;
 import com.github.forax.orvet.rt.PyList;
 import com.github.forax.orvet.rt.PyNone;
 import com.github.forax.orvet.rt.PyRange;
+import com.github.forax.orvet.rt.error.PyIndexError;
 import com.github.forax.orvet.rt.error.PyKeyError;
 import com.github.forax.orvet.rt.error.PyOverflowError;
 import com.github.forax.orvet.rt.error.PyTypeError;
@@ -38,6 +39,10 @@ public class FormattingIntrinsicTest {
     var dict = new PyDict<String, Object>();
     dict.put("a", value);
     return dict;
+  }
+
+  private static String fmt(String template, Object... args) {
+    return FormattingIntrinsics.format(template, args);
   }
 
   @Nested
@@ -271,6 +276,19 @@ public class FormattingIntrinsicTest {
     }
 
     @Test
+    public void percentDecimalHonorsTheIntMaxStrDigitsLimit() {
+      assertEquals(4_300, stringMod("%d", BigInteger.TEN.pow(4_299)).length());
+      var beyond = BigInteger.TEN.pow(4_300);
+      for (var conversion : new String[] {"%d", "%i", "%u", "%5d", "%+d", "%.2d"}) {
+        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond), conversion);
+        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond.negate()), conversion);
+      }
+      // power-of-two radixes are not limited
+      var huge = BigInteger.TEN.pow(5_000);
+      assertEquals(huge.toString(16), stringMod("%x", huge));
+    }
+
+    @Test
     public void throughTheCompiler() {
       var context = run("""
           name = 'Ada'
@@ -317,19 +335,6 @@ public class FormattingIntrinsicTest {
 
       assertEquals("+000123456789012345678901234567890",
           stringMod("%0+34d", decimal));
-    }
-
-    @Test
-    public void percentDecimalHonorsTheIntMaxStrDigitsLimit() {
-      assertEquals(4_300, stringMod("%d", BigInteger.TEN.pow(4_299)).length());
-      var beyond = BigInteger.TEN.pow(4_300);
-      for (var conversion : new String[] {"%d", "%i", "%u", "%5d", "%+d", "%.2d"}) {
-        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond), conversion);
-        assertThrows(PyValueError.class, () -> stringMod(conversion, beyond.negate()), conversion);
-      }
-      // power-of-two radixes are not limited
-      var huge = BigInteger.TEN.pow(5_000);
-      assertEquals(huge.toString(16), stringMod("%x", huge));
     }
   }
 
@@ -406,6 +411,38 @@ public class FormattingIntrinsicTest {
           assertThrows(PyOverflowError.class,
               () -> stringMod("%*s",
                   args(BigInteger.valueOf(Long.MIN_VALUE), "x"))).getMessage());
+    }
+  }
+
+  @Nested
+  public final class Format {
+    @Test
+    public void fieldIndexesFollowCPythonGetInteger() {
+      assertEquals("b", fmt("{0000000000000000000001}", "a", "b"));
+      assertEquals("b", fmt("{\u0661}", "a", "b"));                      // Arabic-Indic one
+      assertEquals("Too many decimal digits in format string",
+          assertThrows(PyValueError.class, () -> fmt("{9223372036854775808}", "a")).getMessage());
+      assertThrows(PyIndexError.class, () -> fmt("{9223372036854775807}", "a"));
+      // the overflow wins over the numbering-mode conflict
+      assertThrows(PyValueError.class, () -> fmt("{}{9223372036854775808}", "a"));
+      assertThrows(PyValueError.class, () -> fmt("{0[9223372036854775808]}", new PyList<>(1L)));
+      assertEquals("20", fmt("{0[0001]}", new PyList<>(10L, 20L)));
+    }
+
+    @Test
+    public void conversionParsingFollowsCPythonParseField() {
+      assertEquals("unmatched '{' in format spec",
+          assertThrows(PyValueError.class, () -> fmt("{0!s", 1L)).getMessage());
+      assertEquals("unmatched '{' in format spec",
+          assertThrows(PyValueError.class, () -> fmt("{0!}", 1L)).getMessage());
+      assertEquals("expected ':' after conversion specifier",
+          assertThrows(PyValueError.class, () -> fmt("{0!} abc", 1L)).getMessage());
+      // the argument is resolved before the conversion is validated
+      assertThrows(PyIndexError.class, () -> fmt("{!x}"));
+      assertEquals("Unknown conversion specifier x",
+          assertThrows(PyValueError.class, () -> fmt("{0!x}", 1L)).getMessage());
+      assertEquals("Unknown conversion specifier \\xe9",
+          assertThrows(PyValueError.class, () -> fmt("{0!\u00e9}", 1L)).getMessage());
     }
   }
 
